@@ -1,0 +1,51 @@
+{
+  "_comment": "Authored (not LLM-recorded) PySub rewrites for the offline demo. Keyed by function name; scripts/author_offline_cache.py turns each attempt into demo/offline_cache/llm/<key>.json. Re-record with scripts/record_offline_cache.sh once an API key is available.",
+  "provenance": "authored",
+  "functions": {
+    "knn_vote": {
+      "fid": "textlab/ml/knn.py::knn_vote",
+      "file": "textlab/ml/knn.py",
+      "note": "comprehension/zip/lambda/sorted -> explicit loops + k-pass selection; first attempt keeps a generator expression, so the retry loop shows",
+      "attempts": [
+        {
+          "attempt": 1,
+          "ok": false,
+          "error": "line 5: expected ')' but found 'for'",
+          "pysub": "def knn_vote(train: list[list[float]], labels: list[int], query: list[float], k: int) -> int:\n    n: int = len(train)\n    dists: list[float] = []\n    for r in range(n):\n        dists.append(sum((train[r][c] - query[c]) * (train[r][c] - query[c]) for c in range(len(query))))\n    taken: list[bool] = []\n    for r in range(n):\n        taken.append(False)\n    votes: dict[int, int] = {}\n    order: list[int] = []\n    for t in range(k):\n        best: int = -1\n        for r in range(n):\n            if not taken[r]:\n                if best == -1 or dists[r] < dists[best]:\n                    best = r\n        if best == -1:\n            break\n        taken[best] = True\n        order.append(best)\n        votes[labels[best]] = votes.get(labels[best], 0) + 1\n    winner: int = -1\n    top: int = 0\n    for idx in order:\n        c2: int = votes.get(labels[idx], 0)\n        if c2 > top:\n            top = c2\n            winner = labels[idx]\n    return winner\n"
+        },
+        {
+          "attempt": 2,
+          "ok": true,
+          "error": null,
+          "pysub": "def knn_vote(train: list[list[float]], labels: list[int], query: list[float], k: int) -> int:\n    n: int = len(train)\n    dists: list[float] = []\n    for r in range(n):\n        d: float = 0.0\n        row: list[float] = train[r]\n        for c in range(len(query)):\n            diff: float = row[c] - query[c]\n            d += diff * diff\n        dists.append(d)\n    taken: list[bool] = []\n    for r in range(n):\n        taken.append(False)\n    votes: dict[int, int] = {}\n    order: list[int] = []\n    for t in range(k):\n        best: int = -1\n        for r in range(n):\n            if not taken[r]:\n                if best == -1 or dists[r] < dists[best]:\n                    best = r\n        if best == -1:\n            break\n        taken[best] = True\n        order.append(best)\n        votes[labels[best]] = votes.get(labels[best], 0) + 1\n    if len(order) == 0:\n        raise ValueError(\"max() arg is an empty sequence\")\n    winner: int = -1\n    top: int = 0\n    for idx in order:\n        c2: int = votes.get(labels[idx], 0)\n        if c2 > top:\n            top = c2\n            winner = labels[idx]\n    return winner\n"
+        }
+      ]
+    },
+    "life_generations": {
+      "fid": "textlab/sim/life.py::life_generations",
+      "file": "textlab/sim/life.py",
+      "note": "tuple loops, ternary, enumerate, [row[:]...], [0]*w, sum() -> range loops + explicit appends",
+      "attempts": [
+        {
+          "attempt": 1,
+          "ok": true,
+          "error": null,
+          "pysub": "def life_generations(grid: list[list[int]], gens: int) -> int:\n    h: int = len(grid)\n    w: int = len(grid[0])\n    cells: list[list[int]] = []\n    for y in range(h):\n        row: list[int] = []\n        for x in range(w):\n            row.append(grid[y][x])\n        cells.append(row)\n    for g in range(gens):\n        nxt: list[list[int]] = []\n        for y in range(h):\n            nrow: list[int] = []\n            for x in range(w):\n                total: int = 0\n                for dy in range(-1, 2):\n                    for dx in range(-1, 2):\n                        if dy != 0 or dx != 0:\n                            total += cells[(y + dy) % h][(x + dx) % w]\n                alive: int = 0\n                if total == 3 or (cells[y][x] == 1 and total == 2):\n                    alive = 1\n                nrow.append(alive)\n            nxt.append(nrow)\n        cells = nxt\n    count: int = 0\n    for y in range(h):\n        for x in range(w):\n            count += cells[y][x]\n    return count\n"
+        }
+      ]
+    },
+    "collatz_longest": {
+      "fid": "textlab/features/collatz.py::collatz_longest",
+      "file": "textlab/features/collatz.py",
+      "note": "annotations only (also derivable from the trace's observed types)",
+      "attempts": [
+        {
+          "attempt": 1,
+          "ok": true,
+          "error": null,
+          "pysub": "def collatz_longest(limit: int) -> int:\n    best: int = 0\n    best_start: int = 1\n    for start in range(1, limit):\n        n: int = start\n        steps: int = 0\n        while n != 1:\n            if n % 2 == 0:\n                n = n // 2\n            else:\n                n = 3 * n + 1\n            steps += 1\n        if steps > best:\n            best = steps\n            best_start = start\n    return best_start * 1000 + best\n"
+        }
+      ]
+    }
+  }
+}
