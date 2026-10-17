@@ -461,6 +461,7 @@ def analyze(fn: ast.AST, info: ModuleInfo, is_method: bool = False) -> Own:
     for_range = {id(n.iter) for n in nodes if isinstance(n, ast.For) and isinstance(n.iter, ast.Call)
                  and isinstance(n.iter.func, ast.Name) and n.iter.func.id == "range"}
     attr_roots = {id(r) for n in nodes if isinstance(n, ast.Attribute) for r in [_root_name(n)] if r is not None}
+    raise_calls = {id(n.exc) for n in nodes if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)}
     ret_tuples = {id(n.value) for n in nodes if isinstance(n, ast.Return) and isinstance(n.value, ast.Tuple)}
 
     for n in nodes:
@@ -574,7 +575,9 @@ def analyze(fn: ast.AST, info: ModuleInfo, is_method: bool = False) -> Own:
             fix["tuple"] = "tuple value — PySub has no tuples (fixable by rewrite)"
 
         # ---- names, calls, attributes
-        if t is ast.Call:
+        if t is ast.Call and id(n) in raise_calls:
+            pass                                    # `raise X("msg")`: judged by the Raise rule above
+        elif t is ast.Call:
             f = n.func
             if n.keywords:
                 fix["kwargs"] = "keyword arguments in a call — PySub has none (fixable by rewrite)"
