@@ -264,7 +264,7 @@ class Pipeline:
     def candidates(self) -> List[FunctionRecord]:
         """Functions we will compile: verifiable, fixed-fixable, and declined (probe)."""
         return [r for r in self.recs() if r.status in ("pending", "declined") and r.eligibility != "not_eligible"
-                and r.private.get("module_src")]
+                and r.private.get("module_src") and not r.private.get("cold")]
 
     # ------------------------------------------------------------ fix
     def llm_client(self):
@@ -281,7 +281,8 @@ class Pipeline:
     def do_fix(self) -> None:
         from . import annotate, fixer, scan
         js, ws = self.js, self.ws
-        fixables = [r for r in self.recs() if r.eligibility == "fixable" and r.status in ("fixable", "declined")]
+        fixables = [r for r in self.recs() if r.eligibility == "fixable" and r.status in ("fixable", "declined")
+                    and not r.private.get("cold")]
         self.stage("fix", "running", caption="Fixing near-misses: annotate from observed types, else ask the LLM for a PySub rewrite")
         self.llm = self.llm_client() if fixables else None
         fx = None

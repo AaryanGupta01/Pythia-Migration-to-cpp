@@ -158,6 +158,11 @@ def create_app(engine=None, home: Optional[str] = None) -> FastAPI:
     def env():
         return engine.env()
 
+    @app.get("/api/demos")
+    def demos():
+        from ..demos import list_demos
+        return list_demos()
+
     @app.get("/api/settings")
     def get_settings():
         return engine.settings()

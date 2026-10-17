@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# End-to-end smoke test: full Studio pipeline on demo/textlab, headless, through the Engine facade.
-# Asserts >=3 verified/guarded functions with speedup>1, >=1 declined, >=1 not_eligible with a reason.
-#   ./scripts/smoke.sh               # offline replay of the authored LLM cache unless ANTHROPIC_API_KEY is set
-#   ./scripts/smoke.sh --offline     # force offline
-#   ./scripts/smoke.sh --online      # force the real LLM
+# End-to-end smoke test: full Studio pipeline on the bundled demos (Quanta, then TextLab), headless, through the
+# Engine facade.  Per demo it asserts: >=N accelerated functions with speedup>1, LLM-fixed functions verified,
+# a boundary-cost decline measured below 1x, not-eligible functions with reasons, an end-to-end speedup with
+# identical stdout, and (Quanta) that `python -m unittest` passes in the exported, accelerated project.
+#   ./scripts/smoke.sh                  # both demos, offline replay of the cached LLM answers unless a key is set
+#   ./scripts/smoke.sh --offline        # force offline (no key, no network needed)
+#   ./scripts/smoke.sh --online         # force the real LLM
+#   ./scripts/smoke.sh --demo quanta    # one demo only
 # Uses $PYTHIA_VENV or ./.venv or ~/pythia-venv, whichever has a python.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,5 +22,5 @@ echo "== demo self-check (compiler front end on every demo function)"
 "$PY" scripts/check_demo.py --no-run
 
 echo
-echo "== full pipeline on demo/textlab"
+echo "== full pipeline on the demo projects"
 exec "$PY" scripts/demo_job.py smoke "$@"

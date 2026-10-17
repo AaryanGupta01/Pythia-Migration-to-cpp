@@ -182,10 +182,12 @@ def ingest(input: dict, home, emit=None) -> Workspace:
                     raise ValueError(f"folder not found: {src}")
                 origin, name = str(src), src.resolve().name
             elif kind == "demo":
-                src = REPO_ROOT / "demo" / "textlab"
+                from .demos import resolve
+                entry = resolve(input.get("name"))
+                src = entry["path"]
                 if not src.is_dir():
                     raise ValueError(f"demo project not found at {src}")
-                origin, name = "demo/textlab", "textlab"
+                origin, name = entry["dir"], entry["name"]
             else:
                 url = input.get("url", "").strip()
                 if not url:
