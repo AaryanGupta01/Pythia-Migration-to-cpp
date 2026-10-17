@@ -21,6 +21,7 @@ import sys
 import sysconfig
 import tempfile
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -116,6 +117,15 @@ def _atomic_write(path: str, data: bytes) -> None:
     os.replace(tmp, path)
 
 
+def _install(src: str, dst: str) -> None:
+    """Copy a .so into place without writing through a possibly-loaded file."""
+    if os.path.abspath(src) == os.path.abspath(dst):
+        return
+    if os.path.lexists(dst):
+        os.unlink(dst)
+    shutil.copyfile(src, dst)
+
+
 def _run(cmd: List[str]) -> Tuple[int, str]:
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     return r.returncode, (r.stdout or "") + (r.stderr or "")
@@ -128,7 +138,7 @@ def _runtime_object(cache_dir: str) -> Tuple[Optional[str], str]:
     obj = os.path.join(cache_dir, f"rt-{key}.o")
     if os.path.exists(obj):
         return obj, ""
-    tmp = obj + f".{os.getpid()}.tmp.o"
+    tmp = obj + f".{uuid.uuid4().hex[:8]}.tmp.o"
     rc, log = _run([cc, *FLAGS, "-I" + RUNTIME, "-c", os.path.join(RUNTIME, "pyrt.cpp"), "-o", tmp])
     if rc != 0:
         return None, log
@@ -145,7 +155,7 @@ def _bridge_pch(cache_dir: str) -> Optional[str]:
     hdr = os.path.join(d, "pyrt_bridge.hpp")
     if os.path.exists(hdr + ".gch"):
         return hdr
-    tmpd = d + f".{os.getpid()}.tmp"
+    tmpd = d + f".{uuid.uuid4().hex[:8]}.tmp"
     try:
         os.makedirs(tmpd, exist_ok=True)
         shutil.copyfile(os.path.join(RUNTIME, "pyrt_bridge.hpp"), os.path.join(tmpd, "pyrt_bridge.hpp"))
@@ -542,8 +552,7 @@ def build_library(src: str, funcs: Sequence[str], out_dir: str, modname: Optiona
     for d in [cache_dir, *extra_cache_dirs]:
         hit = os.path.join(d, bh + ".so")
         if os.path.exists(hit):
-            if os.path.abspath(hit) != os.path.abspath(so_out):
-                shutil.copyfile(hit, so_out)
+            _install(hit, so_out)
             res.so_path, res.cached, res.build_log = so_out, True, f"cache hit: {hit}"
             return res
 
@@ -562,7 +571,7 @@ def build_library(src: str, funcs: Sequence[str], out_dir: str, modname: Optiona
         res.ok, res.build_log = False, rt_log
         res.error = "C++ build failed (runtime): " + rt_log[:2000]
         return res
-    tmp_so = os.path.join(cache_dir, f"{bh}.{os.getpid()}.tmp.so")
+    tmp_so = os.path.join(cache_dir, f"{bh}.{uuid.uuid4().hex[:8]}.tmp.so")
     cmd = [cc, *FLAGS, "-shared", *_includes()]
     rc, log = _run(cmd + (["-include", pch] if pch else []) + [cpp_path, obj, "-o", tmp_so])
     if rc != 0 and pch and ("gch" in log or "pch" in log.lower()):
@@ -577,6 +586,6 @@ def build_library(src: str, funcs: Sequence[str], out_dir: str, modname: Optiona
     _atomic_write(os.path.join(cache_dir, bh + ".meta.json"), json.dumps(
         {"modname": modname, "funcs": funcs, "compile_s": res.compile_s,
          "toolchain": _toolchain_id(), "created": time.time()}).encode())
-    shutil.copyfile(os.path.join(cache_dir, bh + ".so"), so_out)
+    _install(os.path.join(cache_dir, bh + ".so"), so_out)
     res.so_path = so_out
     return res

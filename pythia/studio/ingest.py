@@ -146,7 +146,7 @@ def ingest(input: dict, home, emit=None) -> Workspace:
     emit = emit or _noop
     home = Path(home)
     kind = input.get("kind", "")
-    ws_id = uuid.uuid4().hex[:8]
+    ws_id = input.get("ws_id") or uuid.uuid4().hex[:8]     # B2: Engine preallocates the workspace id
     root = home / "workspaces" / ws_id
     original, work = root / "original", root / "work"
     original.mkdir(parents=True, exist_ok=True)
