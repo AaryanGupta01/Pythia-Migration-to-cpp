@@ -5,7 +5,20 @@
 BCSE307L Compiler Design · Team 2 · Project **A15 — Typed Source-to-Source Transpiler**
 VIT Vellore, Fall 2026
 
-**PYTHIA Studio** (the web app that finds Python hotspots and accelerates them with verified C++) lives in [`studio/`](studio/README.md); install it with [`INSTALL.md`](INSTALL.md).
+## PYTHIA Studio: the application
+
+**PYTHIA Studio** finds the slow, compilable parts of a Python project, compiles them to C++17, *proves* the compiled versions behave identically to your Python by replaying real calls, and shows every change as a reviewable diff. The LLM suggests, the compiler proves.
+
+| Start here | |
+|---|---|
+| [**USER_GUIDE.md**](USER_GUIDE.md) | how to install, run and use the app, step by step |
+| [INSTALL.md](INSTALL.md) | one-line installer, pip/pipx, Docker, Windows (WSL2), troubleshooting |
+| [DEMO.md](DEMO.md) | 3-minute and 30-second demo scripts, viva Q&A |
+| [studio/README.md](studio/README.md) | architecture and limits |
+
+Quickest start: Linux/macOS/WSL `./studio.sh`; Windows double-click `studio.cmd`; then click **Open the demo project** or **Replay sample run**. A free LLM key (Groq) in `.env` turns on the rewrite fixer.
+
+The rest of this README documents the compiler underneath it.
 
 ---
 
