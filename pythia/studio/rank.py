@@ -21,6 +21,7 @@ MARSHAL_S_PER_ELEM = 4e-9       # pybind11 list/str element copy in + out
 CALL_OVERHEAD_S = 1.5e-6        # fixed cost of one boundary crossing
 ELIGIBILITY_FACTOR = {"verifiable": 1.0, "fixable": 0.6, "not_eligible": 0.0}
 MAX_SPEEDUP = 40.0
+COLD_SHARE = 0.002              # below 0.2% of the traced runtime a function is "cold": no build, no LLM call
 
 
 def static_heuristic(m: dict) -> float:
@@ -117,6 +118,17 @@ def rank(records: List[FunctionRecord], trace_profile: Optional[dict] = None, em
             r.reason = (f"Declined: marshalling ~{marshal:.3f}s ({calls} calls x ~{elems:.0f} elements) exceeds "
                         f"the ~{saving:.3f}s of compute saved (est. {s_est:.1f}x on {py_s:.3f}s) -> net {net:+.3f}s")
             r.score["notes"].append(r.reason)
+
+        # cold code: with a trace in hand, don't spend a build or an LLM call on functions that barely run
+        if have_trace and (r.share or 0.0) < COLD_SHARE and r.eligibility != "not_eligible" \
+                and r.status in ("pending", "fixable"):
+            note = f"Cold: {(r.share or 0.0) * 100:.2f}% of the traced runtime ({r.calls or 0} calls)"
+            r.private["cold"] = True
+            if r.eligibility == "verifiable":
+                r.status, r.reason = "declined", note + "; the saving would be negligible, so it is not compiled"
+            else:
+                r.reason = (r.reason or "needs a fix").rstrip(".") + f" [{note}; LLM rewrite skipped]"
+            r.score["notes"].append(note)
 
     def key(r: FunctionRecord):
         cls = 2 if r.eligibility == "not_eligible" else 1 if r.status == "declined" else 0

@@ -1,0 +1,7 @@
+{
+ "model": "openai/gpt-oss-120b",
+ "attempt": 1,
+ "function_sha": "7fcadd8e566c6286892a1dab0ac8d02ba52192f54afdde8b26dbb0688ff50d60",
+ "response": "```python\ndef kmer_counts(seq: str, k: int) -> dict[str, int]:\n    counts: dict[str, int] = {}\n    i: int = 0\n    limit: int = len(seq) - k + 1\n    while i < limit:\n        # build kmer manually because slicing is not allowed\n        kmer: str = \"\"\n        j: int = 0\n        while j < k:\n            kmer = kmer + seq[i + j]\n            j = j + 1\n        # update count\n        prev: int = counts.get(kmer, 0)\n        counts[kmer] = prev + 1\n        i = i + 1\n    return counts\n```",
+ "provenance": "recorded"
+}

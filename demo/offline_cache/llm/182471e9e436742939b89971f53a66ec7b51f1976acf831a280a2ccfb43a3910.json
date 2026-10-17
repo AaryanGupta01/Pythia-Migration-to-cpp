@@ -1,0 +1,7 @@
+{
+ "model": "openai/gpt-oss-120b",
+ "attempt": 1,
+ "function_sha": "b0c68cf6be891a567c840b2a016a4df6f3d12c4f5b16b0e1024c0a1b25ac278d",
+ "response": "```python\ndef longest_increasing_subsequence(seq: list[int]) -> int:\n    n: int = len(seq)\n    if n == 0:\n        return 0\n    best: list[int] = []\n    i: int = 0\n    while i < n:\n        best.append(1)\n        i = i + 1\n    i = 1\n    while i < n:\n        j: int = 0\n        while j < i:\n            if seq[j] < seq[i] and best[j] + 1 > best[i]:\n                best[i] = best[j] + 1\n            j = j + 1\n        i = i + 1\n    # compute max manually (max requires exactly two arguments)\n    max_val: int = best[0]\n    k: int = 1\n    while k < n:\n        if best[k] > max_val:\n            max_val = best[k]\n        k = k + 1\n    return max_val\n```",
+ "provenance": "recorded"
+}

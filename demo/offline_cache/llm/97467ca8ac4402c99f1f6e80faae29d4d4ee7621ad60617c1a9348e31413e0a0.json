@@ -1,0 +1,7 @@
+{
+ "model": "openai/gpt-oss-120b",
+ "attempt": 1,
+ "function_sha": "b344b7a4edc18f03c2a98aa8176ac928ad07aa32c548d77de47a6df612e65721",
+ "response": "```python\ndef weighted_moments(values: list[float], weights: list[float]) -> list[float]:\n    total_w: float = 0.0\n    mean: float = 0.0\n    i: int = 0\n    n: int = len(values)\n    while i < n:\n        v: float = values[i]\n        w: float = weights[i]\n        total_w = total_w + w\n        mean = mean + v * w\n        i = i + 1\n    mean = mean / total_w\n    var: float = 0.0\n    skew: float = 0.0\n    i = 0\n    while i < n:\n        v = values[i]\n        w = weights[i]\n        d: float = v - mean\n        var = var + w * d * d\n        skew = skew + w * d * d * d\n        i = i + 1\n    var = var / total_w\n    if var > 0.0:\n        skew = skew / total_w / (var ** 1.5)\n    else:\n        skew = 0.0\n    result: list[float] = [mean, var, skew]\n    return result\n```",
+ "provenance": "recorded"
+}

@@ -1,0 +1,1 @@
+{"modname": "pythia_d1362556", "funcs": ["escape_area"], "compile_s": 4.918, "toolchain": "c++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0|.cpython-314-x86_64-linux-gnu.so|-std=c++17 -O3 -flto -fPIC -fvisibility=hidden -w|pybind11=3.1.0|3.14.4", "created": 1792250314.8336391}

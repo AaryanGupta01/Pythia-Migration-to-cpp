@@ -44,6 +44,7 @@ IO_MODULES = {"os", "sys", "io", "pathlib", "shutil", "subprocess", "socket", "j
               "sqlite3", "requests", "urllib", "http", "logging", "tempfile", "glob", "gzip", "zipfile"}
 NONDET_MODULES = {"random", "time", "datetime", "uuid", "secrets"}
 MISSING_MARK = " (fixable)"
+PYSUB_PARAM_TYPES = {"int", "float", "bool", "str", "list", "dict", "List", "Dict", "None"}
 _BUILTIN_NAMES = set(dir(builtins))
 
 
@@ -447,6 +448,17 @@ def analyze(fn: ast.AST, info: ModuleInfo, is_method: bool = False) -> Own:
             o.missing.append("return")
     elif isinstance(top.returns, ast.Name) and top.returns.id in BARE_CONTAINERS:
         o.missing.append("return")
+    # parameters typed as objects of a non-PySub type: method calls / attribute reads on them can never be rewritten away
+    obj_params: Dict[str, str] = {}
+    for a in all_args:
+        ann = a.annotation
+        if isinstance(ann, ast.Constant) and isinstance(ann.value, str):
+            ann = ast.Name(id=ann.value.split("[")[0].split(".")[-1])
+        if isinstance(ann, ast.Attribute):
+            ann = ast.Name(id=ann.attr)
+        if isinstance(ann, ast.Name) and ann.id not in PYSUB_PARAM_TYPES and ann.id not in BARE_CONTAINERS \
+                and not (is_method and a.arg == "self"):
+            obj_params[a.arg] = ann.id
     for who, a in anns:
         for x in ast.walk(a):
             if isinstance(x, ast.Name):
@@ -628,6 +640,9 @@ def analyze(fn: ast.AST, info: ModuleInfo, is_method: bool = False) -> Own:
                     hard[f"cls:{r.id}"] = f"uses class `{r.id}` (user classes are not supported in v1)"
                 elif r is not None and r.id in info.nonconst_globals and r.id not in local:
                     hard[f"glob:{r.id}"] = f"uses module-level variable `{r.id}` (mutable global, invisible to PySub)"
+                elif r is not None and r.id in obj_params and r.id in local:
+                    hard[f"obj:{r.id}"] = (f"calls `.{f.attr}()` on `{r.id}`, an object of type `{obj_params[r.id]}` "
+                                           "(user classes cannot cross into PySub)")
                 elif f.attr not in ALL_METHOD_NAMES:
                     fix[f"m:{f.attr}"] = f"method `.{f.attr}()` is not in PySub (fixable by rewrite)"
             else:
@@ -638,6 +653,9 @@ def analyze(fn: ast.AST, info: ModuleInfo, is_method: bool = False) -> Own:
                 mod = info.imports[r.id][0]
                 o.imports_used.add(mod)
                 hard[f"mod:{_chain(n)}"] = _module_reason(_chain(n), mod).replace("calls ", "uses ", 1)
+            elif r is not None and r.id in obj_params and r.id in local:
+                hard[f"obj:{r.id}"] = (f"reads `.{n.attr}` of `{r.id}`, an object of type `{obj_params[r.id]}` "
+                                       "(user classes cannot cross into PySub)")
             elif r is not None and r.id in local and not isinstance(n.value, ast.Attribute):
                 fix[f"attr:{n.attr}"] = f"attribute access `.{n.attr}` — objects are not PySub values (fixable by rewrite)"
         elif t is ast.Attribute and id(n) in ann_ids:

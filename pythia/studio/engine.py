@@ -116,8 +116,12 @@ class Engine:
         opts = {"trace_cmd": None, "trace_timeout_s": 60, "offline": False, "llm": True,
                 "model": self._settings_full().get("model"), "pace_ms": 0}
         opts.update(options or {})
-        if input.get("kind") == "demo" and not (opts.get("trace_cmd") or "").strip():
-            opts["trace_cmd"] = "python main.py --small"   # demo ships a known entry point
+        if input.get("kind") == "demo":
+            from .demos import resolve
+            demo = resolve(input.get("name"))              # each demo ships a known entry point and a time budget
+            if not (opts.get("trace_cmd") or "").strip():
+                opts["trace_cmd"] = demo["trace_cmd"]
+            opts["trace_timeout_s"] = max(float(opts.get("trace_timeout_s") or 0), float(demo["trace_timeout_s"]))
         js = JobState(job_id, self.home, input, opts, ws_id, emit)
         with self._lock:
             self._jobs[job_id] = js
