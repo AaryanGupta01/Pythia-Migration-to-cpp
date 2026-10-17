@@ -36,6 +36,8 @@ class Boundary extends Component<{ children: ReactNode; k: string }, { err: Erro
   }
 }
 
+let booted = false
+
 export default function App() {
   const s = useStudio()
   const { sizes, tabs, activeTab } = s
@@ -45,6 +47,8 @@ export default function App() {
   useEffect(() => {
     s.loadEnv()
     s.loadRecent()
+    if (booted) return // StrictMode runs effects twice in dev; start the run once
+    booted = true
     const job = query.get('job')
     if (job) s.openJob(job, { replay: query.get('replay') === '1' || query.get('presenter') === '1' })
     else if (query.get('autostart') === '1') s.startJob({ kind: 'demo' })
