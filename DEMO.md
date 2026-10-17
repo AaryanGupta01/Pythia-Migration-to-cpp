@@ -27,7 +27,7 @@ python scripts/check_demo.py         # every demo function is in its intended cl
 | `simulate_energy` (sim/nbody.py) | Verified win (no D1 sites) | 16% | about 9x | n-body over `list[float]`, pure float math |
 | `prime_square_sum` (features/primes.py) | Guarded win, has a callee | 5% | about 11x | calls same-module helper `is_prime`, so the callee is compiled with it |
 | `assign_clusters` (ml/kmeans.py) | Verified win (no D1 sites) | 10% | about 10x | k-means assignment over `list[list[float]]` (two-level list) |
-| `count_pairs` (text/bpe.py) | Guarded win, the modest one | 3% | 2 to 2.5x | BPE pair counts; 60k ints in, 16k ints out, so marshalling eats most of the gain |
+| `count_pairs` (text/bpe.py) | Guarded win, the modest one | 3% | 1.3 to 2.5x | BPE pair counts; 60k ints in, 16k ints out, so marshalling eats most of the gain |
 | `monte_carlo_pi` (sim/montecarlo.py) | Guarded win, the big one | 20% | about 14x | inline LCG; `state * 1103515245` cannot be proven non-overflowing, so it is trapped, not wrapped |
 | `knn_vote` (ml/knn.py) | Fixable: LLM retry story | 6% | about 5.7x after rewrite | comprehension, generator, `zip`, `sorted`, tuple unpacking, `max(x)`; **attempt 1 is rejected, attempt 2 passes** |
 | `life_generations` (sim/life.py) | Fixable: LLM | 7% | about 5x after rewrite | tuple loops, ternary, `enumerate`, `[row[:]...]`, `sum` |
@@ -41,7 +41,7 @@ python scripts/check_demo.py         # every demo function is in its intended cl
 | `Vocab.train/merge`, `Rng.*`, `KMeans.*`, `CorpusBuilder.*` | Not eligible | ~5% (BPE merge) | n/a | methods of classes: v1 analyses module-level functions only |
 | `main.py::*`, `energy_profile` | Not eligible | glue | n/a | cross-module callees / generator |
 
-The six "win" rows together are about 68% of runtime, the three "fixable" rows about 21%. The end-to-end speedup is therefore capped by what stays in Python (Amdahl): expect roughly **2.5x** with only the as-written wins and **about 3.5 to 4x** once the LLM-fixed and annotated functions are in (measured offline: 9.1 s to 2.4 s). That honest ceiling is a good talking point.
+The six "win" rows together are about 68% of runtime, the three "fixable" rows about 21%. The end-to-end speedup is therefore capped by what stays in Python (Amdahl): expect roughly **2.5x** with only the as-written wins and **about 4x** once the LLM-fixed and annotated functions are in (measured offline: 9.1 s to 2.3 s). That honest ceiling is a good talking point.
 
 ## 2. The 3-minute script
 
