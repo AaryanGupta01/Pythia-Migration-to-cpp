@@ -78,14 +78,31 @@ def c_string(s: str) -> str:
 
 
 class Emitter:
-    def __init__(self, tc: TypeChecker):
+    def __init__(self, tc: TypeChecker, library: bool = False,
+                 track_lines: bool = False):
         self.tc = tc
         self.buf: List[str] = []
         self.tmp = 0
         self.wrappers: dict = {}      # str(elem_ty) -> (name, C source)
+        # library mode: no main(); track_lines: remember which PySub line
+        # produced each output line (off for the normal CLI path)
+        self.library = library
+        self.track = track_lines
+        self.cur = 0
+        self.src_of: List[int] = []   # parallel to buf when tracking
 
     def w(self, indent: int, line: str = "") -> None:
         self.buf.append("    " * indent + line if line else "")
+        if self.track:
+            self.src_of.append(self.cur)
+
+    def line_map(self) -> dict:
+        """PySub line -> [1-based output lines] (only meaningful if tracking)."""
+        out: dict = {}
+        for i, ln in enumerate(self.src_of):
+            if ln:
+                out.setdefault(str(ln), []).append(i + 1)
+        return out
 
     def fresh(self) -> str:
         self.tmp += 1
@@ -104,25 +121,36 @@ class Emitter:
         if mod.classes:
             self.w(0, "/* class instances: generated C++ objects */")
             for c in mod.classes:
+                self.cur = c.line
                 self.w(0, f"typedef struct {c.name} {c.name};")
+            self.cur = 0
             self.w(0)
             for c in mod.classes:
+                self.cur = c.line
                 self.emit_class_struct(c)
+            self.cur = 0
             self.w(0)
             for c in mod.classes:
+                self.cur = c.line
                 self.w(0, self.ctor_signature(c) + ";")
                 for m in c.methods:
+                    self.cur = m.line
                     self.w(0, self.method_signature(c, m) + ";")
+            self.cur = 0
             self.w(0)
 
         if mod.funcs:
             self.w(0, "/* forward declarations (PySub allows mutual recursion) */")
             for f in mod.funcs:
+                self.cur = f.line
                 self.w(0, self.signature(f) + ";")
+            self.cur = 0
             self.w(0)
 
         for c in mod.classes:
+            self.cur = c.line
             self.emit_class_ctor(c)
+            self.cur = 0
             self.w(0)
             for m in c.methods:
                 self.emit_func(m, owner=c.name)
@@ -131,13 +159,16 @@ class Emitter:
         for f in mod.funcs:
             self.emit_func(f)
             self.w(0)
-        self.emit_main(mod)
+        if not self.library:
+            self.emit_main(mod)
         if self.wrappers:
             wlines = ["/* print-adapter wrappers for nested/class containers */"]
             for _, body in self.wrappers.values():
                 wlines.append(body)
             wlines.append("")
             self.buf[wrapper_marker:wrapper_marker] = wlines
+            if self.track:
+                self.src_of[wrapper_marker:wrapper_marker] = [0] * len(wlines)
         return "\n".join(self.buf) + "\n"
 
     # ---- classes -------------------------------------------------------
@@ -186,6 +217,11 @@ class Emitter:
         return f"static {ctype(sig.ret)}f_{f.name}({ps or 'void'})"
 
     def emit_func(self, f: A.FuncDef, owner: Optional[str] = None) -> None:
+        self.cur = f.line
+        self._emit_func(f, owner)
+        self.cur = 0
+
+    def _emit_func(self, f: A.FuncDef, owner: Optional[str] = None) -> None:
         if owner is not None:
             self.w(0, self.method_signature(self.tc.classes[owner].node, f) + " {")
             sig = self.tc.classes[owner].methods[f.name]
@@ -231,6 +267,13 @@ class Emitter:
         return f"{rt}_set({base_c}, {key_c}, {val_c});"
 
     def stmt(self, s: A.Node, d: int) -> None:
+        if not self.track:
+            return self._stmt(s, d)
+        prev, self.cur = self.cur, s.line
+        self._stmt(s, d)
+        self.cur = prev
+
+    def _stmt(self, s: A.Node, d: int) -> None:
         if isinstance(s, A.Assign):
             if isinstance(s.target, A.Subscript):
                 base = s.target.value
@@ -690,5 +733,12 @@ class Emitter:
         return f"f_{n}({args})"
 
 
-def emit(mod: A.Module, tc: TypeChecker, src_name: str) -> str:
-    return Emitter(tc).emit_module(mod, src_name)
+def emit(mod: A.Module, tc: TypeChecker, src_name: str,
+         library: bool = False, line_map: Optional[dict] = None) -> str:
+    """library=True omits main(); passing a dict as line_map fills it with
+    PySub line -> [output lines] (both off for the normal CLI path)."""
+    e = Emitter(tc, library=library, track_lines=line_map is not None)
+    out = e.emit_module(mod, src_name)
+    if line_map is not None:
+        line_map.update(e.line_map())
+    return out
