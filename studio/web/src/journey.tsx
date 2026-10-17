@@ -64,12 +64,24 @@ export function Journey({ rec }: { rec: FunctionRecord }) {
   const wanted = useMemo(() => new Set(['tokens', 'ast', 'typed_ast', 'pir']), [])
   const dump = useStages(rec, true)
 
+  const shown = new Set<string>()
   const nodes: (JourneyNode & { seen: boolean })[] = rec.journey.map((n) => {
     const seen = nodeSeen(js, rec.id, n.key)
-    return { ...n, title: n.title || TITLES[n.key], seen, state: seen ? n.state : 'pending' }
+    let { summary, reason } = n
+    // an identical reason is only spelled out once; later nodes just say they were not reached
+    if (seen && reason) {
+      if (shown.has(reason)) {
+        reason = null
+        if (n.state === 'skipped') summary = 'Not reached'
+      } else shown.add(reason)
+    }
+    return { ...n, summary, reason, title: n.title || TITLES[n.key], seen, state: seen ? n.state : 'pending' }
   })
   const lastSeen = nodes.reduce((a, n, i) => (n.seen ? i : a), 0)
-  const stopIdx = nodes.findIndex((n) => n.seen && (n.state === 'failed' || n.state === 'skipped') && n.key !== 'rewrites' && n.key !== 'observed_types' && n.key !== 'status' && rec.journey.slice(nodes.indexOf(n) + 1).some((x) => x.state === 'skipped'))
+  // where the function's path ended: the first non-done node after the last completed one (status excluded)
+  const lastDone = nodes.reduce((a, n, i) => (n.seen && n.state === 'done' && n.key !== 'status' ? i : a), -1)
+  const stopCand = nodes.findIndex((n, i) => i > lastDone && n.key !== 'status' && n.seen && n.state !== 'done')
+  const stopIdx = stopCand
 
   // presenter: follow the newest artifact
   const followed = useRef(-1)
@@ -92,7 +104,7 @@ export function Journey({ rec }: { rec: FunctionRecord }) {
     <div className="mx-auto max-w-[920px] px-6 py-5">
       {stopIdx >= 0 && (
         <div className="mb-4 rounded-md border border-line2 bg-raised px-3 py-2 text-sm text-fg2">
-          <span className="font-medium text-fg">Stopped at {nodes[stopIdx].title.toLowerCase()}.</span> {nodes[stopIdx].reason ?? nodes[stopIdx].summary}
+          <span className="font-medium text-fg">Stopped at {nodes[stopIdx].title.toLowerCase()}.</span> {nodes[stopIdx].reason ?? rec.reason ?? nodes[stopIdx].summary}
         </div>
       )}
       <ol className="relative">
