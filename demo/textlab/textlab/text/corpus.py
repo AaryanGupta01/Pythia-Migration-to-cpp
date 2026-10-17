@@ -5,21 +5,27 @@ import tempfile
 LETTERS = "abcdefghijklmnopqrstuvwxyz"
 
 
-def make_words(rng, n_base, n_variants):
-    base = []
-    for _ in range(n_base):
-        base.append("".join(LETTERS[rng.next_int(26)] for _ in range(12 + rng.next_int(9))))
-    words = []
-    for _ in range(n_variants):
-        w = base[rng.next_int(n_base)]
-        for _ in range(rng.next_int(3)):
-            pos = rng.next_int(len(w))
-            w = w[:pos] + LETTERS[rng.next_int(26)] + w[pos + 1:]
-        words.append(w)
-    return words
+class CorpusBuilder:
+    def __init__(self, rng):
+        self.rng = rng
+
+    def make_words(self, n_base, n_variants):
+        rng = self.rng
+        base = []
+        for _ in range(n_base):
+            base.append("".join(LETTERS[rng.next_int(26)] for _ in range(12 + rng.next_int(9))))
+        words = []
+        for _ in range(n_variants):
+            w = base[rng.next_int(n_base)]
+            for _ in range(rng.next_int(3)):
+                pos = rng.next_int(len(w))
+                w = w[:pos] + LETTERS[rng.next_int(26)] + w[pos + 1:]
+            words.append(w)
+        return words
 
 
 def write_corpus(words, per_line=8):
+    # Not eligible: file I/O.
     path = os.path.join(tempfile.gettempdir(), "textlab_corpus_%d.txt" % os.getpid())
     with open(path, "w") as fh:
         for i in range(0, len(words), per_line):

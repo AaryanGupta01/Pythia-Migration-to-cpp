@@ -1,13 +1,11 @@
 """Loose input parsing helpers (dynamic typing on purpose)."""
 
 
-def parse_number(token):
-    # Not eligible: `value` is a str, then an int, then a float.
-    value = token.strip()
-    if value.isdigit():
-        value = int(value)
-    elif value.replace(".", "", 1).isdigit():
-        value = float(value)
+def parse_number(token: str) -> int:
+    # Not eligible: `value` starts as a str, then becomes an int (and may stay a str).
+    value = token
+    if len(token) > 0:
+        value = int(token)
     return value
 
 

@@ -19,20 +19,26 @@ def assign_clusters(points: list[list[float]], centroids: list[list[float]]) -> 
     return out
 
 
-def update_centroids(points, labels, centroids):
-    sums = [[0.0] * len(centroids[0]) for _ in centroids]
-    counts = [0] * len(centroids)
-    for point, label in zip(points, labels):
-        counts[label] += 1
-        for k, value in enumerate(point):
-            sums[label][k] += value
-    return [[s / counts[c] if counts[c] else centroids[c][k] for k, s in enumerate(row)]
-            for c, row in enumerate(sums)]
+class KMeans:
+    """Driver loop (a class, so not analysed): calls the compiled-able assign_clusters."""
 
+    def __init__(self, centroids):
+        self.centroids = centroids
 
-def kmeans(points, centroids, iterations):
-    labels = []
-    for _ in range(iterations):
-        labels = assign_clusters(points, centroids)
-        centroids = update_centroids(points, labels, centroids)
-    return labels, centroids
+    def update(self, points, labels):
+        dim = len(self.centroids[0])
+        sums = [[0.0] * dim for _ in self.centroids]
+        counts = [0] * len(self.centroids)
+        for point, label in zip(points, labels):
+            counts[label] += 1
+            for k, value in enumerate(point):
+                sums[label][k] += value
+        self.centroids = [[s / counts[c] if counts[c] else self.centroids[c][k] for k, s in enumerate(row)]
+                          for c, row in enumerate(sums)]
+
+    def fit(self, points, iterations):
+        labels = []
+        for _ in range(iterations):
+            labels = assign_clusters(points, self.centroids)
+            self.update(points, labels)
+        return labels

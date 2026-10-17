@@ -1,7 +1,7 @@
 {
   "model": "authored",
   "attempt": 1,
-  "function_sha": "d30d8a63797bb81330b91aba45b5ef8d9a446a3f9fec17c46ae8dbd48f72921e",
+  "function_sha": "a399b7f1f6535ae20b1957025a447424d91d6ffb5f210125f2c21e27f4ee6744",
   "response": "def knn_vote(train: list[list[float]], labels: list[int], query: list[float], k: int) -> int:\n    n: int = len(train)\n    dists: list[float] = []\n    for r in range(n):\n        dists.append(sum((train[r][c] - query[c]) * (train[r][c] - query[c]) for c in range(len(query))))\n    taken: list[bool] = []\n    for r in range(n):\n        taken.append(False)\n    votes: dict[int, int] = {}\n    order: list[int] = []\n    for t in range(k):\n        best: int = -1\n        for r in range(n):\n            if not taken[r]:\n                if best == -1 or dists[r] < dists[best]:\n                    best = r\n        if best == -1:\n            break\n        taken[best] = True\n        order.append(best)\n        votes[labels[best]] = votes.get(labels[best], 0) + 1\n    winner: int = -1\n    top: int = 0\n    for idx in order:\n        c2: int = votes.get(labels[idx], 0)\n        if c2 > top:\n            top = c2\n            winner = labels[idx]\n    return winner\n",
   "provenance": "authored"
 }

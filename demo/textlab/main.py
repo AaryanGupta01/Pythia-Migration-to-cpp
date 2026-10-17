@@ -19,7 +19,7 @@ import argparse
 from textlab.features.collatz import collatz_longest
 from textlab.features.primes import prime_square_sum
 from textlab.ml.embed import normalize_rows
-from textlab.ml.kmeans import kmeans
+from textlab.ml.kmeans import KMeans
 from textlab.ml.knn import knn_vote
 from textlab.ml.schedule import make_lr_schedule
 from textlab.signal.window import energy_profile
@@ -27,7 +27,7 @@ from textlab.sim.life import life_generations
 from textlab.sim.montecarlo import monte_carlo_pi
 from textlab.sim.nbody import simulate_energy
 from textlab.text.bpe import count_pairs
-from textlab.text.corpus import load_corpus, make_words, write_corpus
+from textlab.text.corpus import CorpusBuilder, load_corpus, write_corpus
 from textlab.text.distance import edit_distance
 from textlab.text.vocab import Vocab
 from textlab.util.parse import parse_number, summarize
@@ -47,7 +47,7 @@ def fuzzy_dedup(words, threshold):
 
 def stage_text(scale):
     rng = Rng(7)
-    words = load_corpus(write_corpus(make_words(rng, 40, 5500 * scale)))
+    words = load_corpus(write_corpus(CorpusBuilder(rng).make_words(40, 5500 * scale)))
     reps = fuzzy_dedup(words, 4)
     print("text: %d words, %d clusters after fuzzy dedup" % (len(words), len(reps)))
     ids = [ord(ch) - 97 if ch != " " else 26 for ch in " ".join(words)]
@@ -55,7 +55,7 @@ def stage_text(scale):
     ids = vocab.train(ids, 55 + 10 * scale)
     pairs = count_pairs(ids, 1024)
     print("bpe: vocab %d, %d tokens, %d distinct pairs" % (vocab.size, len(ids), len(pairs)))
-    meta = [parse_number(t) for t in ("12", "3.5", "x7", "40") * (50 * scale)]
+    meta = [parse_number(t) for t in ("12", "7", "", "40") * (50 * scale)]
     print("meta: %.2f" % summarize(*[m for m in meta if not isinstance(m, str)]))
 
 
@@ -81,19 +81,20 @@ def stage_ml(scale):
         points.append([centers[c][k] + rng.next_float() - 0.5 for k in range(4)])
         labels.append(c)
     start = [points[i * 7][:] for i in range(16)]
-    assign, final = kmeans(points, start, 80 * scale)
+    model = KMeans(start)
+    assign = model.fit(points, 80 * scale)
     print("kmeans: sizes %s" % [assign.count(c) for c in range(16)])
     train, tl = points[:900], labels[:900]
     votes = [knn_vote(train, tl, points[900 + q], 5) for q in range(900 * scale)]
     print("knn: accuracy %.3f" % (sum(v == labels[900 + q] for q, v in enumerate(votes)) / len(votes)))
-    unit = normalize_rows(final)
+    unit = normalize_rows(model.centroids)
     print("embed: checksum %.4f" % sum(sum(abs(v) for v in row) for row in unit))
     lr = make_lr_schedule(0.5, 0.1)
     print("lr after 100 steps: %.4f" % lr(100))
 
 
 def stage_features(scale):
-    print("primes: %d" % prime_square_sum(5000000 * scale, 1000003))
+    print("primes: %d" % prime_square_sum(300000 * scale, 1000003))
     print("collatz: %d" % collatz_longest(150000 * scale))
     rng = Rng(5)
     signal = [rng.next_float() - 0.5 for _ in range(5000)]

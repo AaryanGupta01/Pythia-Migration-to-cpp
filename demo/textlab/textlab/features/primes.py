@@ -1,23 +1,20 @@
-"""Prime-based features: a sieve helper plus a checksum built on it."""
+"""Prime-based features: a trial-division helper plus a checksum built on it."""
 
 
-def sieve_flags(n: int) -> list[bool]:
-    flags: list[bool] = []
-    for i in range(n + 1):
-        flags.append(True)
-    for p in range(2, n + 1):
-        if flags[p]:
-            m: int = p * p
-            while m <= n:
-                flags[m] = False
-                m += p
-    return flags
+def is_prime(n: int) -> bool:
+    if n < 2:
+        return False
+    d: int = 2
+    while d * d <= n:
+        if n % d == 0:
+            return False
+        d += 1
+    return True
 
 
-def prime_square_sum(n: int, mod: int) -> int:
-    flags: list[bool] = sieve_flags(n)
+def prime_square_sum(limit: int, mod: int) -> int:
     total: int = 0
-    for p in range(2, n + 1):
-        if flags[p]:
+    for p in range(2, limit):
+        if is_prime(p):
             total = (total + p * p) % mod
     return total

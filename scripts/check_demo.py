@@ -33,11 +33,11 @@ from pythia.cli import compile_source  # noqa: E402
 TARGETS = [
     ("textlab/text/distance.py", "edit_distance", "win_guarded", ""),
     ("textlab/sim/nbody.py", "simulate_energy", "win_exact", ""),
-    ("textlab/features/primes.py", "prime_square_sum", "win_guarded", "callee: sieve_flags"),
+    ("textlab/features/primes.py", "prime_square_sum", "win_guarded", "callee: is_prime"),
     ("textlab/ml/kmeans.py", "assign_clusters", "win_exact", "list[list[float]]"),
     ("textlab/text/bpe.py", "count_pairs", "win_guarded", "dict[int,int] result"),
     ("textlab/sim/montecarlo.py", "monte_carlo_pi", "win_guarded", ""),
-    ("textlab/ml/knn.py", "knn_vote", "fixable", "comprehension/zip/lambda/sorted"),
+    ("textlab/ml/knn.py", "knn_vote", "fixable", "comprehension/zip/sorted/tuple loop"),
     ("textlab/sim/life.py", "life_generations", "fixable", "tuple loop/ternary/enumerate/sum"),
     ("textlab/features/collatz.py", "collatz_longest", "fixable", "unannotated"),
     ("textlab/signal/window.py", "window_energy", "boundary", "5000-float list per call"),
@@ -48,6 +48,8 @@ TARGETS = [
     ("textlab/text/corpus.py", "load_corpus", "no", "file I/O"),
     ("textlab/text/vocab.py", "Vocab.train", "no", "method of class"),
     ("textlab/util/rng.py", "Rng.next_float", "no", "method of class"),
+    ("textlab/ml/kmeans.py", "KMeans.fit", "no", "method of class"),
+    ("textlab/text/corpus.py", "CorpusBuilder.make_words", "no", "method of class"),
 ]
 
 

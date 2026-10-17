@@ -5,7 +5,7 @@
     "knn_vote": {
       "fid": "textlab/ml/knn.py::knn_vote",
       "file": "textlab/ml/knn.py",
-      "note": "comprehension/zip/lambda/sorted -> explicit loops + k-pass selection; first attempt keeps a generator expression, so the retry loop shows",
+      "note": "comprehension/generator/zip/sorted/tuple loops -> explicit loops + k-pass selection; first attempt keeps a generator expression inside sum(), so the retry loop shows",
       "attempts": [
         {
           "attempt": 1,
