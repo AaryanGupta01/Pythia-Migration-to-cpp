@@ -146,13 +146,30 @@ def equivalence_inputs(name):
             train = [[round(r.f(), 2) for _ in range(d)] for _ in range(n)]
             labels = [r.i(4) for _ in range(n)]
             yield (train, labels, [round(r.f(), 2) for _ in range(d)], 1 + r.i(7))
+        # edge cases the replay oracle also probes: empty/ragged data, k = 0, negative k, k > n
+        yield ([], [], [0.5], 3)
+        yield ([[0.1, 0.2]], [1], [0.5, 0.5], 0)
+        yield ([[0.1, 0.2], [0.3, 0.9], [0.5, 0.1]], [1, 2, 2], [0.5], -1)
+        yield ([[0.1, 0.2], [0.3, 0.9], [0.5, 0.1]], [1, 2, 2], [0.4, 0.4, 0.4], 99)
+        yield ([[0.1], [0.3, 0.9], [0.5, 0.1, 0.0]], [1, 2, 2], [0.4, 0.4], 2)
     elif name == "life_generations":
         for _ in range(25):
             h, w = 3 + r.i(9), 3 + r.i(9)
             yield ([[1 if r.f() < 0.4 else 0 for _ in range(w)] for _ in range(h)], r.i(6))
+        yield ([[], [], [], [1, 5, 0, -18], [41, -1]], 0)          # ragged, gens = 0 (found by the oracle)
+        yield ([[1, 0, 1], [0, 1]], 2)
+        yield ([], 3)
+        yield ([[1, 1, 1]], -2)
     elif name == "collatz_longest":
         for lim in (2, 3, 10, 97, 1000, 5000):
             yield (lim,)
+
+
+def outcome(f, args):
+    try:
+        return ("value", f(*args))
+    except Exception as e:                      # replay compares the exception class, not the message
+        return ("raises", type(e).__name__)
 
 
 def check_rewrite(rel, name, rewrites):
@@ -171,8 +188,8 @@ def check_rewrite(rel, name, rewrites):
     for args in equivalence_inputs(name):
         a, b = copy.deepcopy(args), copy.deepcopy(args)
         n += 1
-        if orig(*a) != new(*b) or a != b:
-            errs.append(f"rewrite differs from original on {args!r}")
+        if outcome(orig, a) != outcome(new, b) or a != b:
+            errs.append(f"rewrite differs from original on {args!r}: {outcome(orig, copy.deepcopy(args))} vs {outcome(new, copy.deepcopy(args))}")
             break
     return errs, n
 

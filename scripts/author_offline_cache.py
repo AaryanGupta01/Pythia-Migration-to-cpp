@@ -5,9 +5,9 @@
 
 key = sha256(f"{sha256(function_source)}|{attempt}") as in studio/CONTRACTS.md section 7. `function_source`
 must be exactly the text the fixer hashes: the function as it appears in the file (def line to last line,
-no trailing newline) after auto-annotation. For these three demo functions the annotator adds nothing for
-knn_vote/life_generations (already annotated, only construct-level problems) and collatz_longest is keyed by
-its verbatim source. Adjust `function_source()` if fixer.cache_key's input convention differs.
+no trailing newline) after auto-annotation. For knn_vote and life_generations the annotator adds nothing, so the
+key is the verbatim source. collatz_longest needs only annotations from the trace (llm_needed=false), so no
+entry is written for it. Replies are wrapped in a fenced python block like a real model reply.
 Entries are written with provenance "authored"; scripts/record_offline_cache.sh replaces them with
 "recorded" ones.
 """
@@ -45,11 +45,15 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     n = 0
     for name, spec in data["functions"].items():
+        if spec.get("llm_needed") is False:          # annotation from the trace is enough: the fixer never asks
+            continue
         src = function_source(spec["file"], name)
         for att in spec["attempts"]:
+            # the fixer extracts the fenced python block, exactly like from a real model reply
+            reply = f"Here is a PySub version of `{name}`:\n\n```python\n{att['pysub'].rstrip()}\n```\n"
             entry = {"model": "authored", "attempt": att["attempt"],
                      "function_sha": hashlib.sha256(src.encode()).hexdigest(),
-                     "response": att["pysub"], "provenance": "authored"}
+                     "response": reply, "provenance": "authored"}
             (out / f"{key_for(src, att['attempt'])}.json").write_text(json.dumps(entry, indent=2), encoding="utf-8")
             n += 1
     print(f"wrote {n} authored cache entries to {out}")

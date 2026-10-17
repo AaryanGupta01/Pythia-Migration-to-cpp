@@ -1,7 +1,0 @@
-{
-  "model": "authored",
-  "attempt": 1,
-  "function_sha": "9ff3563c66ca90de6d60b0d3485347cac039cf788b6a6924bc62356195ee1d55",
-  "response": "def collatz_longest(limit: int) -> int:\n    best: int = 0\n    best_start: int = 1\n    for start in range(1, limit):\n        n: int = start\n        steps: int = 0\n        while n != 1:\n            if n % 2 == 0:\n                n = n // 2\n            else:\n                n = 3 * n + 1\n            steps += 1\n        if steps > best:\n            best = steps\n            best_start = start\n    return best_start * 1000 + best\n",
-  "provenance": "authored"
-}
