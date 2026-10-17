@@ -27,7 +27,7 @@ mkdir -p lib
 for cpp in src/pythia_*.cpp; do
   name="$(basename "$cpp" .cpp)"
   echo "building $name"
-  c++ -std=c++17 -O3 -shared -fPIC $INC -Isrc "$cpp" src/pyrt.cpp -o "lib/$name$EXT"
+  c++ -std=c++17 -O3 -fPIC -fvisibility=hidden -w -shared $INC -Isrc "$cpp" src/pyrt.cpp -o "lib/$name$EXT"
 done
 echo "done: $(ls lib | wc -l) module(s) in _pythia_accel/lib"
 '''

@@ -63,7 +63,7 @@ def _install():
     codes = {}
     stacks = {}
     realpaths = {}
-    mon = getattr(sys, "monitoring", None)
+    mon = None if os.environ.get("PYTHIA_TRACE_NO_MON") else getattr(sys, "monitoring", None)
     lock = threading.Lock()
     os.makedirs(out_dir, exist_ok=True)
 

@@ -239,18 +239,14 @@ class Pipeline:
         from . import rank
         recs = self.recs()
         self.stage("rank", "running", caption="Scoring hotspots: time share x eligibility x expected benefit")
-        profile = {r.id: r.trace for r in recs if r.trace} if self.trace and self.trace.ok else None
+        profile = {"total_s": self.trace.total_s, "per_fn": self.trace.per_fn} if self.trace and self.trace.ok else None
         try:
-            ordered = rank.rank(recs, profile, None)
+            ordered = rank.rank(recs, profile, self.emit)          # emits rank.done
         except Exception as ex:
             self.err("rank", ex)
             ordered = sorted(recs, key=lambda r: -r.score.get("total", 0))
-        # keep job order = ranking order (best first)
         seen = {r.id for r in ordered}
         self.js.records = {r.id: r for r in ordered + [r for r in recs if r.id not in seen]}
-        self.emit("rank.done", {"ranking": [{"id": r.id, "rank": i + 1, "score": r.score, "status": r.status,
-                                             "reason": r.reason} for i, r in enumerate(ordered)]},
-                  stage="rank", caption="Ranked every function")
         for r in ordered:
             self.save(r)
         n_dec = sum(1 for r in ordered if r.status == "declined")
@@ -283,7 +279,7 @@ class Pipeline:
     def do_fix(self) -> None:
         from . import annotate, fixer, scan
         js, ws = self.js, self.ws
-        fixables = [r for r in self.recs() if r.eligibility == "fixable"]
+        fixables = [r for r in self.recs() if r.eligibility == "fixable" and r.status in ("fixable", "declined")]
         self.stage("fix", "running", caption="Fixing near-misses: annotate from observed types, else ask the LLM for a PySub rewrite")
         self.llm = self.llm_client() if fixables else None
         fx = None
@@ -348,6 +344,8 @@ class Pipeline:
             r.diagnostics = e.diagnostics
         # 2. LLM rewrite
         if fx is None:
+            if r.status == "declined":                      # probe not possible without a fix
+                return False
             r.reason = (r.reason or "needs a rewrite").rstrip(".") + " (LLM fixer disabled)"
             self.emit("fix.done", {"id": r.id, "ok": False, "reason": r.reason}, stage="fix")
             self.fn_step(r, "LLM fixer disabled", "info")
@@ -362,9 +360,7 @@ class Pipeline:
                 return self._fixed(r, e, f"LLM rewrite accepted after {len(r.rewrites)} attempt(s)", rewrites=True)
             res.reason = self._first_diag(e)
         r.status, r.eligibility = "not_eligible", "not_eligible"
-        r.reason = res.reason or "the LLM could not produce valid PySub"
-        self.emit("fix.done", {"id": r.id, "ok": False, "reason": r.reason}, stage="fix",
-                  caption=f"{r.name}: no valid PySub rewrite found")
+        r.reason = res.reason or "the LLM could not produce valid PySub"      # fixer already emitted fix.done
         self.fn_step(r, "rewrite failed", "failed")
         return False
 
@@ -372,7 +368,8 @@ class Pipeline:
         r.private["module_src"] = e.source
         r.sources["pysub"] = e.source
         r.diagnostics = []
-        r.status, r.reason = "pending", None
+        if r.status == "fixable":
+            r.status, r.reason = "pending", None
         if not rewrites:
             self.emit("fix.done", {"id": r.id, "ok": True, "reason": why}, stage="fix",
                       caption=f"{r.name}: {why}")
@@ -404,7 +401,7 @@ class Pipeline:
             r.sources["cpp"], r.sources["wrapper_cpp"] = d.get("cpp"), d.get("wrapper_cpp")
             r.fidelity = d.get("fidelity") or []
             r.cpp_line_map = d.get("cpp_line_map") or {}
-            cpp_path = out / f"{d.get('modname')}.cpp"
+            cpp_path = Path(d.get("cpp_path") or out / f"{d.get('modname')}.cpp")
             r.build = {"ok": bool(d.get("ok") and d.get("so_path")), "module": d.get("modname"),
                        "so": d.get("so_path"), "cached": bool(d.get("cached")), "compile_s": d.get("compile_s") or 0.0,
                        "log": d.get("build_log") or "", "exposed": d.get("exposed") or [],
