@@ -218,3 +218,38 @@ POST /api/upload              multipart file → {job_id,…}   (drag-drop conve
 
 ## 8. Frontend (D) must-haves, pointers only
 Design/behaviour is in `prompt.md` §3. Routes via hash (`#/…`). Query flags: `?presenter=1` (presenter mode), `?mock=1` (self-contained scripted event stream so the UI runs with no backend), `?job=<id>` (open/replay a saved job). Dark default, Inter + JetBrains Mono, one accent colour, no emoji. Reducer is a pure function `(state, event) → state` so live, mock and replay share it.
+
+## 9. Analyzer internals (B1 = front half, B2 = back half) — Python signatures
+
+`pythia/studio/models.py` (already written: `FunctionRecord`, `Workspace`, `JOURNEY_KEYS`, `STAGES`) is the shared model — extend additively only. `emit(type, data, stage=None, caption=None)` is the event callback (§4).
+
+**B1 (front half)** — `ingest.py scan.py annotate.py rank.py fixer.py llm.py`
+```python
+ingest.ingest(input: dict, home: Path, emit) -> Workspace            # snippet|file|folder|git|demo; .gitignore-aware; skips venv/node_modules/.git/data>5MB; streams ingest.progress; writes original/ and work/ (identical copies)
+scan.scan_workspace(ws, emit) -> list[FunctionRecord]                # ast-scan every .py; sets id,file,name,line..,metrics,sources.original,eligibility,status,reason,diagnostics; emits scan.function/scan.done
+scan.extract_pysub(rec, ws, annotated_src: str|None=None, override_src: str|None=None) -> Extract
+      # Extract{ok, source:str, helpers:list[str], diagnostics:list[dict], uses:list[str]}: a standalone PySub module text = inlined module-level
+      # literal constants + transitive same-module callee closure (each also eligible) + the target function (line numbering of the target preserved
+      # when override_src is None). Normalises typing.List/Dict -> list/dict, strips docstrings. This is what is typechecked and handed to libmode.
+annotate.annotate(rec, trace: dict|None) -> str|None                 # observed (trace) types -> annotated function source (same line count); None if nothing to add / no trace
+rank.rank(records, trace_profile: dict|None, emit=None) -> list[FunctionRecord]   # fills score{...}, share, may set status="declined" w/ reason (boundary cost), returns best-first
+fixer.Fixer(llm, offline: bool, cache_dir: Path|None).fix(rec, ws, emit) -> FixResult   # {ok, pysub|None, attempts:[...rewrites...], reason|None}; <=3 loops with typechecker feedback
+llm.make_client(model, offline_cache_dir) -> LLMClient|None          # Anthropic (ANTHROPIC_API_KEY) | OfflineCache | None
+```
+**B2 (back half)** — `trace.py codec.py replay.py bench.py splice.py export.py pipeline.py engine.py` + `runtime/pythia_accel/`
+```python
+trace.run_trace(ws, cmd: str, timeout_s, targets: dict[fid -> {file,name,line}], emit) -> TraceResult
+      # {ok, total_s, exit_code, timed_out, per_fn:{fid:{calls,cum_s,self_s,arg_types,ret_type,avg_arg_elems,avg_ret_elems,samples}}, samples_dir:Path, stdout_tail}
+      # sys.monitoring (3.12+) else sys.setprofile; samples = JSONL of {"args":enc,"ret":enc|null,"exc":name|null} <=500/fn, size-capped; typed JSON codec in codec.py (floats as hex)
+replay.replay(rec, ws, so_path, modname, samples_path|None, n_max=500) -> dict      # §2 `replay` shape + "status": verified|guarded|failed; runs in a subprocess worker
+bench.bench_function(rec, ws, so_path, modname, samples_path|None) -> dict          # §2 `bench` shape (median of repeats, per-call timing of replayed args)
+bench.bench_e2e(ws, cmd, which: "original"|"work", timeout_s) -> {seconds, stdout_hash, ok}
+splice.apply(ws, rec, modname, so_path) / splice.revert(ws, rec)                  # idempotent; also installs shim + lib/*.so in work/
+export.export(ws, records, dest: Path|None, zip: bool) -> Path ; export.report_md(job, records) -> str
+pipeline.Pipeline(...).run()                                                       # ingest->scan->trace->rank->fix->compile->verify->benchmark->splice, emitting §4 events + journey states + persistence; compile via pythia.libmode.build_library
+engine.Engine                                                                        # §5 facade
+```
+Persistence of records: `jobs/<job_id>/functions/<fid_hash>.json` (`models.fid_hash`), rewritten after every state change. Until B1 lands, B2 may merge branch `studio/b1-front` (and `studio/a-compiler` for libmode) from the shared repo.
+
+## 10. Git workflow for agents
+Each agent works in its own worktree on its own branch: `studio/a-compiler`, `studio/b1-front`, `studio/b2-back`, `studio/c-server`, `studio/d-web`, `studio/e-demo`. Commit early and at every milestone (stage only your own paths). Other agents may `git merge` your branch for integration, so keep it green. Never rewrite history. The lead merges everything.
