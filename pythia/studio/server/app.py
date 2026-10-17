@@ -14,14 +14,15 @@ from typing import Any, Optional
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from . import playground
+from .. import branding
 from .bus import Bus
 
 log = logging.getLogger("pythia.studio")
 ROOT = Path(__file__).resolve().parents[3]
-DIST = ROOT / "studio" / "web" / "dist"
+from pythia.paths import WEB_DIST as DIST  # noqa: E402  (wheel or checkout)
 MAX_UPLOAD = 64 << 20
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1", "testserver"}
 DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "http://127.0.0.1:4173"]
@@ -73,6 +74,12 @@ def fs_list(path: str) -> dict:
     return {"path": str(p), "parent": parent, "entries": entries, "home": str(Path.home())}
 
 
+def allowed_hosts() -> set:
+    """localhost names plus PYTHIA_ALLOWED_HOSTS (comma separated; for Docker / LAN use)."""
+    extra = {h.strip().lower() for h in os.environ.get("PYTHIA_ALLOWED_HOSTS", "").split(",") if h.strip()}
+    return LOCAL_HOSTS | extra
+
+
 class LocalOnly:
     """Pure ASGI guard: only answer requests addressed to localhost (blocks DNS rebinding)."""
 
@@ -83,7 +90,7 @@ class LocalOnly:
         if scope["type"] in ("http", "websocket"):
             host = dict(scope.get("headers") or []).get(b"host", b"").decode("latin1")
             name = host.rsplit(":", 1)[0] if not host.startswith("[") else host.split("]")[0] + "]"
-            if name and name.lower() not in LOCAL_HOSTS:
+            if name and name.lower() not in allowed_hosts():
                 if scope["type"] == "websocket":
                     await send({"type": "websocket.close", "code": 1008})
                 else:
@@ -170,6 +177,26 @@ def create_app(engine=None, home: Optional[str] = None) -> FastAPI:
     @app.put("/api/settings")
     async def put_settings(request: Request):
         return engine.update_settings(await body(request))
+
+    @app.get("/api/doctor")
+    def doctor():
+        from pythia.studio import doctor as doctor_mod
+        return doctor_mod.run(home_p)
+
+    # -- installable-app plumbing: manifest + icons (generated here, so the frontend bundle stays untouched) --
+    @app.get("/manifest.webmanifest", include_in_schema=False)
+    def manifest():
+        return Response(branding.MANIFEST, media_type="application/manifest+json")
+
+    @app.get("/icon.svg", include_in_schema=False)
+    def icon_svg():
+        return Response(branding.SVG, media_type="image/svg+xml")
+
+    @app.get("/icon-{size}.png", include_in_schema=False)
+    def icon_png(size: int):
+        if size not in (192, 512):
+            raise HTTPException(404, "icon sizes: 192, 512")
+        return Response(branding.png(size), media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
     # -- jobs ------------------------------------------------------------------------------------
     def start(input_: dict, options: dict) -> dict:
@@ -359,7 +386,8 @@ def create_app(engine=None, home: Optional[str] = None) -> FastAPI:
             f = (DIST / path).resolve()
             if path and f.is_file() and DIST.resolve() in f.parents:
                 return FileResponse(f)
-            return FileResponse(DIST / "index.html")
+            html = (DIST / "index.html").read_text(encoding="utf-8")
+            return HTMLResponse(html.replace("</head>", branding.HEAD_TAGS + "</head>", 1) if "rel=\"manifest\"" not in html else html)
         return HTMLResponse(
             "<!doctype html><meta charset=utf-8><title>PYTHIA Studio</title>"
             "<body style='font:16px system-ui;background:#0b0c0e;color:#d8dade;padding:48px;max-width:640px'>"

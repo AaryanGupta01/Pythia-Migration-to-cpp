@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, FileCode2, Flame, Folder, FolderOpen, Search } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { Check, ChevronDown, ChevronRight, Copy, Flame, GitCompare, Route, Search, X } from 'lucide-react'
 import { api } from './api'
 import { useStudio } from './store'
 import type { FunctionSummary, Status, TreeNode } from './types'
-import { STATUS, basename, cn, fmtPct, fmtX } from './lib/format'
-import { Bar, Empty, PanelTitle, Skeleton, StatusChip } from './ui'
+import { STATUS, basename, cn, fmtPct } from './lib/format'
+import { Empty, PanelTitle, Skeleton, StatusChip } from './ui'
+import { CountUp } from './motion'
+import { FileIcon, FolderIcon } from './fileicons'
 
 export function SidePanel() {
   const view = useStudio((s) => s.sideView)
@@ -45,7 +48,7 @@ function Explorer() {
   return (
     <>
       <PanelTitle>{js.name ? `Explorer · ${js.name}` : 'Explorer'}</PanelTitle>
-      <div className="min-h-0 flex-1 overflow-auto py-1">
+      <div className="min-h-0 flex-1 overflow-auto py-1.5">
         {!js.workspaceId ? (
           <Empty title="No folder open">Open a project from the Welcome tab to browse its files.</Empty>
         ) : err ? (
@@ -71,7 +74,8 @@ function TreeRow({ node, depth, byFile }: { node: TreeNode; depth: number; byFil
   const isDir = node.type === 'dir'
   const active = s.activeTab === `file:${node.path}`
   const fns = byFile[node.path] ?? []
-  const pad = 8 + depth * 12
+  const pad = 10 + depth * 14
+  const guides = Array.from({ length: depth }, (_, i) => <span key={i} aria-hidden className="absolute top-0 h-full w-px bg-line" style={{ left: 16 + i * 14 }} />)
   return (
     <div>
       <div
@@ -79,18 +83,20 @@ function TreeRow({ node, depth, byFile }: { node: TreeNode; depth: number; byFil
         tabIndex={0}
         aria-expanded={isDir ? open : undefined}
         onClick={() => (isDir ? setOpen(!open) : s.openFile(node.path))}
+        onDoubleClick={() => !isDir && s.pinTab(`file:${node.path}`)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') isDir ? setOpen(!open) : s.openFile(node.path)
           if (e.key === 'ArrowRight' && isDir) setOpen(true)
           if (e.key === 'ArrowLeft' && isDir) setOpen(false)
         }}
-        className={cn('group flex h-[24px] cursor-pointer items-center gap-1 pr-2 text-sm hover:bg-hover/60', active && 'bg-hover text-fg')}
+        className={cn('group relative flex h-[26px] cursor-pointer items-center gap-1.5 pr-2.5 text-[13px] transition-colors hover:bg-hover/60', active && 'bg-hover text-fg')}
         style={{ paddingLeft: pad }}
       >
+        {guides}
         {isDir ? (
           <>
             {open ? <ChevronDown size={13} className="flex-none text-fg3" /> : <ChevronRight size={13} className="flex-none text-fg3" />}
-            {open ? <FolderOpen size={14} className="flex-none text-fg3" /> : <Folder size={14} className="flex-none text-fg3" />}
+            <FolderIcon open={open} />
           </>
         ) : (
           <>
@@ -105,10 +111,10 @@ function TreeRow({ node, depth, byFile }: { node: TreeNode; depth: number; byFil
             >
               {fnOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
             </span>
-            <FileCode2 size={14} className="flex-none text-fg3" />
+            <FileIcon name={node.name} />
           </>
         )}
-        <span className="min-w-0 flex-1 truncate">{node.name}</span>
+        <span className={cn('min-w-0 flex-1 truncate', !isDir && !active && 'text-fg2')}>{node.name}</span>
         <Badges n={node} />
       </div>
       {isDir && open && node.children?.map((c) => <TreeRow key={c.path} node={c} depth={depth + 1} byFile={byFile} />)}
@@ -119,13 +125,19 @@ function TreeRow({ node, depth, byFile }: { node: TreeNode; depth: number; byFil
             role="treeitem"
             tabIndex={0}
             onClick={() => s.openFunction(f.id)}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              s.set({ contextMenu: { x: e.clientX, y: e.clientY, id: f.id } })
+            }}
             onKeyDown={(e) => e.key === 'Enter' && s.openFunction(f.id)}
-            className={cn('flex h-[22px] cursor-pointer items-center gap-2 pr-2 text-xs text-fg2 hover:bg-hover/60', s.activeTab === `fn:${f.id}` && 'bg-hover text-fg')}
-            style={{ paddingLeft: pad + 28 }}
+            className={cn('relative flex h-[24px] cursor-pointer items-center gap-2 pr-2.5 text-xs text-fg2 hover:bg-hover/60', s.activeTab === `fn:${f.id}` && 'bg-hover text-fg')}
+            style={{ paddingLeft: pad + 30 }}
           >
+            {guides}
+            <span aria-hidden className="absolute top-0 h-full w-px bg-line" style={{ left: 16 + depth * 14 }} />
             <span className={cn('h-1.5 w-1.5 flex-none rounded-full', STATUS[f.status].dot)} />
             <span className="mono min-w-0 flex-1 truncate">{f.name}</span>
-            {f.speedup ? <span className="tnum text-ok">{fmtX(f.speedup)}</span> : null}
+            {f.speedup ? <span className="tnum text-ok">{f.speedup.toFixed(1)}×</span> : null}
           </div>
         ))}
     </div>
@@ -138,13 +150,13 @@ function Badges({ n }: { n: TreeNode }) {
   return (
     <span className="tnum flex flex-none items-center gap-1.5 text-2xs">
       {b.hotspots > 0 && (
-        <span className="flex items-center gap-0.5 text-fg3" title={`${b.hotspots} hotspots`}>
+        <span className="flex items-center gap-0.5 text-fg3" data-tip={`${b.hotspots} hotspots`}>
           <Flame size={10} />
           {b.hotspots}
         </span>
       )}
       {b.accelerated > 0 && (
-        <span className="rounded bg-ok/15 px-1 text-ok" title={`${b.accelerated} accelerated`}>
+        <span className="rounded-full bg-ok/15 px-1.5 text-ok" data-tip={`${b.accelerated} accelerated`}>
           {b.accelerated}
         </span>
       )}
@@ -164,6 +176,8 @@ const FILTERS: { v: Filter; l: string; test: (s: Status) => boolean }[] = [
 function Hotspots() {
   const js = useStudio((s) => s.js)
   const openFunction = useStudio((s) => s.openFunction)
+  const pinTab = useStudio((s) => s.pinTab)
+  const set = useStudio((s) => s.set)
   const activeTab = useStudio((s) => s.activeTab)
   const [filter, setFilter] = useState<Filter>('all')
   const [q, setQ] = useState('')
@@ -175,24 +189,22 @@ function Hotspots() {
   }, [js.order, js.functions, filter, q])
   const maxShare = useMemo(() => Math.max(0.01, ...Object.values(js.functions).map((f) => f.share ?? 0)), [js.functions])
   const ranked = !!js.ranking
+  const animate = list.length <= 120
 
   return (
     <>
-      <PanelTitle right={<span className="tnum text-xs text-fg3">{list.length}</span>}>{ranked ? 'Hotspots · ranked' : 'Hotspots'}</PanelTitle>
+      <PanelTitle right={<span className="tnum rounded-full bg-hover px-1.5 text-xs text-fg2">{list.length}</span>}>{ranked ? 'Hotspots · ranked' : 'Hotspots'}</PanelTitle>
       <div className="flex flex-none flex-col gap-2 border-b border-line p-2">
-        <label className="flex h-6 items-center gap-1.5 rounded-md border border-line2 bg-bg px-2 text-fg3 focus-within:border-accent">
+        <label className="flex h-7 items-center gap-1.5 rounded-lg border border-line2 bg-bg px-2 text-fg3 transition-colors focus-within:border-accent">
           <Search size={12} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter functions" aria-label="Filter functions" className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg3" />
+          {q && <button aria-label="Clear filter" onClick={() => setQ('')}><X size={11} /></button>}
         </label>
-        <div className="flex gap-1">
+        <div className="flex gap-0.5 rounded-lg bg-bg p-0.5">
           {FILTERS.map((f) => (
-            <button
-              key={f.v}
-              onClick={() => setFilter(f.v)}
-              aria-pressed={filter === f.v}
-              className={cn('rounded px-1.5 py-0.5 text-xs transition-colors', filter === f.v ? 'bg-hover text-fg' : 'text-fg3 hover:text-fg2')}
-            >
-              {f.l}
+            <button key={f.v} onClick={() => setFilter(f.v)} aria-pressed={filter === f.v} className={cn('relative flex-1 rounded-md px-1.5 py-0.5 text-xs transition-colors', filter === f.v ? 'text-fg' : 'text-fg3 hover:text-fg2')}>
+              {filter === f.v && <motion.span layoutId="filter-pill" className="absolute inset-0 rounded-md bg-hover" transition={{ duration: 0.16 }} />}
+              <span className="relative">{f.l}</span>
             </button>
           ))}
         </div>
@@ -200,7 +212,7 @@ function Hotspots() {
       <div className="min-h-0 flex-1 overflow-auto">
         {!js.jobId ? (
           <Empty title="No hotspots yet" icon={<Flame size={20} />}>
-            Open a project and PYTHIA will rank its functions by real time spent and by how well they compile.
+            Open a project and PYTHIA ranks its functions by real time spent and by how well they compile.
           </Empty>
         ) : !list.length && js.state === 'running' && !js.order.length ? (
           <div className="space-y-3 p-3" aria-busy>
@@ -215,36 +227,95 @@ function Hotspots() {
           <Empty title="Nothing matches">Clear the filter to see all {js.order.length} functions.</Empty>
         ) : (
           <ul>
-            {list.slice(0, limit).map((f, i) => (
-              <li key={f.id}>
-                <button
-                  onClick={() => openFunction(f.id)}
-                  className={cn('block w-full border-b border-line/60 px-3 py-2 text-left transition-colors hover:bg-hover/60', activeTab === `fn:${f.id}` && 'bg-hover')}
-                >
-                  <div className="flex items-baseline gap-2">
-                    {ranked && <span className="tnum w-5 flex-none text-right text-2xs text-fg3">{js.order.indexOf(f.id) + 1}</span>}
-                    <span className="mono min-w-0 flex-1 truncate text-fg">{f.name}</span>
-                    <span className={cn('tnum flex-none text-sm font-medium', f.speedup ? 'text-ok' : f.probe_speedup ? 'text-fg3' : 'text-fg3')}>
-                      {f.speedup ? fmtX(f.speedup) : f.probe_speedup ? `${fmtX(f.probe_speedup)} probe` : ''}
-                    </span>
-                  </div>
-                  <div className={cn('mt-0.5 truncate text-xs text-fg3', ranked && 'pl-7')}>{basename(f.file)}</div>
-                  <div className={cn('mt-1.5 flex items-center gap-2', ranked && 'pl-7')}>
-                    <Bar value={f.share ?? 0} max={maxShare} className="h-[5px] flex-1" color={f.status === 'not_eligible' ? 'bg-line2' : 'bg-accent/80'} />
-                    <span className="tnum w-9 flex-none text-right text-2xs text-fg3">{fmtPct(f.share, f.share != null && f.share < 0.1 ? 1 : 0)}</span>
-                    <StatusChip status={f.status} dense />
-                  </div>
-                </button>
-                {i === limit - 1 && list.length > limit && (
-                  <button onClick={() => setLimit(limit + 200)} className="w-full py-2 text-xs text-accent hover:underline">
-                    Show {Math.min(200, list.length - limit)} more
+            {list.slice(0, limit).map((f, i) => {
+              const rank = js.order.indexOf(f.id) + 1
+              const Row = animate ? motion.li : 'li'
+              const anim = animate ? { layout: 'position' as const, initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.2, delay: Math.min(i, 12) * 0.012 } } : {}
+              return (
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                <Row key={f.id} {...(anim as any)}>
+                  <button
+                    onClick={() => openFunction(f.id)}
+                    onDoubleClick={() => pinTab(`fn:${f.id}`)}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      set({ contextMenu: { x: e.clientX, y: e.clientY, id: f.id } })
+                    }}
+                    className={cn('relative block w-full border-b border-line/60 px-3 py-2.5 text-left transition-colors hover:bg-hover/50', activeTab === `fn:${f.id}` && 'bg-hover/80')}
+                  >
+                    {activeTab === `fn:${f.id}` && <span className="absolute inset-y-1 left-0 w-[2px] rounded-r bg-accent" />}
+                    <div className="flex items-baseline gap-2">
+                      {ranked && <span className="tnum w-5 flex-none text-right text-2xs text-fg3">{rank}</span>}
+                      <span className="mono min-w-0 flex-1 truncate text-[12.5px] text-fg">{f.name}</span>
+                      {f.speedup ? <CountUp value={f.speedup} decimals={1} suffix="×" className="flex-none text-sm font-semibold text-ok" /> : f.probe_speedup ? <span className="tnum flex-none text-xs text-fg3">{f.probe_speedup.toFixed(2)}× probe</span> : null}
+                    </div>
+                    <div className={cn('mt-0.5 flex items-center gap-2 text-xs text-fg3', ranked && 'pl-7')}>
+                      <span className="min-w-0 flex-1 truncate">{basename(f.file)}</span>
+                      <span className="tnum flex-none">{fmtPct(f.share, f.share != null && f.share < 0.1 ? 1 : 0)}</span>
+                    </div>
+                    <div className={cn('mt-1.5 flex items-center gap-2', ranked && 'pl-7')}>
+                      <span className="h-[4px] flex-1 overflow-hidden rounded-full bg-hover">
+                        <span className={cn('block h-full rounded-full transition-[width] duration-700 ease-out', f.status === 'not_eligible' ? 'bg-line2' : 'accent-grad')} style={{ width: `${Math.max(1.5, ((f.share ?? 0) / maxShare) * 100)}%` }} />
+                      </span>
+                      <StatusChip status={f.status} dense />
+                    </div>
                   </button>
-                )}
-              </li>
-            ))}
+                  {i === limit - 1 && list.length > limit && (
+                    <button onClick={() => setLimit(limit + 200)} className="w-full py-2 text-xs text-accent hover:underline">
+                      Show {Math.min(200, list.length - limit)} more
+                    </button>
+                  )}
+                </Row>
+              )
+            })}
           </ul>
         )}
       </div>
     </>
+  )
+}
+
+// ------------------------------------------------------------------ context menu (right click on a function)
+export function ContextMenu() {
+  const m = useStudio((s) => s.contextMenu)
+  const s = useStudio()
+  useEffect(() => {
+    if (!m) return
+    const close = () => useStudio.getState().set({ contextMenu: null })
+    const k = (e: KeyboardEvent) => e.key === 'Escape' && close()
+    window.addEventListener('click', close)
+    window.addEventListener('blur', close)
+    window.addEventListener('keydown', k)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('blur', close)
+      window.removeEventListener('keydown', k)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [m])
+  if (!m) return null
+  const f = s.js.functions[m.id]
+  if (!f) return null
+  const acc = f.status === 'verified' || f.status === 'guarded'
+  const item = (label: string, icon: JSX.Element, run: () => void, disabled?: boolean) => (
+    <button key={label} disabled={disabled} onClick={() => { run(); useStudio.getState().set({ contextMenu: null }) }} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm text-fg2 transition-colors hover:bg-accent/15 hover:text-fg disabled:pointer-events-none disabled:opacity-40">
+      <span className="text-fg3">{icon}</span>
+      {label}
+    </button>
+  )
+  const x = Math.min(m.x, window.innerWidth - 220)
+  const y = Math.min(m.y, window.innerHeight - 200)
+  return (
+    <div role="menu" className="surface-2 fixed z-[75] w-[208px] animate-fadeIn rounded-xl p-1" style={{ left: x, top: y }} onClick={(e) => e.stopPropagation()}>
+      <div className="mono truncate px-2.5 py-1 text-xs text-fg3">{f.name}</div>
+      {item('Open journey', <Route size={14} />, () => s.openFunction(m.id, 'journey'))}
+      {item('Open diff', <GitCompare size={14} />, () => s.openFunction(m.id, 'diff'), !acc)}
+      <div className="my-1 h-px bg-line" />
+      {item(f.decision === 'accepted' ? 'Accepted' : 'Accept', <Check size={14} />, () => s.decide(m.id, 'accepted'), !acc)}
+      {item('Reject', <X size={14} />, () => s.decide(m.id, 'rejected'), !acc)}
+      <div className="my-1 h-px bg-line" />
+      {item('Copy function id', <Copy size={14} />, () => { navigator.clipboard?.writeText(m.id); s.toast('Copied function id', 'ok') })}
+    </div>
   )
 }

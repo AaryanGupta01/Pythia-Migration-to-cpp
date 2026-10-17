@@ -50,5 +50,33 @@ export function fileToB64(f: File): Promise<string> {
   })
 }
 
+export function llmLabel(env: { llm: { enabled: boolean; model: string; provider?: string | null } }) {
+  const l = env.llm
+  if (!l.enabled) return 'LLM off'
+  const m = l.model.replace(/^openai\//, '')
+  if (l.provider === 'groq') return `LLM: Groq · ${m} (free)`
+  if (l.provider === 'anthropic') return `LLM: Anthropic · ${m}`
+  if (l.provider === 'offline-cache') return 'LLM: offline cache'
+  return `LLM: ${m}`
+}
+
+export function compilerLabel(env: { compiler: { found: boolean; name: string | null; version: string | null } }) {
+  const c = env.compiler
+  if (!c.found) return 'No C++ compiler'
+  const v = (c.version ?? '').match(/(\d+\.\d+(?:\.\d+)?)\s*$/)?.[1] ?? (c.version ?? '').match(/\d+(?:\.\d+)*/g)?.pop() ?? ''
+  return `${c.name ?? 'c++'} ${v}`.trim()
+}
+
+/** Who produced a rewrite attempt: the provider that answered, or the offline cache. */
+export function attemptSource(env: { llm: { model: string; provider?: string | null } } | null, a: { source: string; model?: string | null; provider?: string | null }) {
+  if (a.source === 'cache') return 'Offline cache'
+  const p = a.provider ?? env?.llm.provider
+  const m = (a.model ?? env?.llm.model ?? '').replace(/^openai\//, '')
+  if (p === 'groq') return `Groq · ${m}`
+  if (p === 'anthropic') return `Anthropic · ${m}`
+  return m || 'LLM'
+}
+export const fmtLatency = (ms: number | null | undefined) => (ms == null ? '' : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`)
+
 export const basename = (p: string) => p.split('/').pop() ?? p
 export const cn = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ')

@@ -55,7 +55,8 @@ function decorations(notes: LineNote[]): monaco.editor.IModelDeltaDecoration[] {
 export const EDITOR_OPTS: monaco.editor.IStandaloneEditorConstructionOptions = {
   readOnly: true,
   minimap: { enabled: false },
-  fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+  fontFamily: "'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace",
+  fontLigatures: true,
   fontSize: 12.5,
   lineHeight: 19,
   scrollBeyondLastLine: false,

@@ -5,6 +5,8 @@
 BCSE307L Compiler Design · Team 2 · Project **A15 — Typed Source-to-Source Transpiler**
 VIT Vellore, Fall 2026
 
+**PYTHIA Studio** (the web app that finds Python hotspots and accelerates them with verified C++) lives in [`studio/`](studio/README.md); install it with [`INSTALL.md`](INSTALL.md).
+
 ---
 
 ## What it does
