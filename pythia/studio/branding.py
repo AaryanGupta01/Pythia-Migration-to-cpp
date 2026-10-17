@@ -45,6 +45,13 @@ def png(size: int) -> bytes:
             + chunk(b"IDAT", zlib.compress(b"".join(rows), 6)) + chunk(b"IEND", b""))
 
 
+def ico(size: int = 256) -> bytes:
+    """Windows .ico holding one PNG image (Vista+)."""
+    p = png(size)
+    d = size if size < 256 else 0
+    return struct.pack("<HHH", 0, 1, 1) + struct.pack("<BBBBHHII", d, d, 0, 0, 1, 32, len(p), 22) + p
+
+
 MANIFEST = json.dumps({
     "name": "PYTHIA Studio", "short_name": "PYTHIA", "description": "Accelerate Python hotspots with verified C++.",
     "start_url": "/", "scope": "/", "display": "standalone", "background_color": "#0b0c0e", "theme_color": "#0b0c0e",

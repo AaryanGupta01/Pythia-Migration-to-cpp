@@ -144,6 +144,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--engine", choices=["mock", "real"], help="override PYTHIA_ENGINE")
     ap.add_argument("--doctor", action="store_true", help="print the environment check and exit")
     ap.add_argument("--version", action="store_true")
+    ap.add_argument("--export-icon", metavar="FILE", help="write the app icon (.ico or .png by extension) and exit; used by the installers")
     a = ap.parse_args(argv)
 
     if a.home:
@@ -154,6 +155,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         os.environ["PYTHIA_ENGINE"] = a.engine
     home = Path(os.environ.get("PYTHIA_HOME") or Path.home() / ".pythia-studio").expanduser()
     from . import doctor
+    if a.export_icon:
+        from . import branding
+        Path(a.export_icon).write_bytes(branding.ico() if a.export_icon.lower().endswith(".ico") else branding.png(256))
+        return 0
     if a.version:
         print(doctor._version())
         return 0
