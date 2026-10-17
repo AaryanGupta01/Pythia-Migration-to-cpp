@@ -34,6 +34,8 @@ def default_home() -> Path:
 
 class Engine:
     def __init__(self, home: Optional[str] = None):
+        from .envfile import load_env
+        load_env()
         self.home = Path(home) if home else default_home()
         (self.home / "jobs").mkdir(parents=True, exist_ok=True)
         (self.home / "workspaces").mkdir(parents=True, exist_ok=True)
@@ -43,7 +45,7 @@ class Engine:
 
     # ------------------------------------------------------------ settings / env
     def _settings_full(self) -> Dict[str, Any]:
-        s = {"offline": False, "model": "claude-sonnet-5-5", "api_key": None}
+        s = {"offline": False, "model": None, "api_key": None, "provider": "auto"}
         p = self.home / "settings.json"
         if p.exists():
             try:
@@ -54,7 +56,7 @@ class Engine:
 
     def _public_settings(self, s: Dict[str, Any]) -> Dict[str, Any]:
         out = {k: v for k, v in s.items() if k != "api_key"}
-        out["has_api_key"] = bool(s.get("api_key") or os.environ.get("ANTHROPIC_API_KEY"))
+        out["has_api_key"] = bool(s.get("api_key") or os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("GROQ_API_KEY"))
         return out
 
     def settings(self) -> Dict[str, Any]:
@@ -62,7 +64,7 @@ class Engine:
 
     def update_settings(self, patch: Dict[str, Any]) -> Dict[str, Any]:
         s = self._settings_full()
-        for k in ("offline", "model", "api_key"):
+        for k in ("offline", "model", "api_key", "provider"):
             if k in patch:
                 s[k] = patch[k] if patch[k] != "" else None
         atomic_write(self.home / "settings.json", json.dumps(s, indent=1))
@@ -92,18 +94,19 @@ class Engine:
             pyb = True
         except Exception:
             pyb = False
-        key = bool(s.get("api_key") or os.environ.get("ANTHROPIC_API_KEY"))
+        from . import llm as llm_mod
         offline_available = (OFFLINE_DIR / "llm").is_dir() or (OFFLINE_DIR / "so").is_dir()
         offline = bool(s.get("offline") or os.environ.get("PYTHIA_OFFLINE") == "1")
-        llm_on = key or (offline and offline_available)
+        llm_info = llm_mod.llm_status(s.get("model"), offline and offline_available, OFFLINE_DIR / "llm", settings=s)
+        if offline and not llm_info["enabled"]:
+            llm_info = llm_mod.llm_status(s.get("model"), False, None, settings=s)
         wsl = False
         try:
             wsl = "microsoft" in Path("/proc/version").read_text().lower()
         except Exception:
             pass
         return {"compiler": cxx, "pybind11": pyb, "python": sys.version.split()[0], "platform": platform.platform(),
-                "llm": {"enabled": llm_on, "model": s.get("model"),
-                        "hint": None if llm_on else "Set ANTHROPIC_API_KEY to enable the LLM fixer"},
+                "llm": llm_info,
                 "offline_available": offline_available, "offline": offline, "wsl": wsl}
 
     # ------------------------------------------------------------ jobs

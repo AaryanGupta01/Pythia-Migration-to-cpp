@@ -13,7 +13,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 DEFAULT_MODEL = "claude-sonnet-5-5"
-NO_KEY_HINT = "Set ANTHROPIC_API_KEY to enable the LLM fixer"
+GROQ_MODEL = "openai/gpt-oss-120b"                # free tier on Groq; strongest open model available there
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+NO_KEY_HINT = "Set GROQ_API_KEY (free) or ANTHROPIC_API_KEY to enable the LLM fixer"
 MAX_TOKENS = 8000
 
 
@@ -73,6 +75,79 @@ class AnthropicClient:
         return text
 
 
+def detect_provider(settings: Optional[dict] = None):
+    """(provider, api_key) from settings/env: explicit `provider`, else Anthropic if its key exists, else Groq."""
+    st = settings or {}
+    want = (st.get("provider") or os.environ.get("PYTHIA_LLM_PROVIDER") or "auto").lower()
+    key = st.get("api_key")
+    a = os.environ.get("ANTHROPIC_API_KEY")
+    g = os.environ.get("GROQ_API_KEY")
+    if key:                                           # a key typed into Settings: infer its provider
+        if want == "auto":
+            want = "groq" if str(key).startswith("gsk_") else "anthropic"
+        return want, key
+    if want in ("anthropic", "auto") and a:
+        return "anthropic", a
+    if want in ("groq", "auto") and g:
+        return "groq", g
+    return None, None
+
+
+def pick_model(provider: Optional[str], requested: Optional[str]) -> str:
+    if provider == "groq":
+        return GROQ_MODEL if not requested or requested.startswith("claude") else requested
+    return requested if requested and requested.startswith("claude") else DEFAULT_MODEL
+
+
+class GroqClient:
+    """OpenAI-compatible chat completions on Groq (stdlib only; free tier => retry politely on 429)."""
+    source = "api"
+
+    def __init__(self, model: str = GROQ_MODEL, api_key: Optional[str] = None, record_dir=None):
+        self.model = model
+        self.key = api_key or os.environ.get("GROQ_API_KEY")
+        if not self.key:
+            raise LLMError("GROQ_API_KEY is not set")
+        self.record_dir = record_dir or os.environ.get("PYTHIA_RECORD_LLM_DIR")
+
+    def complete(self, system: str, messages: List[Dict[str, str]], *, function_source: Optional[str] = None,
+                 attempt: int = 1) -> str:
+        import time
+        import urllib.error
+        import urllib.request
+        body = {"model": self.model, "messages": [{"role": "system", "content": system}] + list(messages),
+                "max_completion_tokens": MAX_TOKENS, "temperature": 0.2}
+        if "gpt-oss" in self.model:
+            body["reasoning_effort"] = "low"
+        data = json.dumps(body).encode()
+        last = "unknown error"
+        for n in range(5):
+            req = urllib.request.Request(GROQ_URL, data=data, headers={
+                "Authorization": f"Bearer {self.key}", "Content-Type": "application/json",
+                "User-Agent": "pythia-studio/1.0"})
+            try:
+                with urllib.request.urlopen(req, timeout=90) as r:
+                    out = json.loads(r.read())
+                text = (out["choices"][0]["message"].get("content") or "")
+                if not text.strip():
+                    raise LLMError("the model returned no text")
+                if self.record_dir and function_source is not None:
+                    write_cache_entry(self.record_dir, function_source, attempt, text, self.model, "recorded")
+                return text
+            except urllib.error.HTTPError as e:
+                detail = e.read().decode("utf-8", "replace")[:300]
+                last = f"Groq API error {e.code}: {detail}"
+                if e.code in (429, 500, 502, 503):
+                    wait = float(e.headers.get("retry-after") or 2 * (n + 1))
+                    time.sleep(min(wait, 20))
+                    continue
+                raise LLMError(last)
+            except (urllib.error.URLError, TimeoutError) as e:
+                last = f"cannot reach the Groq API: {e}"
+                time.sleep(2 * (n + 1))
+        raise LLMError(last)
+
+
 class OfflineCache:
     source = "cache"
 
@@ -105,28 +180,33 @@ class ScriptedClient:
         return self.replies.pop(0)
 
 
-def make_client(model: str = DEFAULT_MODEL, offline_cache_dir=None, *, offline: Optional[bool] = None,
-                record_dir=None):
-    """OfflineCache when offline (default: whenever `offline_cache_dir` is given), else Anthropic when
-    ANTHROPIC_API_KEY is set, else None (fixer disabled)."""
+def make_client(model: Optional[str] = None, offline_cache_dir=None, *, offline: Optional[bool] = None,
+                record_dir=None, settings: Optional[dict] = None):
+    """OfflineCache when offline (default: whenever `offline_cache_dir` is given), else the provider whose key
+    is available (Anthropic, then Groq), else None (fixer disabled)."""
     if offline is None:
         offline = offline_cache_dir is not None
     if offline:
-        return OfflineCache(offline_cache_dir, model) if offline_cache_dir else None
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        try:
-            return AnthropicClient(model, record_dir=record_dir)
-        except Exception:
-            return None
+        return OfflineCache(offline_cache_dir, model or DEFAULT_MODEL) if offline_cache_dir else None
+    provider, key = detect_provider(settings)
+    try:
+        if provider == "anthropic":
+            return AnthropicClient(pick_model(provider, model), api_key=key, record_dir=record_dir)
+        if provider == "groq":
+            return GroqClient(pick_model(provider, model), api_key=key, record_dir=record_dir)
+    except Exception:
+        return None
     return None
 
 
-def llm_status(model: str = DEFAULT_MODEL, offline: bool = False, offline_cache_dir=None) -> dict:
+def llm_status(model: Optional[str] = None, offline: bool = False, offline_cache_dir=None,
+               settings: Optional[dict] = None) -> dict:
     """The `env().llm` payload."""
     if offline:
         ok = bool(offline_cache_dir) and Path(offline_cache_dir).is_dir()
-        return {"enabled": ok, "model": model,
+        return {"enabled": ok, "model": model or DEFAULT_MODEL, "provider": "offline-cache",
                 "hint": "Offline: replaying cached LLM responses" if ok else "Offline cache not found"}
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return {"enabled": True, "model": model, "hint": ""}
-    return {"enabled": False, "model": model, "hint": NO_KEY_HINT}
+    provider, _ = detect_provider(settings)
+    if provider:
+        return {"enabled": True, "model": pick_model(provider, model), "provider": provider, "hint": ""}
+    return {"enabled": False, "model": model or GROQ_MODEL, "provider": None, "hint": NO_KEY_HINT}

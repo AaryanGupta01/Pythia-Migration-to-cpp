@@ -8,3 +8,4 @@ studio/web/node_modules/
 .claude/worktrees/
 *.so
 !demo/offline_cache/so/*.so
+.env

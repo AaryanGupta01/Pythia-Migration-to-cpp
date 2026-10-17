@@ -48,6 +48,9 @@ class Pipeline:
               caption: Optional[str] = None):
         self.emit("stage", {"stage": name, "state": state, "summary": summary, "progress": progress},
                   stage=name, caption=caption)
+        if state in ("running", "done", "failed") and progress in (None, 0, 1) or state == "failed":
+            self.emit("log", {"stream": "system", "level": "error" if state == "failed" else "info",
+                              "text": f"[{name}] {state}" + (f" - {summary}" if summary else "")}, stage=name)
 
     def step(self, step_id: str, title: str, state: str = "running", detail: Optional[str] = None,
              fn_id: Optional[str] = None, caption: Optional[str] = None, stage: Optional[str] = None):
@@ -226,6 +229,8 @@ class Pipeline:
         self.emit("trace.done", {"total_s": tr.total_s, "exit_code": tr.exit_code, "timed_out": tr.timed_out,
                                  "calls": tr.calls, "profile": profile[:200]}, stage="trace",
                   caption=f"{tr.calls:,} calls recorded in {tr.total_s:.1f}s" + (" (timed out)" if tr.timed_out else ""))
+        if tr.stdout_tail:
+            self.emit("log", {"stream": "trace", "level": "info", "text": f"$ {cmd}\n{tr.stdout_tail[-1200:]}"}, stage="trace")
         if tr.exit_code not in (0, None) and not tr.timed_out:
             self.emit("log", {"stream": "trace", "level": "warn",
                               "text": f"entry command exited with code {tr.exit_code}\n{tr.stdout_tail[-600:]}"})
@@ -266,12 +271,9 @@ class Pipeline:
         from . import llm
         if not self.opt.get("llm", True):
             return None
-        key = self.settings.get("api_key")
-        if key and not os.environ.get("ANTHROPIC_API_KEY"):
-            os.environ["ANTHROPIC_API_KEY"] = key
-        model = self.opt.get("model") or self.settings.get("model") or "claude-sonnet-5-5"
+        model = self.opt.get("model") or self.settings.get("model")
         try:
-            return llm.make_client(model, OFFLINE_DIR / "llm" if self.offline else None)
+            return llm.make_client(model, OFFLINE_DIR / "llm" if self.offline else None, settings=self.settings)
         except Exception as ex:
             self.err("llm", ex)
             return None
@@ -426,6 +428,9 @@ class Pipeline:
                                        "diagnostics": d.get("diagnostics") or []}, stage="compile",
                       caption=(f"{r.name}: built " + ("from cache" if r.build["cached"] else f"in {r.build['compile_s']:.1f}s"))
                       if r.build["ok"] else f"{r.name}: compile failed")
+            self.emit("log", {"stream": "build", "level": "info" if r.build["ok"] else "error",
+                              "text": f"$ c++ -std=c++17 -O3 -flto -shared  {r.build['module']}  ({r.name})"
+                                      + "\n" + ((r.build.get("log") or "").strip()[-1500:] or "ok")}, stage="compile")
             self.save(r)
             self.stage("compile", "running", f"{ok_n}/{len(cands)}", progress=(i + 1) / len(cands))
         self.stage("compile", "done" if cands else "skipped", f"{ok_n}/{len(cands)}")
