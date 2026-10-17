@@ -11,6 +11,8 @@ export interface Tab {
   title: string
   ref?: string
   line?: number
+  /** preview tabs are italic and get replaced by the next preview (like VS Code); double-click pins */
+  preview?: boolean
 }
 export type FnView = 'diff' | 'three' | 'journey'
 export type BottomTab = 'terminal' | 'problems' | 'fidelity' | 'benchmarks'
@@ -58,6 +60,11 @@ interface UIState {
   fnViews: Record<string, FnView>
   toasts: Toast[]
   dragging: boolean
+  /** live runs: keep the editor on the active stage until the user clicks something */
+  following: boolean
+  resizing: boolean
+  shortcutsOpen: boolean
+  contextMenu: { x: number; y: number; id: string } | null
 
   env: EnvInfo | null
   envError: string | null
@@ -79,6 +86,7 @@ interface Actions {
   set: (p: Partial<UIState>) => void
   setTheme: (t: 'dark' | 'light') => void
   openTab: (t: Tab, opts?: { activate?: boolean }) => void
+  pinTab: (id: string) => void
   closeTab: (id: string) => void
   setActive: (id: string) => void
   openFunction: (id: string, view?: FnView) => void
@@ -103,6 +111,16 @@ interface Actions {
 let unsub: (() => void) | null = null
 let player: Player
 let lastRun: { input: JobInput; options?: Partial<JobOptions> } | null = null
+let autoOpen = false
+/** run `fn` as an automatic (non-user) navigation: does not stop "follow the run" */
+export function runAuto(fn: () => void) {
+  autoOpen = true
+  try {
+    fn()
+  } finally {
+    autoOpen = false
+  }
+}
 export const getLastRun = () => lastRun
 
 export const useStudio = create<UIState & Actions>((set, get) => {
@@ -130,6 +148,10 @@ export const useStudio = create<UIState & Actions>((set, get) => {
     fnViews: {},
     toasts: [],
     dragging: false,
+    following: true,
+    resizing: false,
+    shortcutsOpen: false,
+    contextMenu: null,
     env: null,
     envError: null,
     settings: null,
@@ -154,11 +176,20 @@ export const useStudio = create<UIState & Actions>((set, get) => {
       set({ theme: t })
     },
     openTab: (t, o) => {
-      set((s) => ({
-        tabs: s.tabs.some((x) => x.id === t.id) ? s.tabs.map((x) => (x.id === t.id ? { ...x, ...t } : x)) : [...s.tabs, t],
-        activeTab: o?.activate === false ? s.activeTab : t.id,
-      }))
+      const auto = autoOpen
+      set((s) => {
+        const exists = s.tabs.some((x) => x.id === t.id)
+        const isPreview = t.kind === 'function' || t.kind === 'file' || t.kind === 'stage'
+        let tabs = s.tabs
+        if (exists) tabs = tabs.map((x) => (x.id === t.id ? { ...x, ...t, preview: auto ? x.preview : false } : x))
+        else {
+          if (isPreview) tabs = tabs.filter((x) => !x.preview)
+          tabs = [...tabs, { ...t, preview: isPreview }]
+        }
+        return { tabs, activeTab: o?.activate === false ? s.activeTab : t.id, following: auto ? s.following : false }
+      })
     },
+    pinTab: (id) => set((s) => ({ tabs: s.tabs.map((x) => (x.id === id ? { ...x, preview: false } : x)) })),
     closeTab: (id) => {
       set((s) => {
         const i = s.tabs.findIndex((x) => x.id === id)
@@ -168,7 +199,7 @@ export const useStudio = create<UIState & Actions>((set, get) => {
         return { tabs, activeTab }
       })
     },
-    setActive: (id) => set({ activeTab: id }),
+    setActive: (id) => set({ activeTab: id, following: autoOpen ? get().following : false }),
     openFunction: (id, view) => {
       const s = get()
       const f = s.js.functions[id]
@@ -304,6 +335,7 @@ function resetForJob(set: SetFn, jobId: string) {
     tabs: [{ id: 'welcome', kind: 'welcome', title: 'Welcome' }],
     activeTab: 'welcome',
     startError: null,
+    following: true,
   })
 }
 

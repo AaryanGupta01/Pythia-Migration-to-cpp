@@ -1,10 +1,12 @@
-import { Component, useCallback, useEffect, useRef, type ReactNode } from 'react'
+import { Component, useCallback, useEffect, useState, type ReactNode } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Pause, Upload } from 'lucide-react'
 import { api, IS_MOCK, query } from './api'
-import { getLastRun, getPlayer, useStudio } from './store'
+import { getLastRun, getPlayer, runAuto, useStudio } from './store'
 import { topHotspot } from './reducer'
-import { ActivityBar, StatusBar, Stepper, TabsBar, TitleBar } from './shell'
-import { SidePanel } from './sidepanel'
+import { ActivityBar, Breadcrumbs, StatusBar, Stepper, TabsBar, TitleBar } from './shell'
+import { ShortcutsSheet } from './sheets'
+import { ContextMenu, SidePanel } from './sidepanel'
 import { AgentPanel } from './agent'
 import { BottomPanel } from './bottom'
 import { Welcome } from './welcome'
@@ -40,7 +42,15 @@ let booted = false
 
 export default function App() {
   const s = useStudio()
-  const { sizes, tabs, activeTab } = s
+  const { tabs, activeTab } = s
+  const [vw, setVw] = useState(window.innerWidth)
+  useEffect(() => {
+    const h = () => setVw(window.innerWidth)
+    window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
+  }, [])
+  // narrow windows get slimmer panels so the editor keeps room
+  const sizes = vw < 1240 ? { ...s.sizes, side: Math.min(s.sizes.side, 232), agent: Math.min(s.sizes.agent, 296) } : s.sizes
   const playgroundVisited = tabs.some((t) => t.kind === 'playground')
 
   // ------- boot
@@ -63,36 +73,38 @@ export default function App() {
   }, [activeTab, tabs])
 
   // ------- follow the run (normal mode and presenter mode)
-  const auto = useRef<string | null>(null)
   const openAuto = useCallback((id: string, open: () => void) => {
-    const st = useStudio.getState()
-    if (st.activeTab === id) return
-    const prev = auto.current
-    open()
-    auto.current = id
-    if (prev && prev !== id && prev !== 'welcome') {
-      const t = useStudio.getState()
-      if (t.tabs.some((x) => x.id === prev) && (prev.startsWith('stage:') || prev.startsWith('fn:'))) t.closeTab(prev)
-    }
+    if (useStudio.getState().activeTab === id) return
+    runAuto(open)
   }, [])
   const jobId = s.js.jobId
   useEffect(() => {
     if (!jobId) return
-    auto.current = null
     useStudio.getState().closeTab('welcome')
-    useStudio.getState().set({ agentOpen: true, bottomOpen: true })
-    useStudio.getState().openStage('ingest')
-    auto.current = 'stage:ingest'
+    useStudio.getState().set({ agentOpen: window.innerWidth >= 1180, bottomOpen: false, bottomTab: 'terminal' })
+    runAuto(() => useStudio.getState().openStage('ingest'))
   }, [jobId])
+  // bottom panel: stays collapsed while empty, opens on the first log line, shows Benchmarks when the run finishes
+  const nLogs = s.js.logs.length
+  useEffect(() => {
+    if (nLogs > 0 && nLogs < 3 && jobId) useStudio.getState().set({ bottomOpen: true, bottomTab: 'terminal' })
+  }, [nLogs > 0, jobId])
+  const runState = s.js.state
+  useEffect(() => {
+    if (runState === 'done' && !s.replaying && Object.keys(useStudio.getState().js.bench).length) useStudio.getState().set({ bottomOpen: true, bottomTab: 'benchmarks' })
+  }, [runState])
+  useEffect(() => {
+    document.title = s.js.name ? `PYTHIA Studio — ${s.js.name}` : 'PYTHIA Studio'
+  }, [s.js.name])
   useEffect(() => {
     if (s.js.scan) s.set({ sideOpen: true, sideView: 'hotspots' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!s.js.scan, jobId])
   const stage = s.js.activeStage
   useEffect(() => {
-    if (!s.presenter || !stage) return
+    if (!stage || !(s.presenter || s.following)) return
     openAuto(`stage:${stage}`, () => useStudio.getState().openStage(stage))
-  }, [stage, s.presenter, openAuto])
+  }, [stage, s.presenter, s.following, openAuto])
   const fn = s.js.activeFn
   const fnTouched = fn ? s.js.touched[fn] ?? 0 : 0
   const interesting = useCallback(
@@ -135,6 +147,9 @@ export default function App() {
       } else if (mod && e.shiftKey && e.key.toLowerCase() === 'a') {
         e.preventDefault()
         st.decide('all', 'accepted')
+      } else if (e.key === '?' && !typing && !mod) {
+        e.preventDefault()
+        st.set({ shortcutsOpen: !st.shortcutsOpen })
       } else if (st.presenter && !typing && !mod) {
         if (e.key === ' ') {
           e.preventDefault()
@@ -214,19 +229,22 @@ export default function App() {
       <TitleBar />
       <div className="print-flow flex min-h-0 flex-1">
         <ActivityBar />
-        {s.sideOpen && (
-          <>
-            <div className="no-print flex-none" style={{ width: sizes.side }}>
-              <SidePanel />
-            </div>
-            <div className="no-print border-r border-line flex-none">
-              <Splitter dir="h" onDrag={(d) => setSize('side', d, 200, 520)} />
-            </div>
-          </>
-        )}
+        <AnimatePresence initial={false}>
+          {s.sideOpen && (
+            <motion.div key="side" className="no-print flex flex-none overflow-hidden" initial={{ width: 0, opacity: 0 }} animate={{ width: sizes.side + 1, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: s.resizing ? 0 : 0.18, ease: 'easeOut' }}>
+              <div className="min-w-0 flex-1" style={{ minWidth: sizes.side }}>
+                <SidePanel />
+              </div>
+              <div className="no-print flex-none border-r border-line">
+                <Splitter dir="h" onDrag={(d) => setSize('side', d, 200, 520)} />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <main className="print-flow relative flex min-w-0 flex-1 flex-col">
           <Stepper />
           <TabsBar />
+          <Breadcrumbs />
           <div className="print-flow relative min-h-0 flex-1 bg-bg">
             <Boundary k={tab.id}>{content}</Boundary>
             {playgroundVisited && (
@@ -238,29 +256,35 @@ export default function App() {
             )}
             <CaptionBar />
           </div>
-          {s.bottomOpen && (
-            <>
-              <Splitter dir="v" onDrag={(d) => setSize('bottom', -d, 120, 560)} />
-              <div className="no-print flex-none" style={{ height: sizes.bottom }}>
-                <BottomPanel />
-              </div>
-            </>
-          )}
+          <AnimatePresence initial={false}>
+            {s.bottomOpen && (
+              <motion.div key="bottom" className="no-print flex flex-none flex-col overflow-hidden" initial={{ height: 0, opacity: 0 }} animate={{ height: sizes.bottom + 1, opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: s.resizing ? 0 : 0.18, ease: 'easeOut' }}>
+                <Splitter dir="v" onDrag={(d) => setSize('bottom', -d, 120, 560)} />
+                <div className="min-h-0 flex-1" style={{ minHeight: sizes.bottom - 4 }}>
+                  <BottomPanel />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </main>
-        {s.agentOpen && (
-          <>
-            <div className="no-print border-l border-line flex-none">
-              <Splitter dir="h" onDrag={(d) => setSize('agent', -d, 260, 560)} />
-            </div>
-            <div className="no-print flex-none" style={{ width: sizes.agent }}>
-              <AgentPanel />
-            </div>
-          </>
-        )}
+        <AnimatePresence initial={false}>
+          {s.agentOpen && (
+            <motion.div key="agent" className="no-print flex flex-none overflow-hidden" initial={{ width: 0, opacity: 0 }} animate={{ width: sizes.agent + 1, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: s.resizing ? 0 : 0.18, ease: 'easeOut' }}>
+              <div className="no-print flex-none border-l border-line">
+                <Splitter dir="h" onDrag={(d) => setSize('agent', -d, 260, 560)} />
+              </div>
+              <div className="min-w-0 flex-1" style={{ minWidth: sizes.agent }}>
+                <AgentPanel />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
       <StatusBar />
       {(s.paletteOpen || s.quickOpen) && <Palette mode={s.paletteOpen ? 'commands' : 'files'} onClose={() => s.set({ paletteOpen: false, quickOpen: false })} />}
       <Toasts />
+      <ContextMenu />
+      <ShortcutsSheet />
       {s.dragging && (
         <div className="pointer-events-none fixed inset-0 z-[70] flex items-center justify-center bg-bg/80 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-accent px-16 py-12">

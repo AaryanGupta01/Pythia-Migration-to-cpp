@@ -1,4 +1,5 @@
 import type {
+  DemoInfo,
   EnvInfo,
   FileContent,
   FsList,
@@ -23,6 +24,8 @@ export const IS_MOCK = query.get('mock') === '1'
 
 export interface Api {
   env(): Promise<EnvInfo>
+  /** optional: not every server has it; callers feature-detect */
+  demos?(): Promise<DemoInfo[]>
   getSettings(): Promise<Settings>
   putSettings(patch: Partial<Settings>): Promise<Settings>
   startJob(input: JobInput, options: Partial<JobOptions>): Promise<{ job_id: string; workspace_id: string }>
@@ -96,6 +99,7 @@ const q = (o: Record<string, string | number | boolean | undefined>) =>
 
 export const realApi: Api = {
   env: () => http('/env'),
+  demos: () => http('/demos'),
   getSettings: () => http('/settings'),
   putSettings: (p) => http('/settings', { ...json(p), method: 'PUT' }),
   startJob: (input, options) => http('/jobs', json({ input, options })),

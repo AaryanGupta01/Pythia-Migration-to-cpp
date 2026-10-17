@@ -3,13 +3,13 @@ import { ArrowDown, ArrowUp, ChevronRight, Download, FileText, Folder, FileCode2
 import { api } from './api'
 import { useStudio } from './store'
 import { useBenchRows } from './bottom'
-import { BenchChart, E2EBars, HBars } from './charts'
+import { BenchChart, E2EBars, FlameChart, HBars, ReplayMatrix } from './charts'
 import { Code, MiniDiff } from './code'
 import { DiffView } from './editors'
 import { Journey, useRecord } from './journey'
 import { exportProject } from './actions'
 import { Bar, Btn, Empty, Skeleton, Spark, StatusChip, Dot } from './ui'
-import { STATUS, basename, cn, fmtBytes, fmtInt, fmtMs, fmtPct, fmtX } from './lib/format'
+import { STATUS, attemptSource, basename, cn, fmtBytes, fmtInt, fmtLatency, fmtMs, fmtPct, fmtX, llmLabel } from './lib/format'
 import { Logo } from './shell'
 import { STAGES, type FunctionSummary, type StageName } from './types'
 
@@ -67,7 +67,7 @@ export function StageInspector({ stage }: { stage: StageName }) {
 }
 
 const Card = ({ title, children, right, className }: { title?: ReactNode; children: ReactNode; right?: ReactNode; className?: string }) => (
-  <section className={cn('rounded-lg border border-line bg-raised', className)}>
+  <section className={cn('surface rounded-[12px]', className)}>
     {title && (
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <h3 className="text-sm font-medium">{title}</h3>
@@ -222,6 +222,22 @@ function ScanView() {
 function TraceView() {
   const js = useStudio((s) => s.js)
   const openFunction = useStudio((s) => s.openFunction)
+  const fetchRecord = useStudio((s) => s.fetchRecord)
+  const records = useStudio((s) => s.records)
+  const top = (js.trace.done?.profile ?? []).slice(0, 40)
+  useEffect(() => {
+    let dead = false
+    const need = top.map((r) => r.id).filter((id) => !records[id])
+    ;(async () => {
+      for (let i = 0; i < need.length && !dead; i += 6) await Promise.all(need.slice(i, i + 6).map((id) => fetchRecord(id)))
+    })()
+    return () => {
+      dead = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [top.length])
+  // self time makes the icicle additive; fall back to cumulative share until the records have loaded
+  const haveSelf = top.length > 0 && top.every((r) => records[r.id]?.trace)
   const t = js.trace
   const done = t.done
   const rows = (done?.profile ?? []).map((r) => ({ id: r.id, label: js.functions[r.id]?.name ?? r.id, value: r.share, sub: `${fmtInt(r.calls)} calls` })).slice(0, 24)
@@ -240,9 +256,19 @@ function TraceView() {
           <Card title="Program output (tail)"><pre className="mono min-h-[96px] whitespace-pre-wrap text-xs text-fg2">{t.stdout_tail || 'Waiting for output…'}</pre></Card>
         </div>
       ) : (
-        <Card title="Where the time goes" right={<span className="text-xs text-fg3">share of traced runtime · top {rows.length}</span>}>
-          <HBars rows={rows} fmt={(v) => fmtPct(v)} onPick={(id) => openFunction(id)} />
-        </Card>
+        <>
+          <Card title="Where the time goes" right={<span className="text-xs text-fg3">{haveSelf ? 'self time' : 'cumulative time'} · program, files, functions</span>}>
+            <FlameChart
+              rows={done.profile.filter((r) => js.functions[r.id]).map((r) => ({ id: r.id, name: js.functions[r.id].name, file: js.functions[r.id].file, share: haveSelf && records[r.id]?.trace ? Math.max(0.0005, records[r.id]!.trace!.self_s / Math.max(0.001, done.total_s)) : haveSelf ? 0 : r.share, calls: r.calls, cum_s: haveSelf && records[r.id]?.trace ? records[r.id]!.trace!.self_s : r.cum_s })).filter((r) => r.share > 0)}
+              totalS={done.total_s}
+              cmd={cmd ?? 'traced run'}
+              onPick={(id) => openFunction(id)}
+            />
+          </Card>
+          <Card title="Hottest functions" right={<span className="text-xs text-fg3">cumulative share of traced runtime (includes callees) · top {rows.length}</span>}>
+            <HBars rows={rows} fmt={(v) => fmtPct(v)} onPick={(id) => openFunction(id)} />
+          </Card>
+        </>
       )}
     </div>
   )
@@ -295,8 +321,17 @@ function FixView() {
   const ids = Object.keys(js.fix)
   const steps = js.steps.filter((s) => s.fn_id && /annotat|skipped/.test(s.title) && !js.fix[s.fn_id!])
   if (!ids.length && !steps.length) return js.stages.fix.state === 'done' ? <Empty title="Nothing needed fixing">Every eligible function compiled as written.</Empty> : <Waiting what="fix attempts" />
+  const all = ids.flatMap((id) => js.fix[id].attempts)
+  const lat = all.map((a) => a.latency_ms).filter((x): x is number => x != null && a_ok(x))
+  const env = useStudio.getState().env
   return (
     <div className="space-y-3">
+      <div className="grid grid-cols-4 gap-4">
+        <Card><Stat k="Functions sent to the LLM" v={ids.length} /></Card>
+        <Card><Stat k="Rewrites accepted" v={ids.filter((i) => js.fix[i].done?.ok).length} sub={`of ${ids.length}`} /></Card>
+        <Card><Stat k="Attempts" v={all.length} sub={`${all.filter((a) => !a.ok).length} rejected by the typechecker`} /></Card>
+        <Card><Stat k="Median latency" v={lat.length ? fmtLatency(lat.sort((a, b) => a - b)[Math.floor(lat.length / 2)]) : '—'} sub={env ? llmLabel(env).replace('LLM: ', '') : undefined} /></Card>
+      </div>
       {ids.map((id) => <FixCard key={id} id={id} />)}
       {steps.length > 0 && (
         <Card title="Handled without the LLM">
@@ -308,6 +343,7 @@ function FixView() {
     </div>
   )
 }
+const a_ok = (x: number) => x > 0
 function FixCard({ id }: { id: string }) {
   const js = useStudio((s) => s.js)
   const fx = js.fix[id]
@@ -328,11 +364,13 @@ function FixCard({ id }: { id: string }) {
     >
       {open && (
         <div className="space-y-3">
+          {fx.attempts.length === 0 && <p className="text-sm text-fg2">Annotated from observed types. The typechecker accepted it without an LLM call.</p>}
           {fx.attempts.map((a, i) => (
             <div key={a.attempt}>
               <div className="mb-1 flex items-center gap-2 text-sm">
                 <b className="font-medium">Attempt {a.attempt}</b>
-                <span className="text-xs text-fg3">{a.source === 'cache' ? 'offline cache' : 'Claude'}</span>
+                <span className="rounded-full border border-line2 bg-bg px-2 py-px text-xs text-fg2">{attemptSource(useStudio.getState().env, a)}</span>
+                {a.latency_ms != null && <span className="tnum text-xs text-fg3">{fmtLatency(a.latency_ms)}</span>}
                 <span className={cn('ml-auto text-xs', a.ok ? 'text-ok' : 'text-bad')}>{a.ok ? 'passed the typechecker' : 'rejected'}</span>
               </div>
               <MiniDiff a={i === 0 ? orig || a.pysub : fx.attempts[i - 1].pysub} b={a.pysub} maxH={200} />
@@ -404,7 +442,7 @@ function VerifyView() {
       </div>
       <Card title="Replay results" className="overflow-hidden [&>div:last-child]:p-0">
         <table className="w-full text-sm">
-          <thead><tr className="border-b border-line text-left text-xs text-fg3"><th className="px-3 py-2 font-medium">Function</th><th className="px-3 py-2 font-medium">Status</th><th className="px-3 py-2 font-medium">Matched</th><th className="px-3 py-2 font-medium">First counterexample</th></tr></thead>
+          <thead><tr className="border-b border-line text-left text-xs text-fg3"><th className="px-3 py-2 font-medium">Function</th><th className="px-3 py-2 font-medium">Status</th><th className="px-3 py-2 font-medium">Recorded calls (one cell each)</th><th className="px-3 py-2 font-medium">First counterexample</th></tr></thead>
           <tbody>
             {ids.map((id) => {
               const v = js.verify[id]
@@ -412,7 +450,7 @@ function VerifyView() {
                 <tr key={id} onClick={() => openFunction(id)} className="cursor-pointer border-b border-line/50 hover:bg-hover/50">
                   <td className="mono px-3 py-1.5">{js.functions[id]?.name}</td>
                   <td className="px-3 py-1.5"><StatusChip status={v.status} dense /></td>
-                  <td className="px-3 py-1.5"><div className="flex items-center gap-2"><Bar value={v.matched} max={Math.max(1, v.total)} className="w-24" color={v.status === 'failed' ? 'bg-bad' : 'bg-ok'} /><span className="tnum text-xs text-fg2">{v.matched}/{v.total}</span></div></td>
+                  <td className="px-3 py-2"><div className="flex items-center gap-3"><ReplayMatrix total={v.total} matched={v.matched} cell={5} max={260} className="max-w-[340px] flex-1" /><span className="tnum w-14 flex-none text-xs text-fg2">{v.matched}/{v.total}</span></div></td>
                   <td className="mono max-w-[360px] truncate px-3 py-1.5 text-xs text-fg3">{v.first_mismatch ? `${js.functions[id]?.name}${v.first_mismatch.args}: Python ${v.first_mismatch.python}, C++ ${v.first_mismatch.cpp}` : '—'}</td>
                 </tr>
               )

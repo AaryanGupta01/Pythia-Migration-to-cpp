@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Status } from './types'
 import { STATUS, cn } from './lib/format'
+import { useStudio } from './store'
 
 export function StatusChip({ status, className, dense }: { status: Status; className?: string; dense?: boolean }) {
   const m = STATUS[status]
@@ -64,7 +65,7 @@ export function IconBtn({
   return (
     <button
       type="button"
-      title={title}
+      data-tip={title}
       aria-label={title}
       disabled={disabled}
       onClick={onClick}
@@ -202,6 +203,7 @@ export function Splitter({ dir, onDrag, onDone }: { dir: 'h' | 'v'; onDrag: (del
       ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
       start.current = dir === 'h' ? e.clientX : e.clientY
       setActive(true)
+      useStudio.setState({ resizing: true })
     },
     [dir],
   )
@@ -223,6 +225,7 @@ export function Splitter({ dir, onDrag, onDone }: { dir: 'h' | 'v'; onDrag: (del
       onPointerMove={move}
       onPointerUp={() => {
         setActive(false)
+        useStudio.setState({ resizing: false })
         onDone?.()
       }}
     />

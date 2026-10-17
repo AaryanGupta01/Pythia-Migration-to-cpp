@@ -44,6 +44,11 @@ export interface FixAttemptS {
   ok: boolean
   error: string | null
   pysub: string
+  /** wall-clock gap since the previous step for this function (ms), derived from event timestamps */
+  latency_ms: number | null
+  model: string | null
+  provider: string | null
+  at: number
 }
 export interface FixState {
   attempts: FixAttemptS[]
@@ -118,6 +123,7 @@ export interface JobState {
   trace: TraceS
   ranking: RankRow[] | null
   fix: Record<string, FixState>
+  fixStart: Record<string, number>
   compile: Record<string, CompileS>
   verify: Record<string, VerifyS>
   bench: Record<string, BenchS>
@@ -159,6 +165,7 @@ export const initialState = (): JobState => ({
   trace: { calls: 0, functions_seen: 0, elapsed_s: 0, stdout_tail: '', history: [], done: null },
   ranking: null,
   fix: {},
+  fixStart: {},
   compile: {},
   verify: {},
   bench: {},
@@ -281,7 +288,11 @@ export function reduce(s: JobState, e: StudioEvent): JobState {
     case 'fix.attempt': {
       const d = e.data
       const cur = s.fix[d.id] ?? { attempts: [], done: null }
-      const attempts = [...cur.attempts.filter((a) => a.attempt !== d.attempt), { attempt: d.attempt, source: d.source, ok: d.ok, error: d.error, pysub: d.pysub }]
+      const prev = cur.attempts.length ? cur.attempts[cur.attempts.length - 1] : null
+      const t0 = prev ? prev.at : s.fixStart[d.id]
+      const x = d as unknown as { model?: string; provider?: string; latency_ms?: number }
+      const lat = x.latency_ms ?? (t0 != null && e.ts > t0 ? Math.round((e.ts - t0) * 1000) : null)
+      const attempts = [...cur.attempts.filter((a) => a.attempt !== d.attempt), { attempt: d.attempt, source: d.source, ok: d.ok, error: d.error, pysub: d.pysub, latency_ms: lat, model: x.model ?? null, provider: x.provider ?? null, at: e.ts }]
       return { ...base, fix: { ...s.fix, [d.id]: { ...cur, attempts } }, touched: bump(s.touched, d.id), activeFn: d.id }
     }
     case 'fix.done': {
@@ -332,9 +343,10 @@ export function reduce(s: JobState, e: StudioEvent): JobState {
     case 'agent.step': {
       const d = e.data
       const item: StepItem = { step_id: d.step_id, fn_id: d.fn_id, title: d.title, state: d.state, detail: d.detail, seq: e.seq, ts: e.ts }
+      const fixStart = e.stage === 'fix' && d.fn_id && s.fixStart[d.fn_id] == null ? { ...s.fixStart, [d.fn_id]: e.ts } : s.fixStart
       const idx = s.steps.findIndex((x) => x.step_id === d.step_id)
       const steps = idx >= 0 ? s.steps.map((x, i) => (i === idx ? { ...item, seq: x.seq } : x)) : [...s.steps, item]
-      return { ...base, steps, activeFn: d.fn_id ?? s.activeFn }
+      return { ...base, steps, fixStart, activeFn: d.fn_id ?? s.activeFn }
     }
     case 'log': {
       const d = e.data

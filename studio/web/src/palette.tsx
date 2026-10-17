@@ -17,6 +17,25 @@ interface Cmd {
   group: string
 }
 
+/** Highlight the characters of `text` that match the query (substring first, then in-order fuzzy). */
+function Hl({ text, q }: { text: string; q: string }) {
+  const needle = q.trim().toLowerCase()
+  if (!needle) return <>{text}</>
+  const low = text.toLowerCase()
+  const i = low.indexOf(needle)
+  if (i >= 0) return <>{text.slice(0, i)}<mark className="rounded-sm bg-accent/25 text-fg">{text.slice(i, i + needle.length)}</mark>{text.slice(i + needle.length)}</>
+  const hit: number[] = []
+  let j = 0
+  for (let k = 0; k < low.length && j < needle.length; k++) if (low[k] === needle[j]) { hit.push(k); j++ }
+  if (j < needle.length) return <>{text}</>
+  return <>{[...text].map((c, k) => (hit.includes(k) ? <mark key={k} className="rounded-sm bg-accent/25 text-fg">{c}</mark> : c))}</>
+}
+
+const RECENT_KEY = 'pythia:recent-cmds'
+const recent = (): string[] => {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') } catch { return [] }
+}
+
 export function Palette({ mode, onClose }: { mode: 'commands' | 'files'; onClose: () => void }) {
   const s = useStudio()
   const [q, setQ] = useState('')
@@ -52,7 +71,7 @@ export function Palette({ mode, onClose }: { mode: 'commands' | 'files'; onClose
       { group: 'View', id: 'agent', label: 'Toggle agent panel', icon: <PanelRight size={14} />, run: () => s.set({ agentOpen: !s.agentOpen }) },
       { group: 'View', id: 'bottom', label: 'Toggle bottom panel', icon: <PanelBottom size={14} />, run: () => s.set({ bottomOpen: !s.bottomOpen }) },
     ]
-    return c.map((x) => ({ ...x, run: () => (x.run(), done()) }))
+    return c.map((x) => ({ ...x, run: () => { try { localStorage.setItem(RECENT_KEY, JSON.stringify([x.id, ...recent().filter((r) => r !== x.id)].slice(0, 4))) } catch { /* private mode */ } x.run(); done() } }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.presenter, s.theme, s.agentOpen, s.bottomOpen, s.js.jobId])
 
@@ -61,7 +80,7 @@ export function Palette({ mode, onClose }: { mode: 'commands' | 'files'; onClose
 
   return (
     <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/45 pt-[14vh]" onMouseDown={close} role="dialog" aria-modal aria-label={mode === 'files' ? 'Quick open' : 'Command palette'}>
-      <div className="w-[600px] max-w-[92vw] animate-fadeIn overflow-hidden rounded-xl border border-line2 bg-panel shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="surface-2 w-[620px] max-w-[92vw] animate-fadeIn overflow-hidden rounded-[16px]" onMouseDown={(e) => e.stopPropagation()}>
         <Command loop label={mode === 'files' ? 'Quick open' : 'Command palette'}>
           <Command.Input
             autoFocus
@@ -72,13 +91,24 @@ export function Palette({ mode, onClose }: { mode: 'commands' | 'files'; onClose
           />
           <Command.List className="max-h-[360px] overflow-auto p-1.5">
             <Command.Empty className="px-4 py-6 text-center text-sm text-fg3">Nothing matches “{q}”.</Command.Empty>
+            {mode === 'commands' && !q && recent().length > 0 && (
+              <Command.Group heading="Recent">
+                {recent().map((id) => cmds.find((c) => c.id === id)).filter((c): c is Cmd => !!c).map((c) => (
+                  <Command.Item key={`r-${c.id}`} value={`recent ${c.label}`} onSelect={c.run}>
+                    <span className="text-fg3">{c.icon}</span>
+                    <span className="flex-1 text-sm">{c.label}</span>
+                    {c.keys && <Kbd>{c.keys}</Kbd>}
+                  </Command.Item>
+                ))}
+              </Command.Group>
+            )}
             {mode === 'commands' &&
               ['Run', 'Review', 'Go to', 'Pipeline', 'View'].map((g) => (
                 <Command.Group key={g} heading={g}>
                   {cmds.filter((c) => c.group === g).map((c) => (
                     <Command.Item key={c.id} value={`${g} ${c.label}`} onSelect={c.run}>
                       <span className="text-fg3">{c.icon}</span>
-                      <span className="flex-1 text-sm">{c.label}</span>
+                      <span className="flex-1 text-sm"><Hl text={c.label} q={q} /></span>
                       {c.keys && <Kbd>{c.keys}</Kbd>}
                     </Command.Item>
                   ))}
@@ -89,7 +119,7 @@ export function Palette({ mode, onClose }: { mode: 'commands' | 'files'; onClose
                 {files.map((f) => (
                   <Command.Item key={f} value={`file ${f}`} onSelect={() => (s.openFile(f), close())}>
                     <FileCode2 size={14} className="text-fg3" />
-                    <span className="flex-1 truncate text-sm">{basename(f)}</span>
+                    <span className="flex-1 truncate text-sm"><Hl text={basename(f)} q={q} /></span>
                     <span className="mono truncate text-xs text-fg3">{f}</span>
                   </Command.Item>
                 ))}
@@ -100,7 +130,7 @@ export function Palette({ mode, onClose }: { mode: 'commands' | 'files'; onClose
                 {fns.map((f) => (
                   <Command.Item key={f.id} value={`fn ${f.name} ${f.file} ${f.status}`} onSelect={() => (s.openFunction(f.id), close())}>
                     <span className={cn('h-2 w-2 flex-none rounded-full', STATUS[f.status].dot)} />
-                    <span className="mono flex-1 truncate text-sm">{f.name}</span>
+                    <span className="mono flex-1 truncate text-sm"><Hl text={f.name} q={q} /></span>
                     <span className="mono truncate text-xs text-fg3">{basename(f.file)}</span>
                     <span className="tnum w-12 text-right text-xs text-ok">{f.speedup ? fmtX(f.speedup) : ''}</span>
                   </Command.Item>

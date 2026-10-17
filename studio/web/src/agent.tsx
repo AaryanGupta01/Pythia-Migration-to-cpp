@@ -1,10 +1,12 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { AlertCircle, Check, ChevronRight, Download, Minus, Sparkles } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { AlertCircle, Check, ChevronRight, Download, Minus, RotateCcw, Sparkles } from 'lucide-react'
 import { useStudio } from './store'
 import { countStatus, totalSpeedup, type StepItem } from './reducer'
 import { exportProject } from './actions'
 import { Btn, Empty, PanelTitle, Kbd, MOD, SHIFT } from './ui'
-import { cn, fmtX } from './lib/format'
+import { cn, fmtX, llmLabel } from './lib/format'
+import { CountUp, DrawCheck, reducedMotion } from './motion'
 
 /** `code` -> <code> */
 export function inlineCode(s: string): ReactNode {
@@ -26,7 +28,7 @@ function StepIcon({ state }: { state: StepItem['state'] }) {
         <span className="h-2 w-2 animate-pulseDot rounded-full bg-accent" />
       </span>
     )
-  if (state === 'done') return <Check size={14} className="flex-none text-ok" />
+  if (state === 'done') return <DrawCheck size={14} className="text-ok" />
   if (state === 'failed') return <AlertCircle size={14} className="flex-none text-bad" />
   return <Minus size={14} className="flex-none text-fg3" />
 }
@@ -37,8 +39,8 @@ function Step({ s }: { s: StepItem }) {
   const [exp, setExp] = useState(false)
   const has = !!s.detail
   return (
-    <li className="animate-fadeIn">
-      <div className={cn('group rounded-md px-2 py-1.5 transition-colors hover:bg-hover/60', open && 'bg-hover')}>
+    <motion.li initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
+      <div className={cn('group rounded-lg px-2 py-1.5 transition-colors hover:bg-hover/60', open && 'bg-hover')}>
         <div className="flex items-start gap-2">
           <span className="mt-[2px]">
             <StepIcon state={s.state} />
@@ -58,8 +60,21 @@ function Step({ s }: { s: StepItem }) {
         </div>
         {has && exp && <p className="mt-1 whitespace-pre-wrap pl-6 text-xs leading-[17px] text-fg2">{s.detail}</p>}
       </div>
-    </li>
+    </motion.li>
   )
+}
+
+/** Reveal text quickly, a few characters per frame (skipped under reduced motion). */
+function Typewriter({ text }: { text: string }) {
+  const [n, setN] = useState(reducedMotion() ? text.length : 0)
+  useEffect(() => {
+    if (reducedMotion()) return setN(text.length)
+    setN(0)
+    const step = Math.max(2, Math.ceil(text.length / 22))
+    const t = setInterval(() => setN((x) => (x + step >= text.length ? (clearInterval(t), text.length) : x + step)), 16)
+    return () => clearInterval(t)
+  }, [text])
+  return <>{text.slice(0, n)}<span className={n < text.length ? 'ml-px inline-block h-3.5 w-[2px] translate-y-[2px] bg-accent' : 'hidden'} /></>
 }
 
 export function AgentPanel() {
@@ -108,13 +123,13 @@ export function AgentPanel() {
         {!js.jobId ? (
           <Empty title="The LLM suggests. The compiler proves." icon={<Sparkles size={20} />}>
             When you open a project, every step PYTHIA takes appears here: what it traced, what it rewrote, and what the oracle replay confirmed.
-            {env && !env.llm.enabled && <span className="mt-2 block text-xs">{env.llm.hint}</span>}
+            {env && <span className="mt-2 block text-xs">{env.llm.enabled ? llmLabel(env) : env.llm.hint}</span>}
           </Empty>
         ) : (
           <>
             {js.caption && js.state === 'running' && (
-              <p key={js.captionSeq} className="mb-2 animate-fadeIn rounded-md border border-accent/25 bg-accent/10 px-2.5 py-2 text-sm leading-[18px] text-fg">
-                {js.caption}
+              <p key={js.captionSeq} className="mb-2 rounded-lg border border-accent/25 bg-accent/10 px-3 py-2.5 text-sm leading-[19px] text-fg shadow-[0_0_24px_-10px_rgb(var(--accent)/0.6)]">
+                <Typewriter text={js.caption} />
               </p>
             )}
             <ul className="space-y-px">
@@ -129,11 +144,12 @@ export function AgentPanel() {
               </div>
             )}
             {done && (
-              <section className="mt-3 animate-fadeIn rounded-lg border border-line2 bg-raised p-3" aria-label="Run summary">
-                <div className="flex items-end justify-between">
+              <section className="surface shine relative mt-3 animate-fadeIn rounded-[14px] p-3.5" aria-label="Run summary">
+                <div aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-ok/15 blur-2xl" />
+                <div className="relative flex items-end justify-between">
                   <div>
                     <div className="text-xs text-fg3">{js.e2e?.ok ? 'End-to-end speedup' : 'Geometric-mean speedup'}</div>
-                    <div className="tnum text-[28px] font-semibold leading-8 tracking-tight text-fg">{sp ? fmtX(sp) : '—'}</div>
+                    <div className="text-[34px] font-semibold leading-10 tracking-tight text-grad">{sp ? <CountUp value={sp} decimals={1} suffix="×" ms={1100} /> : '—'}</div>
                   </div>
                   {js.e2e?.ok && (
                     <div className="tnum pb-1 text-right text-xs text-fg3">
@@ -159,6 +175,9 @@ export function AgentPanel() {
                   </Btn>
                   <Btn kind="primary" onClick={() => exportProject(false)} className="ml-auto">
                     <Download size={13} /> Export
+                  </Btn>
+                  <Btn kind="ghost" onClick={() => useStudio.getState().replayCurrent()} title="Replay this run with pacing">
+                    <RotateCcw size={12} /> Replay
                   </Btn>
                 </div>
                 <p className="mt-2 text-2xs text-fg3">

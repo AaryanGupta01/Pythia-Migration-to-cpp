@@ -10,6 +10,7 @@ export default {
         bg: c('bg'),
         panel: c('panel'),
         raised: c('raised'),
+        overlay: c('overlay'),
         hover: c('hover'),
         line: c('line'),
         line2: c('line2'),
@@ -22,8 +23,8 @@ export default {
         bad: c('bad'),
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        sans: ['"Inter Variable"', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono Variable"', '"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       fontSize: {
         '2xs': ['10.5px', '14px'],
