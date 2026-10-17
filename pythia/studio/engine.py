@@ -113,6 +113,8 @@ class Engine:
         opts = {"trace_cmd": None, "trace_timeout_s": 60, "offline": False, "llm": True,
                 "model": self._settings_full().get("model"), "pace_ms": 0}
         opts.update(options or {})
+        if input.get("kind") == "demo" and not (opts.get("trace_cmd") or "").strip():
+            opts["trace_cmd"] = "python main.py --small"   # demo ships a known entry point
         js = JobState(job_id, self.home, input, opts, ws_id, emit)
         with self._lock:
             self._jobs[job_id] = js

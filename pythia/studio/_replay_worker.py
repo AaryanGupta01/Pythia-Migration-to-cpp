@@ -81,10 +81,14 @@ def replay(job, fn_py, mod):
     res = {"total": 0, "matched": 0, "exc_matches": 0, "skipped": 0, "mismatches": 0,
            "first_mismatch": None, "timeouts": 0}
     signal.signal(signal.SIGALRM, _alarm)
+    t_start = time.monotonic()
     for i, c in enumerate(calls):
+        if time.monotonic() - t_start > job.get("budget_s", 30):
+            res["budget_exhausted"] = True      # partial replay beats a killed worker
+            break
         PROTO.write(f"@{i}\n")
         pa, ca = codec.decode(c["args"]), codec.decode(c["args"])
-        signal.setitimer(signal.ITIMER_REAL, job.get("call_timeout", 10))
+        signal.setitimer(signal.ITIMER_REAL, job.get("call_timeout", 1))
         try:
             po = outcome(fn_py, pa)
         except CallTimeout:
