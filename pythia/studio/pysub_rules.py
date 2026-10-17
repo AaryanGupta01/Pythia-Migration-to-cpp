@@ -99,12 +99,7 @@ def _restriction_messages() -> List[str]:
         for n in ast.walk(tree):
             if isinstance(n, ast.Constant) and isinstance(n.value, str):
                 s = " ".join(n.value.split())
-                if ("PySub" in s or "outside" in s or "not allowed" in s) and 25 < len(s) < 220:
-                    msgs.append(s)
-            elif isinstance(n, ast.JoinedStr):
-                s = " ".join(
-                    "".join(v.value if isinstance(v, ast.Constant) else "{}" for v in n.values).split())
-                if ("PySub" in s or "outside" in s) and 25 < len(s) < 220:
+                if ("PySub" in s or "outside" in s or "not allowed" in s) and 25 < len(s) < 220                         and "{" not in s and s.split()[0] not in ("is", "instance", "instances", "declares"):
                     msgs.append(s)
     seen, out = set(), []
     for m in msgs:
@@ -116,7 +111,10 @@ def _restriction_messages() -> List[str]:
 
 @lru_cache(maxsize=1)
 def rules_text() -> str:
-    ops = " ".join(sorted(_parser.BP, key=lambda k: (_parser.BP[k], k)))
+    tiers: Dict[int, List[str]] = {}
+    for k, v in _parser.BP.items():
+        tiers.setdefault(v, []).append(k)
+    ops = "  |  ".join(" ".join(sorted(tiers[b])) for b in sorted(tiers))
     aug = " ".join(sorted(_parser.AUG_OPS))
     m = METHODS
     lines = [
@@ -141,7 +139,7 @@ def rules_text() -> str:
         "  break, continue, pass, return, try/except [Name] [as e] (no finally, no else), raise Name(\"message\").",
         "  Exception names allowed: " + ", ".join(sorted(EXC_NAMES)) + ".",
         "EXPRESSIONS: literals, names, [..] and {k: v} literals, subscripts a[i], calls, method calls,",
-        "  binary operators ordered by binding power: " + ops + " (** is right-associative),",
+        "  binary operators, loosest to tightest binding: " + ops + " (** is right-associative),",
         "  unary - + not, comparisons (chains like a < b < c are NOT supported), `in` / `not in`.",
         "  * No comprehensions, generator expressions, conditional expressions (x if c else y), f-strings,",
         "    slicing a[i:j], tuple unpacking, `is`/`is not`, walrus, star-expressions, `with`, `assert`, `del`, `global`.",
