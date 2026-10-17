@@ -44,13 +44,18 @@ export default function App() {
   const s = useStudio()
   const { tabs, activeTab } = s
   const [vw, setVw] = useState(window.innerWidth)
+  const [vh, setVh] = useState(window.innerHeight)
   useEffect(() => {
-    const h = () => setVw(window.innerWidth)
+    const h = () => {
+      setVw(window.innerWidth)
+      setVh(window.innerHeight)
+    }
     window.addEventListener('resize', h)
     return () => window.removeEventListener('resize', h)
   }, [])
   // narrow windows get slimmer panels so the editor keeps room
-  const sizes = vw < 1240 ? { ...s.sizes, side: Math.min(s.sizes.side, 232), agent: Math.min(s.sizes.agent, 296) } : s.sizes
+  const sizes = { ...(vw < 1240 ? { ...s.sizes, side: Math.min(s.sizes.side, 232), agent: Math.min(s.sizes.agent, 296) } : s.sizes) }
+  if (vh < 800) sizes.bottom = Math.min(sizes.bottom, 168)
   const playgroundVisited = tabs.some((t) => t.kind === 'playground')
 
   // ------- boot

@@ -195,9 +195,9 @@ function ThreeWay({ rec }: { rec: FunctionRecord }) {
       <div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: `repeat(${panes.length}, minmax(0, 1fr))` }}>
         {panes.map((p, i) => (
           <div key={p.key} className={cn('flex min-h-0 min-w-0 flex-col', i > 0 && 'border-l border-line')}>
-            <div className="flex h-7 flex-none items-baseline gap-2 border-b border-line bg-panel px-3 pt-1">
-              <span className="text-xs font-medium text-fg2">{p.title}</span>
-              <span className="mono truncate text-2xs text-fg3">{p.sub}</span>
+            <div className="flex h-8 flex-none items-center gap-2 overflow-hidden border-b border-line bg-panel px-3">
+              <span className="flex-none whitespace-nowrap text-xs font-medium text-fg2">{p.title}</span>
+              <span className="mono min-w-0 truncate text-2xs text-fg3">{p.sub}</span>
             </div>
             <div className="min-h-0 flex-1">{p.el}</div>
           </div>

@@ -191,13 +191,13 @@ export function Stepper() {
             key={st}
             onClick={() => openStage(st)}
             aria-label={`${LABEL[st]} stage: ${x.state}${x.summary ? ', ' + x.summary : ''}`}
-            className={cn('group relative flex min-w-0 flex-1 flex-col justify-center border-r border-line px-2.5 text-left transition-colors last:border-r-0 hover:bg-hover/50', sel && 'bg-hover/70')}
+            className={cn('group relative flex min-w-0 flex-1 flex-col justify-center border-r border-line text-left transition-colors last:border-r-0 hover:bg-hover/50', narrow ? 'px-1.5' : 'px-2.5', sel && 'bg-hover/70')}
           >
             <span className="flex min-w-0 items-center gap-1.5">
               <StageGlyph state={x.state} icon={STAGE_ICON[st]} />
-              <span className={cn('truncate text-[12px] font-medium leading-4', x.state === 'idle' || x.state === 'skipped' ? 'text-fg3' : x.state === 'running' ? 'text-fg' : 'text-fg2')}>{narrow ? SHORT[st] : LABEL[st]}</span>
+              <span className={cn('truncate font-medium leading-4', narrow ? 'text-[11.5px]' : 'text-[12px]', x.state === 'idle' || x.state === 'skipped' ? 'text-fg3' : x.state === 'running' ? 'text-fg' : 'text-fg2')}>{narrow ? SHORT[st] : LABEL[st]}</span>
             </span>
-            <span className={cn('tnum block truncate pl-[18px] text-2xs leading-[14px]', x.state === 'running' ? 'text-accent' : x.state === 'failed' ? 'text-bad' : 'text-fg3')}>
+            <span className={cn('tnum block truncate text-2xs leading-[14px]', narrow ? 'pl-[16px]' : 'pl-[18px]', x.state === 'running' ? 'text-accent' : x.state === 'failed' ? 'text-bad' : 'text-fg3')}>
               {x.summary ? <CountText text={x.summary} /> : x.state === 'running' ? 'running' : x.state === 'skipped' ? 'skipped' : idle ? '—' : 'waiting'}
             </span>
             {sel && <motion.span layoutId="stage-sel" className="absolute inset-x-0 top-0 h-[2px] bg-accent" transition={{ duration: 0.16 }} />}
