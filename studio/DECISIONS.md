@@ -11,6 +11,10 @@
 - Demo project root is `demo/textlab/` (main.py + package `textlab/`), so fids look like `textlab/text/distance.py::edit_distance`; scale factor 1 for `--small`, 4 otherwise.
 - Demo "guarded" vs "verified": expected by D1 (int +,-,* not provable) sites; the global D7 note (line 0) appears on every list/str function and is ignored for that split. Interval analysis elides 0 guards in the demo wins (bounds come from len()/params), so n-body and k-means are the fully exact ones.
 - Authored offline rewrites live in `demo/offline_cache/authored_rewrites.json` (keyed by function name, provenance "authored"); `scripts/author_offline_cache.py` converts them to `llm/<key>.json`.
+- Web UI (Agent D): `?mock=1` serves the whole API/event stream in-browser (src/mock); the reducer, player and views are identical for mock, live WS and saved-job replay.
+- Web UI: events pass through a Player (instant or paced) before the pure reducer, so presenter mode, replay speed and Space/Arrow stepping work for every source.
+- Web UI: Monaco is bundled (edcore + python/cpp tokenizers + one worker); fonts via @fontsource; no CDN at runtime.
+- Web UI: the diff view shows the whole file (original vs spliced work copy) with unchanged regions folded; a toggle compares the original function to the PySub rewrite.
 - (C) Server adds `mock_data.py` (demo project text + per-function outcomes) next to `mock_engine.py`; mock C++/fidelity come from the real front-end (`pythia.cli.compile_source`) when importable, so they are real, not invented.
 - (C) Event `seq` starts at 1 and is contiguous per job; the bus (not the engine) writes `events.jsonl`, buffering events emitted before `start_job` returns the job id.
 - (C) Mock export is user-triggered (`export.done` after POST /export); pass `options.export=true` to make the scripted stream cover every §4 event type.
