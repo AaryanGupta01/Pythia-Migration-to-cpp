@@ -53,7 +53,7 @@ def stage_text(scale):
     ids = [ord(ch) - 97 if ch != " " else 26 for ch in " ".join(words)]
     vocab = Vocab(27)
     ids = vocab.train(ids, 55 + 10 * scale)
-    pairs = count_pairs(ids, 1024)
+    pairs = [c for c in count_pairs(ids, 128) if c]
     print("bpe: vocab %d, %d tokens, %d distinct pairs" % (vocab.size, len(ids), len(pairs)))
     meta = [parse_number(t) for t in ("12", "7", "", "40") * (50 * scale)]
     print("meta: %.2f" % summarize(*[m for m in meta if not isinstance(m, str)]))

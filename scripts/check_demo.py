@@ -35,7 +35,7 @@ TARGETS = [
     ("textlab/sim/nbody.py", "simulate_energy", "win_exact", ""),
     ("textlab/features/primes.py", "prime_square_sum", "win_guarded", "callee: is_prime"),
     ("textlab/ml/kmeans.py", "assign_clusters", "win_exact", "list[list[float]]"),
-    ("textlab/text/bpe.py", "count_pairs", "win_guarded", "dict[int,int] result"),
+    ("textlab/text/bpe.py", "count_pairs", "win_guarded", "flat list[int] counts"),
     ("textlab/sim/montecarlo.py", "monte_carlo_pi", "win_guarded", ""),
     ("textlab/ml/knn.py", "knn_vote", "fixable", "comprehension/zip/sorted/tuple loop"),
     ("textlab/sim/life.py", "life_generations", "fixable", "tuple loop/ternary/enumerate/sum"),
@@ -177,7 +177,66 @@ def check_rewrite(rel, name, rewrites):
     return errs, n
 
 
+def bench_cases():
+    """(file, function, args factory, repeat, uses_authored_rewrite) for a by-hand speedup measurement."""
+    r = Rng(5)
+    letters = "abcdefghijklmnopqrstuvwxyz"
+    words = ["".join(letters[r.i(26)] for _ in range(16)) for _ in range(400)]
+    pts = [[r.f() * 10 for _ in range(4)] for _ in range(3000)]
+    cents = [list(p) for p in pts[:16]]
+    sig = [r.f() - 0.5 for _ in range(5000)]
+    nb = [[r.f() for _ in range(100)] for _ in range(5)]
+    grid = [[1 if r.f() < 0.3 else 0 for _ in range(80)] for _ in range(80)]
+    train = pts[:900]
+    return [
+        ("textlab/text/distance.py", "edit_distance", [(words[i], words[i + 1]) for i in range(399)] * 3, False),
+        ("textlab/sim/nbody.py", "simulate_energy", [(nb[0], nb[1], nb[2], nb[3], nb[4], 20, 0.01)], False),
+        ("textlab/features/primes.py", "prime_square_sum", [(60000, 1000003)], False),
+        ("textlab/ml/kmeans.py", "assign_clusters", [(pts, cents)] * 5, False),
+        ("textlab/text/bpe.py", "count_pairs", [([r.i(60) for _ in range(60000)], 128)] * 5, False),
+        ("textlab/sim/montecarlo.py", "monte_carlo_pi", [(500000, 12345)], False),
+        ("textlab/ml/knn.py", "knn_vote", [(train, [i % 6 for i in range(900)], pts[900 + q], 5) for q in range(60)], True),
+        ("textlab/sim/life.py", "life_generations", [(grid, 20)], True),
+        ("textlab/features/collatz.py", "collatz_longest", [(60000,)], True),
+        ("textlab/signal/window.py", "window_energy", [(sig, k, 128) for k in range(2000)], False),
+    ]
+
+
+def bench():
+    """Build each function with pythia.libmode.build_library and compare against CPython on the same inputs."""
+    import importlib.util
+    import tempfile
+    from pythia.libmode import build_library
+    rewrites = json.load(open(os.path.join(DEMO, "..", "offline_cache", "authored_rewrites.json")))["functions"]
+    out = tempfile.mkdtemp(prefix="demo-bench-")
+    print(f"{'function':20s} {'py ms':>9s} {'c++ ms':>9s} {'speedup':>8s}  identical  build")
+    for rel, name, calls, rewritten in bench_cases():
+        src = rewrites[name]["attempts"][-1]["pysub"] if rewritten else pysub_text(rel, name)
+        res = build_library(src, [name], out, modname=f"bench_{name}")
+        if not res.ok:
+            print(f"{name:20s} build failed: {res.error or res.diagnostics}")
+            continue
+        spec = importlib.util.spec_from_file_location(res.modname, res.so_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        fast, slow = getattr(mod, name), load_func(rel, name)
+        py_copies = [copy.deepcopy(a) for a in calls]       # copies are made outside the timed region
+        t = time.perf_counter()
+        want = [slow(*a) for a in py_copies]
+        t_py = time.perf_counter() - t
+        arg_copies = [copy.deepcopy(a) for a in calls]
+        t = time.perf_counter()
+        got = [fast(*a) for a in arg_copies]
+        t_cpp = time.perf_counter() - t
+        same = want == got
+        print(f"{name:20s} {1000 * t_py:9.1f} {1000 * t_cpp:9.1f} {t_py / t_cpp:7.1f}x  {str(same):9s}  "
+              f"{'cached' if res.cached else '%.1fs' % res.compile_s}")
+    return 0
+
+
 def main():
+    if "--bench" in sys.argv:
+        return bench()
     no_run = "--no-run" in sys.argv
     rewrites = json.load(open(os.path.join(DEMO, "..", "offline_cache", "authored_rewrites.json")))
     bad = 0
