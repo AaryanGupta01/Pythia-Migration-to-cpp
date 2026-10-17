@@ -67,22 +67,28 @@ def compile_snippet(source: str) -> Dict[str, Any]:
 
 
 def _line_map(source: str) -> dict:
-    """pysub line -> cpp lines, if the stage dump provides one (it does not yet; kept for forward compatibility)."""
+    """pysub line -> cpp lines. Library-mode emission shares its prefix with the program's C++ (main comes last),
+    so its map is valid for the full program; empty if libmode is missing or can't expose the functions."""
     try:
-        from pythia import stages  # noqa: F401
-        return getattr(stages, "line_map", lambda s: {})(source)
+        import ast
+        from pythia.libmode import build_library
+        names = tuple(n.name for n in ast.parse(source).body if isinstance(n, ast.FunctionDef))
+        if not names:
+            return {}
+        d = tempfile.mkdtemp(prefix="pythia-pgmap-")
+        try:
+            r = build_library(source, names, d, build=False)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+        return r.cpp_line_map if r.ok else {}
     except Exception:
         return {}
 
 
 def stages(source: str) -> Dict[str, Any]:
     source = _check(source)
-    try:
-        from pythia.stages import dump_stages
-    except Exception:
-        from .mock_engine import stage_dump         # hand-built stand-in until pythia.stages exists; flagged "mock": true
-        return stage_dump(source, "playground.py")
-    return dump_stages(source, "playground.py")
+    from .mock_engine import stage_dump         # real dump_stages if importable, else a flagged "mock": true stand-in
+    return stage_dump(source, "playground.py")
 
 
 def _exc_of(stderr: str) -> Optional[str]:

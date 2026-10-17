@@ -234,6 +234,8 @@ def main():
     src = "def f(n: int) -> int:\n    return n * 2\nprint(f(21))\n"
     c = ok(api, "POST", "/api/playground/compile", {"source": src})
     assert c["ok"] and "f_f" in c["cpp"] and {"diagnostics", "fidelity", "cpp_line_map"} <= set(c)
+    if os.path.exists(str(Path(__file__).resolve().parents[1] / "pythia" / "libmode.py")):
+        assert c["cpp_line_map"], "libmode is present: expected a cpp_line_map"
     bad = ok(api, "POST", "/api/playground/compile", {"source": "def f(x):\n    return x\n"})
     assert bad["ok"] is False and bad["diagnostics"]
     run = ok(api, "POST", "/api/playground/run", {"source": src})

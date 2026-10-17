@@ -77,6 +77,21 @@ def _compile(src: str, name: str = "<mock>"):
     return code, nd, []
 
 
+def _libmode(src: str, name: str) -> Optional[Dict[str, Any]]:
+    """Real library-mode emission (no build) from pythia.libmode, or None if unavailable/failing."""
+    try:
+        import tempfile
+        from pythia.libmode import build_library
+        d = tempfile.mkdtemp(prefix="pythia-mock-")
+        try:
+            r = build_library(src, (name,), d, build=False)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+        return r.to_dict() if r.ok and r.cpp else None
+    except Exception:
+        return None
+
+
 def _split_cpp(code: str) -> str:
     """Functions only (strip banner and main)."""
     a = code.find('#include "pyrt.hpp"')
@@ -164,7 +179,15 @@ def _node(n: ast.AST, mode: str, env: Dict[str, str]) -> Dict[str, Any]:
 
 
 def stage_dump(source: str, filename: str = "<input>") -> Dict[str, Any]:
-    """Stand-in for pythia.stages.dump_stages built on stdlib tokenize/ast (+ the real compiler if present)."""
+    """pythia.stages.dump_stages when available, else a stdlib tokenize/ast stand-in flagged "mock": true."""
+    try:
+        from pythia.stages import dump_stages
+    except Exception:
+        return _fallback_stage_dump(source, filename)
+    return dump_stages(source, filename)
+
+
+def _fallback_stage_dump(source: str, filename: str = "<input>") -> Dict[str, Any]:
     out: Dict[str, Any] = {"ok": True, "diagnostics": [], "tokens": [], "ast": None, "typed_ast": None,
                            "pir": None, "cpp": "", "fidelity": [], "guard_elision": {"elided": 0, "kept": 0},
                            "mock": True}
@@ -465,18 +488,22 @@ class Project:
         cmap: Dict[str, List[int]] = {}
         fid_notes: List[Dict[str, Any]] = []
         if build_src and eligible_compile:
-            code, notes, errs = _compile(build_src, i["file"])
-            if errs:
-                self.warnings.append(f"{i['id']}: pysub does not compile: {errs[0]}")
-            if code:
-                cpp = _split_cpp(code)
-                cmap = _cpp_line_map(build_src, cpp, i["name"])
-                fid_notes = notes if st == "guarded" else [n for n in notes if not n["cls"].startswith("D1")]
+            lib = _libmode(build_src, i["name"])           # real cpp/wrapper/line map when pythia.libmode exists
+            if lib:
+                cpp, wrapper, cmap, notes, mod = lib["cpp"], lib["wrapper_cpp"], lib["cpp_line_map"], lib["fidelity"], lib["modname"]
             else:
-                cpp = f"// (C++ preview unavailable: PYTHIA front-end not importable)\n// {i['name']}\n"
-            mod = "pythia_" + hashlib.sha256((cpp or build_src).encode()).hexdigest()[:8]
+                code, notes, errs = _compile(build_src, i["file"])
+                if errs:
+                    self.warnings.append(f"{i['id']}: pysub does not compile: {errs[0]}")
+                if code:
+                    cpp = _split_cpp(code)
+                    cmap = _cpp_line_map(build_src, cpp, i["name"])
+                else:
+                    cpp = f"// (C++ preview unavailable: PYTHIA front-end not importable)\n// {i['name']}\n"
+                mod = "pythia_" + hashlib.sha256((cpp or build_src).encode()).hexdigest()[:8]
+                wrapper = _wrapper(mod, i["name"], build_src) if _is_plain(build_src) else None
+            fid_notes = notes if st == "guarded" else [n for n in notes if not n["cls"].startswith("D1")]
             self.module[i["id"]] = mod
-            wrapper = _wrapper(mod, i["name"], build_src) if _is_plain(build_src) else None
             hh = _h(i["id"])
             cs = round(3.2 + (hh % 55) / 10, 1)
             build = {"ok": True, "module": mod, "so": f"lib/{mod}.cpython-314-x86_64-linux-gnu.so",
@@ -1231,7 +1258,7 @@ class MockEngine:
         for k in range(1, 9):
             fr = k / 8
             add("trace.progress", {"calls": int(total_calls * fr * fr), "functions_seen": int(len(called) * min(1, fr * 1.4)),
-                                   "elapsed_s": round(TRACE_TOTAL_S * fr, 2), "stdout_tail": "\n".join(tails[:k])}, "trace", None, 2.2)
+                                   "elapsed_s": round(TRACE_TOTAL_S * fr, 2), "stdout_tail": "\n".join(tails[:k])}, "trace", None, 6)
             if k in (3, 6):
                 add("log", {"stream": "trace", "level": "info", "text": tails[k - 1]}, "trace", None, 0.1)
             if k == 4:
@@ -1274,7 +1301,7 @@ class MockEngine:
                 cap = (f"Typechecker rejected `{f['name']}`: {f['reason']} -> asking the LLM for a PySub rewrite" if w["attempt"] == 1
                        else f"Attempt {w['attempt']}: feeding the error back to the LLM")
                 add("fix.attempt", {"id": fid, "attempt": w["attempt"], "source": "cache" if job.options.get("offline") else "api",
-                                    "ok": w["ok"], "error": w["error"], "pysub": w["pysub"]}, "fix", cap, 6)
+                                    "ok": w["ok"], "error": w["error"], "pysub": w["pysub"]}, "fix", cap, 3.5)
                 step(sid, fid, f["name"], "running", f"attempt {w['attempt']}: " + ("PySub accepted" if w["ok"] else w["error"]), 0.05)
             ok = bool(f["rewrites"]) and f["rewrites"][-1]["ok"]
             add("fix.done", {"id": fid, "ok": ok, "reason": None if ok else f["reason"]}, "fix",
