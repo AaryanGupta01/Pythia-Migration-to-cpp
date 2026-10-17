@@ -43,7 +43,9 @@ def collatz_max(limit: int) -> int:
     return best
 
 def sieve_count(n: int) -> int:
-    flags = [True] * (n + 1)
+    flags: list[bool] = []
+    for k in range(n + 1):
+        flags.append(True)
     count = 0
     for i in range(2, n + 1):
         if flags[i]:
@@ -117,7 +119,7 @@ def main():
     ok("all event types emitted: " + ", ".join(sorted(types)))
     funcs = {f["id"]: f for f in eng.functions(jid)}
     for k, f in funcs.items():
-        print("     ", k, f["status"], f["speedup"], f["share"])
+        print("     ", k, f["status"], f["speedup"], f["share"], f["reason"])
     good = [f for f in funcs.values() if f["status"] in ("verified", "guarded")]
     assert len(good) >= 2 and all(f["speedup"] and f["speedup"] > 1 for f in good), good
     assert funcs["pkg/kern.py::uses_math"]["status"] == "not_eligible"
@@ -204,35 +206,19 @@ def main():
     from pythia.studio.models import Workspace
     sroot = tmp / "sp"
     (sroot / "original").mkdir(parents=True)
-    weird = ('#!/usr/bin/env python
-"""doc"""
-from __future__ import annotations
-import functools
-
-'
-             '@functools.lru_cache(maxsize=None)
-@functools.wraps(print)
-def f(
-    a: int,
-    b: int = 2,
-) -> int:
-    return a + b
-')
+    NL = chr(13) + chr(10)
+    weird = NL.join(["#!/usr/bin/env python", '"""doc"""', "from __future__ import annotations", "import functools", "",
+                     "@functools.lru_cache(maxsize=None)", "@functools.wraps(print)", "def f(", "    a: int,",
+                     "    b: int = 2,", ") -> int:", "    return a + b", ""])
     (sroot / "original" / "w.py").write_bytes(weird.encode())
     shutil.copytree(sroot / "original", sroot / "work")
     sws = Workspace("sp000000", "sp", sroot, sroot / "original", sroot / "work")
     sr = FunctionRecord(id="w.py::f", file="w.py", name="f")
-    (fake / "pythia_zz.py").write_text("def f(a, b=2):
-    return a + b
-")
+    (fake / "pythia_zz.py").write_text("def f(a, b=2):" + chr(10) + "    return a + b" + chr(10))
     splice.apply(sws, sr, "pythia_zz", fake / "pythia_zz.py")
     new = (sroot / "work" / "w.py").read_bytes().decode()
-    assert new.startswith("#!/usr/bin/env python
-\"\"\"doc\"\"\"
-from __future__"), new
-    assert new.index("from _pythia_accel") > new.index("import functools") and "
-" not in new.replace("
-", "")
+    assert new.startswith(NL.join(["#!/usr/bin/env python", '"""doc"""', "from __future__"])), new
+    assert new.index("from _pythia_accel") > new.index("import functools") and chr(10) not in new.replace(NL, "")
     assert new.index("@_pythia_accelerated") > new.index("@functools.wraps") and new.index("@_pythia_accelerated") < new.index("def f(")
     splice.apply(sws, sr, "pythia_zz", fake / "pythia_zz.py")
     assert (sroot / "work" / "w.py").read_bytes().decode() == new

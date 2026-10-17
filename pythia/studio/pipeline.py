@@ -21,7 +21,7 @@ from .models import FunctionRecord, STATUSES, Workspace
 
 REPO = Path(__file__).resolve().parents[2]
 OFFLINE_DIR = REPO / "demo" / "offline_cache"
-SLOWER_THAN = 0.95            # measured speedup below this => declined (never ship a slowdown)
+SLOWER_THAN = 1.1             # measured speedup below this => declined (a wash is not worth the boundary risk)
 
 
 def fmt_x(v: Optional[float]) -> str:
@@ -495,7 +495,7 @@ class Pipeline:
                 r.probe_speedup = sp
             elif sp < SLOWER_THAN:
                 r.status, r.probe_speedup, r.speedup = "declined", sp, None
-                r.reason = f"Compiled version measured {sp:.2f}x (slower than Python): marshalling cost outweighs the saving"
+                r.reason = f"Compiled version measured {sp:.2f}x ({'slower than' if sp < 1 else 'no faster than'} Python): marshalling cost outweighs the saving"
                 probe = True
             else:
                 r.speedup = sp
