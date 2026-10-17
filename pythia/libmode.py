@@ -39,7 +39,7 @@ from .emit_cpp import emit
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNTIME = os.path.join(HERE, "runtime")
 RUNTIME_FILES = ("pyrt.cpp", "pyrt.hpp", "pyrt_bridge.hpp")
-FLAGS = ["-std=c++17", "-O3", "-fPIC", "-fvisibility=hidden", "-w"]
+FLAGS = ["-std=c++17", "-O3", "-flto", "-fPIC", "-fvisibility=hidden", "-w"]
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 

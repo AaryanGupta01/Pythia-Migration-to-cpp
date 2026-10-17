@@ -142,7 +142,9 @@ def replay(rec: FunctionRecord, ws: Workspace, so_path, modname: str,
                 base["total"] = ci + 1
         return base
     r["source"] = source
-    nonexact = any(f.get("severity") in ("guarded", "divergent") for f in rec.fidelity)
+    # only per-site notes count: module-level notes (line 0: D7 memory, L1-L4) apply to every function
+    nonexact = any(f.get("severity") in ("guarded", "divergent") and (f.get("line") or 0) > 0
+                   for f in rec.fidelity)
     if r["total"] == 0:
         r["status"] = "failed"
         r["error"] = "every call fell back or timed out; nothing could be compared"

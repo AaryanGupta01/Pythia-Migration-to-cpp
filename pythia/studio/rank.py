@@ -17,7 +17,7 @@ from typing import List, Optional
 
 from .models import FunctionRecord
 
-MARSHAL_S_PER_ELEM = 45e-9      # pybind11 list/str element copy in + out
+MARSHAL_S_PER_ELEM = 4e-9       # pybind11 list/str element copy in + out
 CALL_OVERHEAD_S = 1.5e-6        # fixed cost of one boundary crossing
 ELIGIBILITY_FACTOR = {"verifiable": 1.0, "fixable": 0.6, "not_eligible": 0.0}
 MAX_SPEEDUP = 40.0
