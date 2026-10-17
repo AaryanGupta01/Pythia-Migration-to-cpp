@@ -11,7 +11,7 @@ DEFAULT_DEMO = "quanta"
 DEMOS: Dict[str, dict] = {
     "quanta": {
         "title": "Quanta: analytics and simulation toolkit",
-        "description": "A 4,000-line pure-Python toolkit (simulation, graphs, text, linear algebra, statistics, "
+        "description": "A 3,800-line pure-Python toolkit (simulation, graphs, text, linear algebra, statistics, "
                        "CLI, tests). About 30 s to run; a realistic mix of hot numeric kernels and glue code.",
         "dir": "quanta",
         "trace_cmd": "python main.py --small",
@@ -19,7 +19,7 @@ DEMOS: Dict[str, dict] = {
     },
     "textlab": {
         "title": "TextLab: quick demo",
-        "description": "A 550-line text and numerics workbench. About 10 s to run; handy for a fast end-to-end "
+        "description": "A 480-line text and numerics workbench. About 10 s to run; handy for a fast end-to-end "
                        "pass.",
         "dir": "textlab",
         "trace_cmd": "python main.py --small",

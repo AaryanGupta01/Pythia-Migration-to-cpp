@@ -2,95 +2,128 @@
 
 Tagline for the whole demo: **the LLM suggests, the compiler proves.** The LLM only ever rewrites Python into PySub (our typed subset). It never writes C++, and nothing is called verified until the compiled code has reproduced the recorded calls exactly.
 
-UI labels below follow the layout in `prompt.md` section 3 and may shift slightly. Click targets are given as **bold names**.
+UI labels below follow the layout in `prompt.md` section 3 and may shift slightly. Click targets are given as **bold names**. All numbers in this file were measured on the development machine (WSL2, CPython 3.14.4, g++ 15); the Hotspots list shows yours.
 
 ## 0. Before you go on stage (5 minutes, once)
 
 ```bash
-./scripts/make_demo_repo.sh          # local bare repo for the "Clone repository" card (prints a file:// URL)
 python scripts/check_demo.py         # every demo function is in its intended class; prints CPython time shares
-./studio.sh --offline                # cached LLM answers + prebuilt .so files, no network, no API key
+./scripts/smoke.sh --offline         # both demos end to end, no key, no network (about 15 minutes, run it once)
+./studio.sh --offline                # cached LLM answers + prebuilt .so files
 ```
 
 1. Open `http://127.0.0.1:8765/?presenter=1` in a 1080p window at 110% zoom, dark theme.
 2. **Dry run once** (steps below), then note the job id in the status bar. If anything stalls on stage, open `http://127.0.0.1:8765/?presenter=1&job=<id>` and the whole run replays from its saved event log.
-3. With a real key (`ANTHROPIC_API_KEY=... ./studio.sh`) the same flow works online; the attempt/rewrite pictures are the same shape, the text will differ.
-4. `python demo/textlab/main.py --small` takes about 10 s under CPython 3.14 (about 25 to 40 s when traced). Its output is deterministic: no clock, fixed LCG seeds.
+3. A full Quanta run takes about 3 minutes with the offline cache (trace 35 s, builds are cache hits, replay and benchmark about 2 minutes, two end-to-end runs 30 s each). For a live demo use the saved-job replay, or the 10-second `textlab` demo (**Open demo project**, then pick *TextLab* in the run dialog, or `{kind:"demo", name:"textlab"}` over the API).
+4. With a key (`GROQ_API_KEY=... ./studio.sh`, free at console.groq.com, or `ANTHROPIC_API_KEY`) the same flow works online. The LLM answers in the offline cache were recorded from `openai/gpt-oss-120b` on Groq (provenance `recorded`), so online the pictures have the same shape and the text differs a little.
+5. `python main.py --small` inside `demo/quanta` takes about 26 s under CPython 3.14 (32 to 38 s traced). Its output is deterministic: no clock, seeded LCG.
 
 ## 1. What the demo project is
 
-`demo/textlab/`: about 550 lines, a text and numerics workbench. `main.py --small` runs four stages (text, sim, ml, features). Numbers are from this machine; the Hotspots list shows yours.
+`demo/quanta/`: **Quanta, a small analytics and simulation toolkit.** 3,772 lines of pure Python in 13 sub-packages (`sim`, `combinatorics`, `numtheory`, `text`, `graph`, `linalg`, `cluster`, `opt`, `signal`, `stats`, `io`, `util`, `cli`), a `pyproject.toml`, README, CHANGELOG, an argparse CLI with eleven sub-commands and 81 `unittest` tests that pass before **and** after acceleration. 24% of all lines (28% of the non-test code) sit in functions PYTHIA can use; the rest is the glue a real team writes: dataclasses, classes, I/O, closures, generators, `Optional`, `*args`, a guarded NumPy import.
 
-| Function (file under `textlab/`) | Intended outcome | CPython time share | Expected speedup | Why |
-|---|---|---|---|---|
-| `edit_distance` (text/distance.py) | Guarded win | 14% | about 4x | fuzzy de-dup; two short strings in, an int out; 15 D1 `+`/`-` sites stay guarded |
-| `simulate_energy` (sim/nbody.py) | Verified win (no D1 sites) | 16% | about 9x | n-body over `list[float]`, pure float math |
-| `prime_square_sum` (features/primes.py) | Guarded win, has a callee | 5% | about 11x | calls same-module helper `is_prime`, so the callee is compiled with it |
-| `assign_clusters` (ml/kmeans.py) | Verified win (no D1 sites) | 10% | about 10x | k-means assignment over `list[list[float]]` (two-level list) |
-| `count_pairs` (text/bpe.py) | Guarded win, the modest one | 3% | 1.3 to 2.5x | BPE pair counts; 60k ints in, 16k ints out, so marshalling eats most of the gain |
-| `monte_carlo_pi` (sim/montecarlo.py) | Guarded win, the big one | 20% | about 14x | inline LCG; `state * 1103515245` cannot be proven non-overflowing, so it is trapped, not wrapped |
-| `knn_vote` (ml/knn.py) | Fixable: LLM retry story | 6% | about 5.7x after rewrite | comprehension, generator, `zip`, `sorted`, tuple unpacking, `max(x)`; **attempt 1 is rejected, attempt 2 passes** |
-| `life_generations` (sim/life.py) | Fixable: LLM | 7% | about 5x after rewrite | tuple loops, ternary, `enumerate`, `[row[:]...]`, `sum` |
-| `collatz_longest` (features/collatz.py) | Fixable: types from the trace | 8% | about 5x after annotation | no annotations; observed types `int -> int` fill them in, no LLM needed |
-| `window_energy` (signal/window.py) | **Declined (boundary cost)** | 7% | below 1x (about 0.2 to 0.4x probe) | compiles fine, but ~220k calls each marshal a 5000-float list for 128 multiply-adds: 3.5 us in Python vs about 50 us to cross the boundary |
-| `normalize_rows` (ml/embed.py) | Not eligible | ~0% | n/a | reads module-level `np` (numpy, guarded import) |
-| `make_lr_schedule` (ml/schedule.py) | Not eligible | ~0% | n/a | returns a closure (nested function) |
-| `parse_number` (util/parse.py) | Not eligible | ~0% | n/a | `value` changes type str to int (dynamic typing) |
-| `summarize` (util/parse.py) | Not eligible | ~0% | n/a | `*args` |
-| `load_corpus`, `write_corpus` (text/corpus.py) | Not eligible | small | n/a | file I/O (`open`, `with`, `os.remove`) |
-| `Vocab.train/merge`, `Rng.*`, `KMeans.*`, `CorpusBuilder.*` | Not eligible | ~5% (BPE merge) | n/a | methods of classes: v1 analyses module-level functions only |
-| `main.py::*`, `energy_profile` | Not eligible | glue | n/a | cross-module callees / generator |
+`python main.py --small` runs seven jobs (simulation, puzzles, text, graph, linalg, optimisation, signals). Analysis result (offline run, 278 functions found, 123 of them methods, mostly the tests):
 
-The six "win" rows together are about 68% of runtime, the three "fixable" rows about 21%. The end-to-end speedup is therefore capped by what stays in Python (Amdahl): expect roughly **2.5x** with only the as-written wins and **about 4x** once the LLM-fixed and annotated functions are in (measured offline: 9.1 s to 2.3 s). That honest ceiling is a good talking point.
+| Result | Count |
+|---|---|
+| accelerated (verified or guarded, replay matched, all faster) | 48 (3 verified, 45 guarded), geometric-mean 16x per function |
+| LLM rewrite accepted and verified | 6 (+1 fixed by the LLM but then declined as slower) |
+| annotated from the trace (no LLM) | 2 |
+| declined | 5 measured below 1x, 3 predicted to lose that still measured above 1x, 30 cold (below 0.2% of runtime, not built) |
+| not eligible, with a reason | 184 (123 of them methods of classes) |
+
+CPython time shares (self time under the tracer; the 7 `job_*` functions are glue that call the kernels). Kernels together are **66 to 69%** of runtime, glue **31 to 34%**.
+
+| Function (file under `quanta/`) | Intended | Actual | Share | Speedup | Why |
+|---|---|---|---|---|---|
+| `combinatorics/queens.py::count_queens` | win | guarded | 6.6-7.3% | 6.9x | backtracking, 3 bool tables; bounds checks on every access eat much of the gain |
+| `sim/fractal.py::mandelbrot_row` | win | guarded | 4.0% | 31x | pure float escape-time loop |
+| `sim/nbody.py::advance` | win | guarded | 3.9% | 19.6x | 7 `list[float]` mutated in place, written back after the call |
+| `numtheory/collatz.py::longest_collatz` (+ callee `collatz_steps`) | win | guarded | 3.5% self / 4.2% cum | 26x | same-module callee compiled together |
+| `linalg/spectral.py::spectral_norm` (+ `mult_av`, `mult_atv`) | win | guarded | 3.9% cum | 25x | power iteration, entries recomputed inline |
+| `opt/routes.py::tour_length` | win | guarded | 3.0% | 4x | tiny lists, 167k calls: boundary cost eats most of the gain (modest win on purpose) |
+| `graph/shortest.py::dijkstra_dense` | win | guarded | 3.0% | 6.4x | `list[list[int]]` 130x130 marshalled on each of 1,500 calls |
+| `sim/montecarlo.py::estimate_pi` | win | guarded | 2.7% | 18x | inline LCG, `state * 1103515245` is trapped not wrapped |
+| `text/distance.py::levenshtein` | win | guarded | 2.5% | 14-16x | two-row DP on `list[int]` symbol codes, 62k calls |
+| `graph/shortest.py::floyd_warshall` | win | guarded | 2.2% | 19-20x | n^3 on an adjacency matrix |
+| `numtheory/digits.py::digital_root_total`, `count_palindromes` | fixable (annotate) | guarded | 2.1%, 1.7% | 42x, 33x | **no annotations in the source**: observed types `int -> int` fill them in, no LLM |
+| `cluster/kernels.py::assign_points` | win | verified | 1.9% | 18x | no int guards at all: fully exact |
+| `linalg/dense.py::matmul` | win | verified | 1.7% | 29x | `list[list[float]]` x2 |
+| `opt/dp.py::knapsack_01` | win | guarded | 1.5% | 27x | 1-D DP table |
+| `numtheory/primes.py::sieve_primes` | win | guarded | 1.7% | 3.4x | the 400k-prime result list crosses the boundary |
+| `opt/dp.py::grid_min_path` | **fixable (LLM)** | guarded | 1.0% | 11.5x | `row[:]`, ternaries, 3-argument `min`: rewritten in 1 attempt |
+| `sim/life.py::life_population` | **fixable (LLM)** | guarded | 0.9% | 2.5x | comprehensions, `sum(genexpr)`, chained comparison: **attempt 1 rejected by the parser, attempt 2 passes** |
+| `opt/dp.py::longest_increasing_subsequence` | fixable (LLM) | guarded | 0.7% | 13x | `[1] * n`, `max(list)` |
+| `graph/traverse.py::bfs_levels` | fixable (LLM) | guarded | 0.55% | 2.8x | `[-1] * n`, `queue.pop(0)` |
+| `signal/filters.py::exp_smooth` | fixable (LLM) | guarded | 0.4% | 2.4x | `enumerate`, slicing, ternary |
+| `stats/descriptive.py::weighted_moments` | fixable (LLM) | guarded | 0.26% | 9.4x | `zip`, tuple loop. See the viva note: the rewrite is not equivalent on mismatched list lengths and replay never saw that input |
+| `text/kmers.py::kmer_counts` | fixable (LLM) | **declined, 0.30x** | 0.9% | below 1x | the rewrite is valid and replays 250/250, but a `dict[str,int]` in the runtime is a linear scan and strings are copied: slower than CPython, so it is not spliced |
+| `stats/drift.py::tail_variance` | boundary | **declined, 0.45x** | 0.74% | below 1x | a growing 12,000-float list marshalled for 143,232 calls, 24 samples of work each |
+| `cluster/kernels.py::update_centroids` | win | declined, 0.16x | 0.21% | below 1x | nested lists copied in and out each call |
+| `text/kmers.py::gc_content`, `longest_run` | win | declined, 0.35x and 0.74x | 0.3%, 0.2% | below 1x | 15,000-character strings marshalled 250 times |
+| `opt/anneal.py::acceptance_probability` | boundary | declined (predicted) | 0.3% | probe 4.8x | the ranker predicted a loss from 144k scalar crossings; the probe measured a gain. A calibration miss, shown as is |
+| `numtheory/primes.py::is_probable_prime` | win | declined (predicted) | 0.9% | probe 1.3x | 350k calls of a tiny function; it still gets compiled inside `prime_square_sum` (11x) |
+| 30 more kernels (`rolling_std`, `histogram`, `convolve`, ...) | win | declined, **cold** | below 0.2% each | not built | "Cold: 0.03% of the traced runtime". No build, no LLM call |
+| `util/iterutil.py::make_decay`, `combine_counts`, `coerce_cell`, `first_peak`, `chunked` | n/a | not eligible | small | n/a | closure, `*args`, function held in a variable, `Optional`/`Tuple`, generator |
+| `linalg/accel.py::*` | n/a | not eligible | ~0 | n/a | reads module-level `np` (guarded NumPy import) |
+| `text/corpus.py::*`, `sim/events.py::exponential`, `stats/resample.py::bootstrap_means`, `linalg/builders.py::random_matrix` | n/a | not eligible | 1.6% (`make_dna`) | n/a | "calls `.next_int()` on `rng`, an object of type `Lcg`": objects cannot cross into PySub |
+| `io/csvio.py::read_table`, `io/jsonio.py::*`, `cli/*` | n/a | not eligible | 1-2% | n/a | file I/O, `with`, `csv`/`json`, cross-module callees, default arguments |
+| `sim/events.py::simulate_queue`, `graph/sparse.py::*`, `text/index.py::*` | n/a | not eligible | 1.1% | n/a | `heapq`, constructs classes, module-level regex, `Counter` |
+| 123 methods (`Lcg.*`, `Graph.*`, `SpellChecker.*`, `Test*.test_*`) | n/a | not eligible | glue | n/a | method of class: v1 analyses module-level functions only |
+
+**End to end** (`python main.py --small`, same stdout hash before and after, `python -m unittest` green in the exported project):
+about **26 s -> 5.7 s, 4.4 to 5.0x** across three runs (25.0 -> 5.6, 27.4 -> 5.7, and 4.95x in the last recording run). The ceiling is Amdahl: roughly a third of the time is glue that stays in Python, plus the declined and low-speedup kernels. That honest ceiling is a good talking point.
+
+`demo/textlab/` stays as the 10-second demo (480 lines, 10 accelerated functions, 2 LLM-fixed, `window_energy` declined at 0.2x, 9.1 s -> 1.6 s = 5.7x).
 
 ## 2. The 3-minute script
 
 | Time | Click | Say |
 |---|---|---|
-| 0:00 | Welcome screen. Point at the four cards, then click **Open demo project** (bottom). | "A stranger gets a Python project. Four ways in: folder, GitHub URL, dropped file, playground. I'll use the bundled demo, a 550-line text and numerics workbench." |
-| 0:15 | In the run dialog check **Trace command** = `python main.py --small`, **Offline** on, **Presenter mode** on. Press **Run** (Ctrl+Enter). | "We give it an entry command so it can watch the program run. Offline means cached LLM answers, but everything else is real: real compiler, real C++ build, real replay." |
-| 0:25 | Watch the **pipeline stepper** at the top of the editor. As **Ingest** and **Scan** complete, read the captions. | "Ingest copies the project, we never touch the original. Scan parses every function and runs our real typechecker on each: about 35 functions, a handful eligible as written." |
-| 0:40 | Stepper reaches **Trace**: the stage inspector shows calls counting up and the sorted profile bars. | "Now it runs `main.py` under a sys.monitoring tracer: call counts, time, observed types, and it samples real argument/return pairs. Those samples become the proof obligations later." |
-| 0:55 | **Rank**: click the stage to open the score breakdown. Hover one row. | "Score is trace share times eligibility times expected benefit, minus a boundary penalty. Ten hotspots between 3% and 20% each: this is where the time actually goes." |
-| 1:05 | **Fix** starts. The right **PYTHIA agent** panel shows `knn_vote`: "typechecker rejected: loop over tuples, list comprehension, max() with 1 argument". Pause with **Space** here. | "Three functions need help: a comprehension, a ternary, no annotations. The rewrite is the only thing the LLM does. Watch what the checker does to its first answer." |
-| 1:15 | Press **right arrow**. Attempt 1 appears red: `line 5: expected ')' but found 'for'`; then attempt 2 green. | "First attempt kept a generator expression: our parser rejects it, the error goes back to the model, second attempt passes the typechecker. The compiler is the judge, not the model." |
-| 1:30 | Click the function **`knn_vote`** in **Hotspots** (activity bar) to open its **journey**. Expand nodes in order: Original, Observed types, Eligibility, Rewrite attempts, Final PySub, then Tokens, AST, Typed AST, PIR, C++. Spend about 3 s each; show the source-highlight link. | "This is that one function's whole path: original, what we saw at runtime, why it was rejected, the retry, the PySub, then our compiler phases, tokens, AST, typed AST, IR with the fidelity notes, and finally C++. Failed or skipped steps would be greyed out with the exact reason." |
-| 1:55 | Keep scrolling: **wrapper**, **build**, **oracle replay**, **benchmark**, **splice**. Land on the replay node ("N/N matched") and the speedup. | "Built into a pybind11 module, then the proof: the recorded calls replayed through Python and through C++, floats compared bitwise, exceptions compared by class. N of N match. Then the benchmark." |
-| 2:10 | Open the **diff** (button at the top of the journey, or double-click the function in the file tree). Toggle **three-way view**. Hover a coloured gutter mark. | "Cursor-style diff: the original function is untouched, a one-line decorator is added; the shim falls back to Python if the `.so` is missing. Three-way: Python, the PySub rewrite, the C++. Gutter colours are fidelity: green exact, amber guarded, red divergent. Hover shows the class and the mitigation." |
-| 2:25 | Hotspots list: click **`window_energy`** (status chip **Declined**). Show the journey stopping at benchmark/splice. | "This is the one it refuses. It compiles and passes replay, but it is called 220,000 times on a 5000-element list to do 128 multiply-adds. Crossing the boundary costs more than the work: the probe measured below 1x. The ranker declined it before it could make your program slower." |
-| 2:40 | Bottom panel: **Benchmarks** tab. Point at the log-scale bars, then the end-to-end before/after. | "Per-function Python vs C++ on a log scale, and the number that matters: the whole program before and after, output identical." |
-| 2:50 | Agent panel summary card: **Export**. Pick a folder, tick zip. Mention `PYTHIA_REPORT.md` and `build_accel.sh`. Press **Accept all** first if some are still pending (Ctrl+Shift+A). | "Accept or reject per function, export the project with the report and a script that rebuilds the `.so` on any machine. Python in, verified faster Python out." |
+| 0:00 | Welcome screen. Point at the four cards, then click **Open demo project** (bottom). | "A stranger gets a Python project: a 3,800-line analytics toolkit, simulation, graphs, text, linear algebra, its own CLI and tests. Four ways in: folder, GitHub URL, dropped file, playground. I'll use the bundled demo." |
+| 0:15 | In the run dialog check **Trace command** = `python main.py --small`, **Offline** on, **Presenter mode** on. Press **Run** (Ctrl+Enter). | "We give it an entry command so it can watch the program run. Offline means cached LLM answers recorded from a real model; everything else is real: real compiler, real C++ build, real replay." |
+| 0:25 | Watch the **pipeline stepper**. As **Ingest** and **Scan** complete, read the captions. | "Scan parses every function and runs our real typechecker on each: 278 functions, about 90 that pass or can be fixed, 184 that can never be compiled, each with its reason." |
+| 0:40 | **Trace**: calls count up (1.3 million) and the sorted profile bars grow. | "It runs `main.py` under a sys.monitoring tracer: call counts, time, observed types, and it samples real argument/return pairs. Those samples become the proof obligations later." |
+| 0:55 | **Rank**: open the score breakdown, hover one row. | "Time share times eligibility times expected benefit, minus a boundary penalty. Look at the spread: `count_queens` 7%, `mandelbrot_row` 4%, `advance` 4%, ten more between 1 and 4%. The seven `job_*` functions at the top are glue: not eligible, but they show where the kernels are called from." |
+| 1:05 | **Fix** starts. Agent panel: `life_population`, "typechecker rejected: list comprehension, `sum()`, generator expression". Pause with **Space**. | "Seven functions need help: comprehensions, `zip`, `pop(0)`, ternaries. Two more only lack annotations; those are fixed from the trace, no LLM. The rewrite is the only thing the model does. Watch what the checker does to its first answer." |
+| 1:15 | Press **right arrow**: attempt 1 red (`expected ')' but found ','`), attempt 2 green. | "Attempt 1 kept a generator-style loop the parser can't read; the error goes back to the model, attempt 2 passes. The compiler is the judge, not the model." |
+| 1:30 | In **Hotspots** open the journey of **`life_population`**. Expand Original, Observed types, Eligibility, Rewrite attempts, Final PySub, Tokens, AST, Typed AST, PIR, C++. About 3 s each. | "Original, what we saw at runtime, why it was rejected, the retry, the PySub, then our phases: tokens, AST, typed AST, IR with fidelity notes, C++." |
+| 1:55 | Keep scrolling: **wrapper**, **build**, **oracle replay**, **benchmark**, **splice**. | "Built into a pybind11 module, then the proof: the recorded calls replayed through Python and C++, floats compared bitwise, exceptions by class. 50 of 50 match; 2.5x. Compare `mandelbrot_row`: 31x, nothing needed rewriting." |
+| 2:10 | Open the **diff**; toggle **three-way view**; hover a gutter mark. | "The original function is untouched, a one-line decorator is added, and the shim falls back to Python if the `.so` is missing. Gutter colours are fidelity: green exact, amber guarded." |
+| 2:25 | Hotspots: **`tail_variance`** (chip **Declined**), then **`kmer_counts`**. | "Two refusals. `tail_variance` compiles and replays fine but it is called 143,000 times on a list of thousands to do 24 samples of work; crossing the boundary measured 0.45x. And `kmer_counts` is the interesting one: the LLM rewrote it correctly, 250 of 250 replays match, and it is still slower, 0.30x, because strings and a string-keyed dict are expensive in our runtime. So it is not spliced. Proof is necessary, speed is measured." |
+| 2:40 | Bottom panel: **Benchmarks**. Log-scale bars, then end-to-end. | "Per function Python vs C++ on a log scale, from 0.16x to 100x, and the number that matters: the whole program 26 seconds before, 5.7 after, output identical." |
+| 2:50 | Summary card: **Export**, tick zip. Mention `PYTHIA_REPORT.md`, `build_accel.sh`. **Accept all** first (Ctrl+Shift+A). | "Export the project with the report and a script that rebuilds the `.so` anywhere. The exported project's 81 unit tests pass unchanged." |
 
-If you are ahead of time, run `python main.py --small` in the exported folder and show the same output lines as the original.
+If you are ahead of time, run `python main.py --small` and `python -m unittest` in the exported folder.
 
 ## 3. The 30-second version
 
-1. (0:00) **Open demo project**, Presenter mode on, **Run**. "Python project in, we trace it to find the hot functions."
-2. (0:10) Space to pause on the Fix stage, right arrow through `knn_vote`: attempt 1 rejected, attempt 2 passes. "The LLM only rewrites into PySub; our typechecker is the judge."
-3. (0:18) Open its journey, jump to the replay node: "N/N recorded calls match, then C++, then speedup."
-4. (0:24) **Benchmarks** tab: "Whole program before and after, identical output. And it declined one function because the boundary cost would have made it slower."
+1. (0:00) **Open demo project**, Presenter mode on, **Run**. "A 3,800-line Python project in, we trace it to find the hot functions."
+2. (0:10) Space on the Fix stage, right arrow through `life_population`: attempt 1 rejected, attempt 2 passes. "The LLM only rewrites into PySub; our typechecker is the judge."
+3. (0:18) Open its journey, jump to replay: "50 of 50 recorded calls match, then C++, then speedup."
+4. (0:24) **Benchmarks**: "Whole program 26 s to 5.7 s, identical output. And it declined `tail_variance` and `kmer_counts` because the boundary would have made them slower."
 
-## 4. Viva: Tokens, AST, Typed AST, PIR for `edit_distance`
+## 4. Viva: Tokens, AST, Typed AST, PIR for `levenshtein`
 
-Open the journey of `edit_distance` (27 lines of PySub after const-inlining) and walk the nodes. The source, with the lines used below:
+Open the journey of `levenshtein` (`quanta/text/distance.py`, 18 lines of PySub after docstring stripping) and walk the nodes. The source, with the lines used below:
 
 ```
-12    for i in range(1, n + 1):
-13        ca: str = a[i - 1]
-15        for j in range(1, m + 1):
-16            cost: int = 1
-17            if ca == bc[j - 1]:
-18                cost = 0
-19            best: int = prev[j] + 1
+ 4    prev: list[int] = []
+ 9    for i in range(1, n + 1):
+11        for j in range(1, m + 1):
+12            cost: int = 1
+13            if a[i - 1] == b[j - 1]:
+14                cost = 0
+15            cur[j] = min(min(prev[j] + 1, cur[j - 1] + 1), prev[j - 1] + cost)
 ```
 
-**Tokens** (hand-written lexer, `pythia/lexer.py`). Line 13 becomes `NAME(ca) OP(:) NAME(str) OP(=) NAME(a) OP([) NAME(i) OP(-) INT(1) OP(]) NEWLINE`. Say: the lexer implements Python's off-side rule: leading whitespace turns into explicit `INDENT`/`DEDENT` tokens, so the parser can use an ordinary block grammar. `range`, `in`, `None`, `try`... are keywords (22 of them), which is why `for ... in range(...)` can be parsed straight into a loop node. Longest-match operators (`**=` before `**` before `*`).
+**Tokens** (hand-written lexer, `pythia/lexer.py`): 219 tokens for the whole function. Line 12 becomes `NAME(cost) OP(:) NAME(int) OP(=) INT(1) NEWLINE`. The lexer implements Python's off-side rule: leading whitespace turns into explicit `INDENT`/`DEDENT` tokens, so the parser can use an ordinary block grammar. `range`, `in`, `None`, `try`... are keywords, which is why `for ... in range(...)` parses straight into a loop node. Longest-match operators (`**=` before `**` before `*`).
 
-**AST** (recursive descent for statements, Pratt parser for expressions, `pythia/parser.py`). The function body is five annotated `Assign` nodes, three `ForRange` nodes, then `Return`. Line 19 is `Assign(target=Name best, ann=int, value=BinOp('+', Subscript(Name prev, Name j), IntLit 1))`. Say: precedence comes from binding powers (`*` 8 beats `+` 6 beats comparisons 4 beats `and`/`or`), `**` is right associative, and panic-mode recovery means one run reports several syntax errors.
+**AST** (recursive descent for statements, Pratt parser for expressions, `pythia/parser.py`): 117 nodes. The body is annotated `Assign` nodes, `ForRange` nodes and one `Return`. Line 15 is `Assign(target=Subscript(cur, j), value=Call(min, [Call(min, [BinOp(+, Subscript(prev, j), 1), BinOp(+, Subscript(cur, j-1), 1)]), BinOp(+, Subscript(prev, j-1), Name cost)]))`. Say: precedence comes from binding powers (`*` 8 beats `+` 6 beats comparisons 4 beats `and`/`or`), `**` is right associative, and panic-mode recovery means one run reports several syntax errors. Note `min` takes exactly two arguments in PySub, which is why the source nests it; the 3-argument `min` in `grid_min_path` is one of the things the LLM had to rewrite.
 
-**Typed AST** (`pythia/typecheck.py`). Every expression node now carries a static type: `a[i - 1]` is `str`, `ca == bc[j - 1]` is `bool`, `prev[j] + 1` is `int`. Say: bidirectional checking; locals need no annotation because the first binding fixes the type, and rebinding to another type is an error ("variable 'value' was inferred as str; cannot rebind to int"); the only implicit conversion is bool to int to float; function bodies are closed, module globals are invisible (the analyzer inlines literal constants such as `MODULUS`). This is the stage that rejects `knn_vote` in the fixable story.
+**Typed AST** (`pythia/typecheck.py`): every expression carries a static type: `a[i - 1]` is `int`, `a[i - 1] == b[j - 1]` is `bool`, the whole of line 15 is `int`. Bidirectional checking; locals need no annotation because the first binding fixes the type, rebinding to another type is an error ("variable 'value' was inferred as str; cannot rebind to int"); the only implicit conversion is bool to int to float; function bodies are closed, module globals are invisible (the analyzer inlines literal constants such as `MODULUS` in `coin_ways`). This is the stage that rejects `life_population` in the fixable story.
 
-**PIR and fidelity** (`pythia/lower.py`, `pythia/optimize.py`). Lowering makes every implicit coercion an explicit `Coerce` node (none are needed in `edit_distance`, everything is already `int`/`str`; for a visible one type `def g(i: int) -> float:` / `return i + 0.5` in the Playground and watch `i` get wrapped in `Coerce(int to float)`) and records a **Semantic Fidelity Report**: for `edit_distance` that is 25 sites: 15 **D1** `+`/`-` (amber, guarded), 10 **D5** indexing (green, exact), plus the global D7 note. Then guard elision runs an interval analysis: `0 of 15` guards are removed here because the bounds come from `len()` and parameters, which are unknown. To show it working, paste this into the **Playground**:
+**PIR and fidelity** (`pythia/lower.py`, `pythia/optimize.py`): lowering makes every implicit coercion an explicit `Coerce` node (none are needed in `levenshtein`, everything is `int`; for a visible one type `def g(i: int) -> float:` / `return i + 0.5` in the Playground and watch `i` get wrapped in `Coerce(int to float)`) and records a **Semantic Fidelity Report**: 19 notes here, 11 **D1** `+`/`-` sites (amber, guarded), 7 **D5** indexing sites (green, exact) and the global D7 note. Guard elision runs an interval analysis: `0 of 11` guards are removed because the bounds come from `len()` and parameters, which are unknown. To see it working paste into the **Playground**:
 
 ```python
 def f(n: int) -> int:
@@ -101,37 +134,44 @@ def f(n: int) -> int:
     return y + total
 ```
 
-`i * i + 7` is proven to be at most 9808 so both guards are removed (2 of 4); `total + n` and `y + total` stay guarded because `n` is a parameter.
+`i * i + 7` is proven to be at most 9808 so both guards are removed (2 of 4); `total + n` and `y + total` stay guarded because `n` is a parameter. Another real example: `dft_power` in `signal/spectrum.py` has 8 of 9 guards elided because all its integer arithmetic is on `range` variables.
 
-**C++** (`py_add_i64`, `PyListI64_get/set`, `pystr_index`): the generated loop is a plain `for` with Python's `range` semantics, every list access goes through the runtime so negative indices and `IndexError` behave like Python, and `+`/`-` call overflow-checked helpers that raise `OverflowError` instead of wrapping.
+**C++** (`py_add_i64`, `PyListI64_get/set`): the generated loop (83 lines for `levenshtein`) is a plain `for` with Python's `range` semantics, every list access goes through the runtime so negative indices and `IndexError` behave like Python, and `+`/`-` call overflow-checked helpers that raise `OverflowError` instead of wrapping.
 
 ### Likely questions and crisp answers
 
-**What are D1 to D9?** Divergence classes, places where a C++ image of Python could silently differ, each reported with a mitigation. D1 unbounded int vs int64 (guarded: overflow raises `OverflowError`, never wraps). D2 floor division rounds toward minus infinity (exact). D3 modulo sign follows the divisor (exact). D4 `/` always returns float (exact). D5 negative indexing and bounds checks (exact: same `IndexError`). D6 `int ** negative int` yields a float in Python (the one **divergent** class: reported, not hidden). D7 object lifetime: the runtime never frees (guarded). D8 exception propagation across calls (exact, via setjmp/longjmp handler stack). D9 class fields zero-initialised before `__init__` (guarded). Severity colours the gutter: exact green, guarded amber, divergent red.
+**What are D1 to D9?** Divergence classes, places where a C++ image of Python could silently differ, each reported with a mitigation. D1 unbounded int vs int64 (guarded: overflow raises `OverflowError`, never wraps). D2 floor division rounds toward minus infinity (exact). D3 modulo sign follows the divisor (exact). D4 `/` always returns float (exact). D5 negative indexing and bounds checks (exact: same `IndexError`). D6 `int ** negative int` yields a float in Python (the one **divergent** class: reported, not hidden). D7 object lifetime: the runtime never frees outside library mode (guarded). D8 exception propagation across calls (exact, via setjmp/longjmp handler stack). D9 class fields zero-initialised before `__init__` (guarded). Severity colours the gutter: exact green, guarded amber, divergent red.
 
-**Why does interval analysis let you drop a guard, and is that safe?** A guard only needs to exist where overflow is possible. A forward pass computes a conservative `[lo, hi]` for every int expression (constants, `range` loop variables, results of `+ - *` on known intervals) and removes the guard only if the result provably stays within +/-2^62, which leaves two bits of headroom so a following operation cannot be the one that overflows. Anything loop-carried (accumulators), read from a parameter or returned from a call is "unknown" and keeps its guard. It may be incomplete (keeps guards it did not need), it must never be wrong. That is why `edit_distance` keeps all 15 and `i * i + 7` loses both.
+**Why does interval analysis let you drop a guard, and is that safe?** A guard only needs to exist where overflow is possible. A forward pass computes a conservative `[lo, hi]` for every int expression and removes the guard only if the result provably stays within +/-2^62, which leaves two bits of headroom. Anything loop-carried, read from a parameter or returned from a call is "unknown" and keeps its guard. It may be incomplete (keeps guards it did not need), it must never be wrong.
 
-**Why can the LLM not break correctness?** Three independent gates, none of which trusts the model. (1) Its output has to be valid PySub text and must pass our typechecker, otherwise the error goes back to it (3 attempts, then the function is simply marked not eligible). (2) The C++ comes from our deterministic transpiler, not from the model. (3) The compiled function must reproduce up to 500 recorded real calls: return values (floats compared bitwise), exception class, and post-call state of list/dict arguments. A mismatch auto-rejects the function and shows the first counterexample. At run time the splice layer falls back to the original Python if the `.so` is missing or an input cannot be represented (`FallbackError`, e.g. non-ASCII strings). Be honest about the limit: replay is testing on observed inputs, not a proof of equivalence, which is why fidelity classes and overflow traps exist and why the original function stays in the file.
+**Why can the LLM not break correctness?** Three independent gates, none of which trusts the model. (1) Its output must be valid PySub and pass our typechecker, otherwise the error goes back to it (3 attempts, then the function is marked not eligible). (2) The C++ comes from our deterministic transpiler, not from the model. (3) The compiled function must reproduce up to 500 recorded real calls: return values (floats bitwise), exception class, and post-call state of list/dict arguments. A mismatch auto-rejects the function and shows the first counterexample. At run time the splice layer falls back to the original Python if the `.so` is missing or an input cannot be represented (`FallbackError`).
+**Be honest about the limit, with a real example:** the recorded rewrite of `weighted_moments` uses index loops where the original uses `zip`. On equal-length lists (all that the program ever passes) it matches 140 of 140 calls; on lists of different lengths `zip` silently stops early and the rewrite raises `IndexError`. Replay is testing on observed inputs, not a proof of equivalence. `scripts/check_demo.py` prints this as a note. That is why fidelity classes and overflow traps exist and why the original function stays in the file.
 
-**What is the boundary cost and how do you predict it?** Calling compiled code means copying arguments into runtime containers and copying results back (copy semantics, with write-back for mutated lists). That is O(size of arguments) per call. If a call does little work per element, the copy dominates: `window_energy` costs about 3.5 us in Python and about 50 us through the boundary because it marshals 5000 floats to read 128. The ranker multiplies trace share by expected benefit and subtracts a penalty that grows with `avg_arg_elems` (observed from the trace) relative to the work per call; for a declined function the pipeline still builds and times a probe so the number on screen is measured, not guessed.
+**What is the boundary cost and how do you predict it?** Calling compiled code means copying arguments into runtime containers and copying results back (copy semantics, write-back for mutated lists): O(size of arguments) per call. If a call does little work per element the copy dominates: `tail_variance` is 143,000 calls on lists averaging 1,200 elements for 24 samples of work. The ranker multiplies trace share by expected benefit and subtracts a penalty that grows with `avg_arg_elems` and call count; for a declined function the pipeline still builds and times a probe so the number on screen is measured. The probe can also disagree with the prediction: `acceptance_probability` was predicted to lose (144k scalar crossings) and measured 4.8x faster. We show both numbers.
 
-**What is the memory model (D7)?** The original runtime allocates strings, lists and dicts and never frees them (fine for a short-lived CLI binary, flagged as D7). In library mode every wrapper opens an arena after marshalling the arguments and frees everything allocated during the call once the result has been copied back, so long-running Python processes do not leak. Outside library mode the behaviour is unchanged.
+**Why is `kmer_counts` slower after a correct rewrite?** Compiling is not free speed. The runtime copies every `str` into its own string type and `dict[str,int]` is a linear scan over keys, where CPython hashes. The benchmark catches it (0.30x) and the function is never spliced.
 
-**What are the limits of PySub?** Types `int float bool str`, `list[T]` up to two levels, `dict[int|str, scalar]`, classes with typed fields and an `__init__`. Statements: `if/while/for-range/for-each`, `try/except` with six named exceptions, `raise`. No tuples, sets, comprehensions, generators, lambdas or closures, no slices, no `sum/zip/enumerate/sorted`, `min`/`max` take exactly two arguments, only `.append`/`.pop()`, `.get(k, d)`, `.upper/.lower`; no default arguments or `*args`; no imports; strings are ASCII; module globals invisible except literal constants. Classes and methods can be used inside compiled code but cannot cross the boundary. Everything outside the subset is the LLM's job to rewrite, or stays Python.
+**Why do some kernels say "Cold"?** With a trace in hand, functions below 0.2% of the traced runtime get no build and no LLM call: 30 of Quanta's eligible functions. Otherwise every small helper in a real project would cost a 4-second build, and every glue function with an f-string an LLM call.
 
-**Why not just Cython or Numba?** Different goal: source-visible, auditable output (read the C++), a written fidelity contract with a report per construct, a replay oracle and splice that preserves the original, and a pipeline whose stages (tokens, AST, typed AST, PIR) are inspectable. It is a compiler course project first and a product second.
+**What is the memory model (D7)?** The original runtime never frees. In library mode every wrapper opens an arena after marshalling the arguments and frees everything allocated during the call once the result has been copied back, so long-running Python processes do not leak.
 
-**What does a rejected function look like in the UI?** `parse_number` (journey stops at Eligibility, reason: "variable `value` changes type from str to int"), `normalize_rows` ("reads module-level variable `np`"), `make_lr_schedule` (closure), `load_corpus` (file I/O), `Vocab.train` (method of a class). The greyed nodes after the stop carry the same reason text.
+**What are the limits of PySub?** Types `int float bool str`, `list[T]` up to two levels, `dict[int|str, scalar]`, classes with typed fields and an `__init__`. Statements: `if/while/for-range/for-each`, `try/except` with six named exceptions, `raise`. No tuples, sets, comprehensions, generators, lambdas or closures, no slices, no `sum/zip/enumerate/sorted/ord`, `min`/`max` take exactly two arguments, only `.append`/`.pop()`, `.get(k, d)`, `.upper/.lower`; no default arguments or `*args`; no imports; strings are ASCII; module globals invisible except literal scalar constants. Classes and methods can be used inside compiled code but cannot cross the boundary. Everything outside the subset is the LLM's job to rewrite, or stays Python.
+
+**Why does `levenshtein` take `list[int]` and not `str`?** Because strings are the slow path in the runtime (single-character indexing allocates). A str-based version measured 1.0 to 1.6x, the code-list version 14 to 16x. The caller encodes once with `[ord(c) for c in word]` (in a method, which is glue). It is a real design lesson the tool surfaces.
+
+**Why not just Cython or Numba?** Different goal: source-visible, auditable output (read the C++), a written fidelity contract per construct, a replay oracle and splice that preserves the original, and a pipeline whose stages (tokens, AST, typed AST, PIR) are inspectable. It is a compiler course project first and a product second.
+
+**What does a rejected function look like in the UI?** `exponential` ("calls `.next_float()` on `rng`, an object of type `Lcg`"), `coerce_cell` ("calls `convert`, a function held in a variable"), `make_decay` (closure), `matmul_fast` (reads module-level `np`), `read_table` (constructs a class, uses `with`), `Graph.shortest_paths` (method of a class). The journey stops at Eligibility and the greyed nodes after it carry the same reason text.
 
 ## 5. If something goes wrong
 
 | Symptom | Fix |
 |---|---|
-| Fixer shows "disabled" | You are not in offline mode and have no key. Restart with `./studio.sh --offline`, or `export ANTHROPIC_API_KEY=...`. |
-| Offline run says "no cached reply" for a rewrite | `python scripts/author_offline_cache.py` regenerates `demo/offline_cache/llm/` from `authored_rewrites.json`. The cache key hashes the function source, so re-run it after editing a demo function. |
-| Builds take about 5 s each | First run without `demo/offline_cache/so/` (or after a compiler upgrade). Run once before the demo; the build cache then makes it instant. |
-| Trace times out | Raise **Timeout** in the run dialog (default 60 s) or keep `--small`. |
+| Fixer shows "disabled" | You are not in offline mode and have no key. Restart with `./studio.sh --offline`, or set `GROQ_API_KEY` / `ANTHROPIC_API_KEY` (a `.env` file in the repo root works). |
+| Offline run says "no cached reply" for a rewrite | The cache key hashes the function source, so editing a Quanta kernel invalidates its entry. Re-record: `./scripts/record_offline_cache.sh` (needs a key, about 12 minutes, free Groq tier is enough). |
+| Builds take about 4 s each | First run without `demo/offline_cache/so/` (or after a compiler upgrade; the snapshot is for g++ 15 on x86-64 Linux/WSL, others rebuild locally from source). |
+| Trace times out | The Quanta budget is 240 s (the run dialog value is raised to it). For a slow machine use `--small` and a bigger **Timeout**. |
 | Clone repository path | `./scripts/make_demo_repo.sh` prints a `file://...` URL; paste it into the **Clone repository** card. |
 | Wi-Fi / projector hiccup | Replay the saved job: `?presenter=1&job=<id>`. |
-| Want to refresh the cache with a real key | `ANTHROPIC_API_KEY=... ./scripts/record_offline_cache.sh`, then commit `demo/offline_cache/`. |
-| Headless sanity check | `./scripts/smoke.sh` (prints the table, asserts at least 3 accelerated, 1 declined, 1 not eligible). |
+| Re-record the cache with a real model | `GROQ_API_KEY=... ./scripts/record_offline_cache.sh`, then commit `demo/offline_cache/`. |
+| Headless sanity check | `./scripts/smoke.sh --offline` (both demos; asserts at least 6 accelerated, 3 LLM-fixed, 1 measured decline, 3 not eligible, end-to-end at least 2x with identical output, and `python -m unittest` green in the exported Quanta). |
