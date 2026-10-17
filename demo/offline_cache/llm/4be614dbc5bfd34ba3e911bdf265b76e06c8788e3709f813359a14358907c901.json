@@ -1,0 +1,7 @@
+{
+ "model": "openai/gpt-oss-120b",
+ "attempt": 1,
+ "function_sha": "b452834537e2c423f9241630949d0e27699b5b6bf41e85ca9f9a1610c7c082a7",
+ "response": "```python\ndef bfs_levels(adjacency: list[list[int]], source: int) -> list[int]:\n    # initialize distance list with -1 for each node\n    dist: list[int] = []\n    i: int = 0\n    while i < len(adjacency):\n        dist.append(-1)\n        i = i + 1\n    # distance to source is zero\n    dist[source] = 0\n    # queue implementation using list and index pointer\n    queue: list[int] = [source]\n    q_idx: int = 0\n    while q_idx < len(queue):\n        node: int = queue[q_idx]\n        q_idx = q_idx + 1\n        for nxt in adjacency[node]:\n            if dist[nxt] < 0:\n                dist[nxt] = dist[node] + 1\n                queue.append(nxt)\n    return dist\n```",
+ "provenance": "recorded"
+}

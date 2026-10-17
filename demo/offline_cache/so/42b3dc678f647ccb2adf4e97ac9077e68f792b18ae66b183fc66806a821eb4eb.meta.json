@@ -1,0 +1,1 @@
+{"modname": "pythia_42b3dc67", "funcs": ["count_queens"], "compile_s": 8.863, "toolchain": "c++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0|.cpython-314-x86_64-linux-gnu.so|-std=c++17 -O3 -flto -fPIC -fvisibility=hidden -w|pybind11=3.1.0|3.14.4", "created": 1792250095.4530003}

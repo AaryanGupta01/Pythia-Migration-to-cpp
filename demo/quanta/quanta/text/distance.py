@@ -1,8 +1,12 @@
-"""String distances used for spell-suggestion and for diffing document lines."""
+"""Edit distances between sequences of symbol codes (characters or tokens mapped to integers).
+
+Callers encode text once (for example with `[ord(c) for c in word]`) and reuse the codes for many comparisons,
+which keeps these loops free of string handling.
+"""
 
 
-def levenshtein(a: str, b: str) -> int:
-    """Minimum number of single-character insertions, deletions and substitutions turning `a` into `b`.
+def levenshtein(a: list[int], b: list[int]) -> int:
+    """Minimum number of single-symbol insertions, deletions and substitutions turning `a` into `b`.
 
     Two-row dynamic programme: O(len(a) * len(b)) time, O(len(b)) space."""
     n: int = len(a)
@@ -24,8 +28,8 @@ def levenshtein(a: str, b: str) -> int:
     return prev[m]
 
 
-def lcs_length(a: str, b: str) -> int:
-    """Length of the longest common subsequence of two strings (full table, O(len(a) * len(b)) memory)."""
+def lcs_length(a: list[int], b: list[int]) -> int:
+    """Length of the longest common subsequence of two sequences (full table, O(len(a) * len(b)) memory)."""
     n: int = len(a)
     m: int = len(b)
     table: list[list[int]] = []

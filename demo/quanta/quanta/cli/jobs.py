@@ -49,7 +49,7 @@ from quanta.stats.resample import ar1_series, confidence_interval
 from quanta.stats.table import make_sales_table, normalise_column, revenue_by_region
 from quanta.text.corpus import (edit_line, make_dictionary, make_dna, make_document, make_lines,
                                 misspell)
-from quanta.text.distance import hamming, lcs_length
+from quanta.text.distance import hamming, lcs_length, levenshtein
 from quanta.text.index import InvertedIndex, top_terms
 from quanta.text.kmers import gc_content, kmer_counts, longest_run
 from quanta.text.spell import SpellChecker
@@ -95,11 +95,14 @@ def job_sim(cfg: Settings, rep: Report) -> None:
     rng = Lcg(cfg.seed + 4)
     grid = [[1 if rng.next_float() < 0.35 else 0 for _ in range(s.life_size)] for _ in range(s.life_size)]
     cur = grid
+    population = [sum(map(sum, grid))]
     for _ in range(s.life_generations):
         cur = life_step(cur)
-    alive = sum(map(sum, cur))
-    rep.record(sec, "life population", "%d -> %d" % (sum(map(sum, grid)), alive))
-    rep.record(sec, "life cross-check", life_population(grid, s.life_generations) == alive)
+        population.append(sum(map(sum, cur)))
+    rep.record(sec, "life population", "%d -> %d" % (population[0], population[-1]))
+    checks = [life_population(grid, g) == population[g] for g in (s.life_generations, s.life_generations * 3 // 4,
+                                                                   s.life_generations // 2)]
+    rep.record(sec, "life cross-check", all(checks))
 
     seed_row = [1 if rng.next_float() < 0.5 else 0 for _ in range(s.automaton_cells)]
     for rule in (30, 110):
@@ -140,9 +143,12 @@ def job_text(cfg: Settings, rep: Report) -> None:
 
     old_lines = make_lines(rng, dictionary, s.diff_lines, 160)
     new_lines = [edit_line(rng, line) for line in old_lines]
-    kept = sum(lcs_length(a, b) for a, b in zip(old_lines, new_lines))
-    total = sum(len(a) for a in old_lines)
+    old_codes = [[ord(c) for c in line] for line in old_lines]
+    new_codes = [[ord(c) for c in line] for line in new_lines]
+    kept = sum(lcs_length(a, b) for a, b in zip(old_codes, new_codes))
+    total = sum(len(a) for a in old_codes)
     rep.record(sec, "diff similarity", kept / total)
+    rep.record(sec, "line edit distance", sum(levenshtein(a, b) for a, b in zip(old_codes, new_codes)))
     rep.record(sec, "hamming total", sum(hamming(a, b) for a, b in zip(old_lines, new_lines)))
     rep.record(sec, "shared substrings", sum(longest_common_substring(a, b) for a, b in zip(old_lines, new_lines)))
     rep.record(sec, "palindromes in text", max(longest_palindrome(" ".join(new_lines)[i:i + 2000])
@@ -269,7 +275,7 @@ def job_optimise(cfg: Settings, rep: Report) -> None:
         value += knapsack_01(weights, values, s.knapsack_capacity)
     rep.record(sec, "knapsack value", value)
     rep.record(sec, "coin ways", sum(coin_ways([1, 2, 5, 10, 25, 50], 4000 * (k + 1)) for k in range(s.dp_rounds)))
-    rep.record(sec, "increasing subsequence", sum(longest_increasing_subsequence(rng.ints(1500, 1000))
+    rep.record(sec, "increasing subsequence", sum(longest_increasing_subsequence(rng.ints(2000, 1000))
                                                   for _ in range(s.dp_rounds)))
     rep.record(sec, "matrix chain", sum(matrix_chain_cost([5 + rng.next_int(60) for _ in range(s.chain_length + 1)])
                                         for _ in range(s.dp_rounds)))
@@ -300,11 +306,12 @@ def job_signals(cfg: Settings, rep: Report) -> None:
         filtered = fir_filter(signal, taps)
         energy += sum(v * v for v in filtered)
         peak = max(peak, max(convolve(signal[:600], taps)))
-        for alpha in (0.05, 0.1, 0.2, 0.4):
-            tail += exp_smooth(moving_average(signal, 16), alpha)[-1]
+        averaged = moving_average(signal, 16)
+        for k in range(1, 25):
+            tail += exp_smooth(averaged, k / 25.0)[-1]
         autocorr += autocorrelation(signal, 5)
         rolling = max(rolling, max(rolling_std(signal[:1500], 40)))
-        for ramp in (0.0, 0.5, 1.5):
+        for ramp in (0.0, 0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0):
             weights = [1.0 + ramp * i / len(signal) for i in range(len(signal))]
             m = weighted_moments(signal, weights)
             moments = [x + y for x, y in zip(moments, m)]
@@ -333,7 +340,7 @@ def job_signals(cfg: Settings, rep: Report) -> None:
         for t, value in enumerate(series):
             grown.append(value)
             if t >= 64:
-                recent = tail_variance(grown, 300)
+                recent = tail_variance(grown, 24)
                 if baseline is None:
                     baseline = recent
                 elif recent > 3.0 * baseline:

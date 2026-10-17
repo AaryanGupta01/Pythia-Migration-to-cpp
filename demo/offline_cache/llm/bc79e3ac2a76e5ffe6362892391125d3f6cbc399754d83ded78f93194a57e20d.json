@@ -1,0 +1,7 @@
+{
+ "model": "openai/gpt-oss-120b",
+ "attempt": 2,
+ "function_sha": "7dfe8e664b9aee6bf01af798f9beec9f42743c6137dafe465e32caab0ac815a1",
+ "response": "```python\ndef life_population(grid: list[list[int]], generations: int) -> int:\n    h: int = len(grid)\n    w: int = len(grid[0])\n    cur: list[list[int]] = []\n    for row in grid:\n        new_row: list[int] = []\n        for val in row:\n            new_row.append(val)\n        cur.append(new_row)\n\n    for _ in range(generations):\n        nxt: list[list[int]] = []\n        for _r in range(h):\n            zero_row: list[int] = []\n            for _c in range(w):\n                zero_row.append(0)\n            nxt.append(zero_row)\n\n        for r in range(h):\n            for c in range(w):\n                alive: int = 0\n                for dr in [-1, 0, 1]:\n                    for dc in [-1, 0, 1]:\n                        if dr != 0 or dc != 0:\n                            nr: int = r + dr\n                            nc: int = c + dc\n                            if 0 <= nr and nr < h and 0 <= nc and nc < w:\n                                alive = alive + cur[nr][nc]\n                if alive == 3 or (alive == 2 and cur[r][c] == 1):\n                    nxt[r][c] = 1\n                else:\n                    nxt[r][c] = 0\n        cur = nxt\n\n    total: int = 0\n    for row in cur:\n        row_sum: int = 0\n        for val in row:\n            row_sum = row_sum + val\n        total = total + row_sum\n    return total\n```",
+ "provenance": "recorded"
+}

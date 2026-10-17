@@ -38,15 +38,15 @@ class Scale:
     collatz_limit: int = 250000
     digit_limit: int = 2500000
     totient_limit: int = 900000
-    coprime_limit: int = 900
+    coprime_limit: int = 1300
     perfect_limit: int = 250000
     automaton_cells: int = 1200
     automaton_steps: int = 600
     # text
     dictionary_words: int = 420
     queries: int = 300
-    diff_lines: int = 60
-    dna_reads: int = 100
+    diff_lines: int = 80
+    dna_reads: int = 250
     dna_length: int = 15000
     corpus_docs: int = 600
     # graph / linalg / cluster / opt / signal / stats
@@ -55,7 +55,7 @@ class Scale:
     dense_nodes: int = 130
     dense_sources: int = 1500
     sparse_nodes: int = 2000
-    bfs_sources: int = 100
+    bfs_sources: int = 400
     matmul_size: int = 90
     matmul_rounds: int = 20
     solve_size: int = 100
@@ -69,15 +69,15 @@ class Scale:
     knapsack_items: int = 120
     knapsack_capacity: int = 6000
     knapsack_runs: int = 20
-    dp_rounds: int = 6
+    dp_rounds: int = 4
     chain_length: int = 130
     partition_n: int = 2500
-    path_grids: int = 120
+    path_grids: int = 300
     signal_length: int = 8000
     signal_taps: int = 64
     channels: int = 14
     series_length: int = 12000
-    drift_channels: int = 3
+    drift_channels: int = 12
     csv_rows: int = 30000
     bootstrap_rounds: int = 60
     rank_samples: int = 800

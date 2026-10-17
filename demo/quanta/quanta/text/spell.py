@@ -1,4 +1,4 @@
-"""Nearest-word spelling suggestions built on the edit-distance kernels."""
+"""Nearest-word spelling suggestions built on the edit-distance kernel."""
 from __future__ import annotations
 
 from typing import List
@@ -11,15 +11,17 @@ class SpellChecker:
 
     def __init__(self, dictionary: List[str], max_distance: int = 3) -> None:
         self.dictionary = dictionary
+        self.codes = [[ord(c) for c in word] for word in dictionary]
         self.max_distance = max_distance
 
     def suggest(self, word: str) -> str:
         """Closest dictionary word by Levenshtein distance; the first in dictionary order wins ties."""
+        query = [ord(c) for c in word]
         best, best_d = word, self.max_distance + 1
-        for candidate in self.dictionary:
-            if abs(len(candidate) - len(word)) >= best_d:
+        for candidate, codes in zip(self.dictionary, self.codes):
+            if abs(len(codes) - len(query)) >= best_d:
                 continue
-            d = levenshtein(word, candidate)
+            d = levenshtein(query, codes)
             if d < best_d:
                 best, best_d = candidate, d
         return best

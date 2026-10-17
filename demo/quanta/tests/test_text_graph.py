@@ -12,14 +12,18 @@ from quanta.text.spell import SpellChecker
 from quanta.util.rng import Lcg
 
 
+def codes(text):
+    return [ord(c) for c in text]
+
+
 class Distances(unittest.TestCase):
     def test_levenshtein(self):
-        self.assertEqual(levenshtein("kitten", "sitting"), 3)
-        self.assertEqual(levenshtein("", "abc"), 3)
-        self.assertEqual(levenshtein("same", "same"), 0)
+        self.assertEqual(levenshtein(codes("kitten"), codes("sitting")), 3)
+        self.assertEqual(levenshtein([], codes("abc")), 3)
+        self.assertEqual(levenshtein(codes("same"), codes("same")), 0)
 
     def test_lcs_and_hamming(self):
-        self.assertEqual(lcs_length("AGGTAB", "GXTXAYB"), 4)
+        self.assertEqual(lcs_length(codes("AGGTAB"), codes("GXTXAYB")), 4)
         self.assertEqual(hamming("karolin", "kathrin"), 3)
         self.assertEqual(hamming("ab", "abcd"), 2)
 
@@ -32,7 +36,7 @@ class Distances(unittest.TestCase):
         rng = Lcg(3)
         words = make_dictionary(rng, 30)
         for word in words:
-            self.assertLessEqual(levenshtein(word, misspell(rng, word)), 6)
+            self.assertLessEqual(levenshtein(codes(word), codes(misspell(rng, word))), 6)
 
 
 class Kmers(unittest.TestCase):

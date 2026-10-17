@@ -1,0 +1,7 @@
+{
+ "model": "openai/gpt-oss-120b",
+ "attempt": 1,
+ "function_sha": "994deb60910eadc5a9971e1d1b534a54e61d0e46d8491f7ace472ad5030bc164",
+ "response": "```python\ndef exp_smooth(signal: list[float], alpha: float) -> list[float]:\n    smoothed: list[float] = []\n    if len(signal) != 0:\n        smoothed.append(signal[0])\n    i: int = 1\n    while i < len(signal):\n        x: float = signal[i]\n        prev: float = smoothed[i - 1]\n        smoothed.append(alpha * x + (1.0 - alpha) * prev)\n        i = i + 1\n    return smoothed\n```",
+ "provenance": "recorded"
+}
