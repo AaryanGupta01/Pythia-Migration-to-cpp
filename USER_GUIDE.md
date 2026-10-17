@@ -15,7 +15,8 @@ Pick one path (details and troubleshooting in [INSTALL.md](INSTALL.md)):
 | Linux, macOS or WSL | `curl -fsSL https://raw.githubusercontent.com/Vishalvivek2007/Pythia/main/scripts/install.sh \| bash` then `pythia-studio --app` |
 | Windows | `powershell -ExecutionPolicy Bypass -File scripts\install.ps1` (sets up WSL2 + Ubuntu for you), then use the **PYTHIA Studio** Start-Menu shortcut |
 | Docker | `docker build -t pythia-studio . && docker run --rm -p 127.0.0.1:8765:8765 -v pythia-data:/data pythia-studio`, then open <http://127.0.0.1:8765> |
-| This repository checkout | `./studio.sh` (creates a virtualenv on first run, installs dependencies, opens the browser) |
+| This repository checkout (Linux/macOS/WSL) | `./studio.sh` (creates a virtualenv on first run, installs dependencies, opens the browser; `--offline` for the cached demo, `--app` for a chromeless window) |
+| This repository checkout (Windows) | double-click **`studio.cmd`** (or run it from a terminal). It starts PYTHIA inside WSL2, which provides the Linux C++ toolchain, and opens your browser. Running `python -m pythia_studio` on Windows does the same hand-off automatically. |
 
 You need a **C++ compiler** (g++/clang) and Python 3.10+ (3.12+ recommended). `pythia-studio --doctor` checks everything and prints the exact fix for anything missing.
 
@@ -25,12 +26,14 @@ You need a **C++ compiler** (g++/clang) and Python 3.10+ (3.12+ recommended). `p
 
 ## 2. Your first run: the demo project (3 minutes)
 
-1. Start the app. On the **welcome screen** click **Open the demo project**.
+1. Start the app. On the **welcome screen** click **Open the demo project** (Quanta, a 3,800-line analytics toolkit; a full run takes a few minutes on a cold machine, mostly benchmarking — the TextLab demo under *Demo projects* takes about 90 seconds).
 2. Watch the **pipeline stepper** along the top fill in left to right: *Ingest → Scan → Trace → Rank → Fix → Compile → Verify → Benchmark → Splice → Export*. Each stage shows a one-number result. Click any stage to see its real output.
 3. The right-hand **PYTHIA agent** panel narrates what the engine is doing, one line per step ("Traced `python main.py --small` · 523,953 calls", "`edit_distance` → PySub ✓ → C++ ✓ → 500/500 replays match → 10×").
 4. When it finishes, the summary card shows the **end-to-end speedup** of the whole program (output hash must be identical) and the status counts.
 5. Click a function in the **Hotspots** list (left) to review it — see §4.
 6. Click **Accept all** (or accept functions one by one), then **Export**.
+
+**Want it instantly?** Click **Replay sample run** next to the demo button: a finished run of the same project is bundled with the app and plays back in about a minute without compiling anything (browse everything; Export needs a real run).
 
 To see it as a guided show instead, click **Presenter** (top right): the run plays stage by stage with captions; **Space** pauses, **→** steps.
 
