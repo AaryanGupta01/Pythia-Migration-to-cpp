@@ -10,7 +10,7 @@ import { HeroCanvas, SpeedTicker } from './hero'
 import { cn, fileToB64, fmtAgo, fmtX, llmLabel } from './lib/format'
 import type { DemoInfo, FsList, JobInfo, JobInput } from './types'
 
-const FALLBACK_DEMO: DemoInfo[] = [{ id: 'demo', name: 'textlab', description: 'About sixty functions: fast wins, fixable code, and code that should stay Python.' }]
+const FALLBACK_DEMO: DemoInfo[] = [{ name: 'quanta', title: 'Quanta: analytics and simulation toolkit', description: 'A realistic 3,800-line pure-Python project: hot numeric kernels, fixable code and glue that should stay Python.' }]
 
 const rise = (i: number) => ({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.28, delay: 0.04 * i, ease: 'easeOut' as const } })
 
@@ -54,7 +54,7 @@ export function Welcome() {
     if (notPy) return
     s.startJob(input, { trace_cmd: cmd.trim() || null, offline })
   }
-  const demoInput = (d: DemoInfo): JobInput => (d.id === 'demo' || demos.length === 1 ? { kind: 'demo' } : { kind: 'demo', demo: d.id })
+  const demoInput = (d: DemoInfo): JobInput => ({ kind: 'demo', name: d.name })
   const chooseFile = async (f: File | undefined) => {
     if (!f) return
     run({ kind: 'file', filename: f.name, content_b64: await fileToB64(f) })
@@ -187,10 +187,10 @@ export function Welcome() {
             <h2 className="mb-3 mt-10 text-sm font-medium text-fg2">Demo projects</h2>
             <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
               {demos.map((d, i) => (
-                <GlowCard key={d.id} className="p-4">
+                <GlowCard key={d.name} className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-base font-medium">{d.name}</div>
+                      <div className="text-base font-medium">{d.title ?? d.name}</div>
                       <p className="mt-0.5 text-sm text-fg3">{d.description ?? 'A bundled Python project.'}</p>
                     </div>
                     <Btn kind={i === 0 ? 'primary' : 'default'} onClick={() => run(demoInput(d))} disabled={s.starting || notPy}><Play size={12} /> Open</Btn>

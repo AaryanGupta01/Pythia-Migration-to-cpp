@@ -293,11 +293,13 @@ export type JobInput =
   | { kind: 'file'; filename: string; content_b64: string }
   | { kind: 'folder'; path: string }
   | { kind: 'git'; url: string }
-  | { kind: 'demo'; demo?: string }
+  | { kind: 'demo'; name?: string }
 
 export interface DemoInfo {
-  id: string
   name: string
+  title?: string
+  files?: number
+  lines?: number
   description?: string
   functions?: number
   [k: string]: unknown
