@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Check, ChevronRight, Minus, X } from 'lucide-react'
+import { Activity, Binary, Braces, ChevronRight, FileCheck2, FileCode2, Flag, GitMerge, Hammer, Layers, Network, Plug, Repeat, ShieldCheck, Sparkles, Timer, Type, type LucideIcon } from 'lucide-react'
 import { api } from './api'
 import { useStudio } from './store'
 import { nodeSeen } from './reducer'
 import { Code, MiniDiff, TreeView, UnifiedDiff, countNodes, type CodeHL } from './code'
+import { ReplayMatrix } from './charts'
 import { Bar, CodeBlock, KV, Skeleton } from './ui'
-import { cn, fmtInt, fmtMs, fmtPct, fmtX, SEV_COLOR } from './lib/format'
+import { attemptSource, cn, fmtInt, fmtLatency, fmtMs, fmtPct, fmtX, SEV_COLOR } from './lib/format'
 import { inlineCode } from './agent'
 import type { FunctionRecord, JourneyKey, JourneyNode, StageDump, TreeNodeT } from './types'
 
@@ -112,34 +113,40 @@ export function Journey({ rec }: { rec: FunctionRecord }) {
           const isOpen = open.has(n.key) && n.seen
           const grey = n.state === 'skipped' || n.state === 'pending'
           const last = i === nodes.length - 1
+          const nextGrey = !last && (nodes[i + 1].state === 'skipped' || nodes[i + 1].state === 'pending')
           return (
-            <li key={n.key} className="relative pl-9" data-node={n.key}>
-              {!last && <span className={cn('absolute left-[11px] top-6 -bottom-0 w-px', grey || nodes[i + 1].state === 'skipped' || nodes[i + 1].state === 'pending' ? 'border-l border-dashed border-line2' : 'bg-line2')} />}
-              <span className="absolute left-0 top-[5px]">
-                <NodeIcon state={n.state} running={presenter && js.state === 'running' && i === lastSeen} />
+            <li key={n.key} className="relative pl-12" data-node={n.key}>
+              {!last && (
+                <span
+                  className={cn('absolute left-[15px] top-[34px] bottom-[-2px] w-px grow-y', grey || nextGrey ? 'border-l border-dashed border-line2' : 'bg-gradient-to-b from-ok/60 to-ok/20')}
+                  style={{ animationDelay: `${i * 35}ms` }}
+                />
+              )}
+              <span className="absolute left-0 top-[3px]">
+                <NodeIcon nodeKey={n.key} state={n.state} running={presenter && js.state === 'running' && i === lastSeen} />
               </span>
               <button
                 onClick={() => n.seen && toggle(n.key)}
                 aria-expanded={isOpen}
                 disabled={!n.seen}
-                className={cn('flex w-full items-baseline gap-3 rounded-md py-1.5 pr-2 text-left transition-colors', n.seen && 'hover:bg-hover/50')}
+                className={cn('flex w-full items-baseline gap-3 rounded-lg py-1.5 pl-1 pr-2 text-left transition-colors', n.seen && 'hover:bg-hover/50', isOpen && 'bg-hover/40')}
               >
-                <span className={cn('text-base font-medium', grey ? 'text-fg3' : 'text-fg')}>{n.title}</span>
+                <span className={cn('text-[14px] font-medium', grey ? 'text-fg3' : 'text-fg')}>{n.title}</span>
                 <span className={cn('min-w-0 flex-1 truncate text-sm', grey ? 'text-fg3' : n.state === 'failed' ? 'text-bad' : 'text-fg2')}>
                   {n.seen ? n.summary : 'waiting for earlier stages'}
                 </span>
                 {n.seen && <ChevronRight size={14} className={cn('flex-none text-fg3 transition-transform', isOpen && 'rotate-90')} />}
               </button>
               {n.seen && (n.state === 'skipped' || n.state === 'failed') && n.reason && !isOpen && (
-                <p className={cn('-mt-1 mb-1.5 text-sm', n.state === 'failed' ? 'text-bad/90' : 'text-fg3')}>{n.reason}</p>
+                <p className={cn('mb-1.5 pl-1 text-sm', n.state === 'failed' ? 'text-bad/90' : 'text-fg3')}>{n.reason}</p>
               )}
               {isOpen && (
-                <div className="mb-3 mt-1 animate-fadeIn">
+                <div className="surface mb-3 mt-1.5 animate-fadeIn rounded-[12px] p-3">
                   {n.reason && <p className={cn('mb-2 text-sm', n.state === 'failed' ? 'text-bad/90' : 'text-fg3')}>{n.reason}</p>}
                   <Artifact node={n} rec={rec} dump={wanted.has(n.key) ? dump : null} />
                 </div>
               )}
-              {!isOpen && <div className="h-1" />}
+              {!isOpen && <div className="h-1.5" />}
             </li>
           )
         })}
@@ -148,16 +155,25 @@ export function Journey({ rec }: { rec: FunctionRecord }) {
   )
 }
 
-function NodeIcon({ state, running }: { state: string; running?: boolean }) {
-  const base = 'flex h-[22px] w-[22px] items-center justify-center rounded-full border'
-  if (state === 'done') return <span className={cn(base, 'border-ok/50 bg-ok/15 text-ok', running && 'ring-pulse')}><Check size={12} strokeWidth={3} /></span>
-  if (state === 'failed') return <span className={cn(base, 'border-bad/50 bg-bad/15 text-bad')}><X size={12} strokeWidth={3} /></span>
-  if (state === 'skipped') return <span className={cn(base, 'border-line2 bg-bg text-fg3')}><Minus size={12} /></span>
-  return <span className={cn(base, 'border-line2 bg-bg')}><span className="h-1.5 w-1.5 animate-pulseDot rounded-full bg-fg3" /></span>
+const NODE_ICON: Record<JourneyKey, LucideIcon> = {
+  original: FileCode2, observed_types: Activity, eligibility: ShieldCheck, rewrites: Sparkles, pysub: FileCheck2, tokens: Binary, ast: Network, typed_ast: Type,
+  pir: Layers, cpp: Braces, wrapper: Plug, build: Hammer, replay: Repeat, benchmark: Timer, splice: GitMerge, status: Flag,
+}
+function NodeIcon({ nodeKey, state, running }: { nodeKey: JourneyKey; state: string; running?: boolean }) {
+  const I = NODE_ICON[nodeKey]
+  const base = 'flex h-[26px] w-[26px] items-center justify-center rounded-full border transition-colors'
+  const cls =
+    state === 'done' ? 'border-ok/40 bg-ok/10 text-ok' : state === 'failed' ? 'border-bad/50 bg-bad/10 text-bad' : state === 'skipped' ? 'border-line2 bg-bg text-fg3' : 'border-dashed border-line2 bg-bg text-fg3'
+  return (
+    <span className={cn(base, cls, running && 'ring-pulse')}>
+      {state === 'pending' ? <span className="h-1.5 w-1.5 animate-pulseDot rounded-full bg-fg3" /> : <I size={13} strokeWidth={2} />}
+    </span>
+  )
 }
 
 // ------------------------------------------------------------------ artifacts
 function Artifact({ node, rec, dump }: { node: JourneyNode; rec: FunctionRecord; dump: StageDump | null }) {
+  const js = useStudio((s) => s.js)
   const src = rec.sources
   const py = src.pysub ?? ''
   switch (node.key) {
@@ -165,7 +181,7 @@ function Artifact({ node, rec, dump }: { node: JourneyNode; rec: FunctionRecord;
       return <Code code={src.original} startLine={rec.line} />
     case 'observed_types':
       return rec.trace ? (
-        <div className="grid grid-cols-2 gap-6 rounded-md border border-line bg-raised p-3 text-sm">
+        <div className="grid grid-cols-2 gap-6 surface rounded-[10px] p-3 text-sm">
           <div>
             <div className="mb-1 text-xs text-fg3">Signature seen at run time</div>
             <div className="mono text-fg">
@@ -202,10 +218,11 @@ function Artifact({ node, rec, dump }: { node: JourneyNode; rec: FunctionRecord;
           {rec.rewrites.map((r, i) => {
             const prev = i === 0 ? src.annotated ?? src.original : rec.rewrites[i - 1].pysub
             return (
-              <div key={r.attempt} className="rounded-md border border-line bg-raised p-2.5">
+              <div key={r.attempt} className="surface rounded-[10px] p-2.5">
                 <div className="mb-2 flex items-center gap-2 text-sm">
                   <span className="font-medium">Attempt {r.attempt}</span>
-                  <span className="text-xs text-fg3">{r.source === 'cache' ? 'offline cache' : 'Claude'}</span>
+                  <span className="rounded-full border border-line2 bg-bg px-2 py-px text-xs text-fg2">{attemptSource(useStudio.getState().env, r)}</span>
+                  {js.fix[rec.id]?.attempts.find((x) => x.attempt === r.attempt)?.latency_ms != null && <span className="tnum text-xs text-fg3">{fmtLatency(js.fix[rec.id].attempts.find((x) => x.attempt === r.attempt)!.latency_ms)}</span>}
                   <span className={cn('ml-auto rounded-full border px-2 py-0.5 text-xs', r.ok ? 'border-ok/30 bg-ok/10 text-ok' : 'border-bad/30 bg-bad/10 text-bad')}>{r.ok ? 'passed the typechecker' : 'rejected'}</span>
                 </div>
                 <div className="mb-1 text-xs text-fg3">{i === 0 ? 'Changes from the original' : `Changes from attempt ${i}`}</div>
@@ -243,7 +260,7 @@ function Artifact({ node, rec, dump }: { node: JourneyNode; rec: FunctionRecord;
     case 'build':
       return rec.build ? (
         <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-x-8 rounded-md border border-line bg-raised px-3 py-2 text-sm">
+          <div className="grid grid-cols-2 gap-x-8 surface rounded-[10px] px-3 py-2 text-sm">
             <KV k="Module" v={rec.build.module} mono />
             <KV k="Compile time" v={rec.build.cached ? 'cache hit' : `${rec.build.compile_s.toFixed(1)} s`} />
             <KV k="Shared object" v={<span className="mono text-xs">{rec.build.so.split('/').pop()}</span>} />
@@ -282,7 +299,7 @@ function ScoreBreakdown({ rec }: { rec: FunctionRecord }) {
     ['Boundary penalty', sc.boundary_penalty, sc.boundary_penalty?.toFixed(2) ?? '—'],
   ]
   return (
-    <div className="rounded-md border border-line bg-raised p-3">
+    <div className="surface rounded-[10px] p-3">
       <div className="mb-2 flex items-baseline justify-between"><span className="text-xs text-fg3">Ranking score</span><span className="tnum text-base font-medium">{sc.total.toFixed(2)}</span></div>
       <div className="space-y-1.5">
         {rows.map(([k, v, t]) => (
@@ -342,7 +359,7 @@ function StagePane({ code, dump, kind, rec }: { code: string; dump: StageDump | 
 
 function FidelityList({ rec }: { rec: FunctionRecord }) {
   return (
-    <div className="rounded-md border border-line bg-raised">
+    <div className="surface rounded-[10px]">
       <div className="border-b border-line px-3 py-1.5 text-xs font-medium text-fg2">Fidelity notes · {rec.fidelity.length}</div>
       <ul className="divide-y divide-line">
         {rec.fidelity.map((f, i) => (
@@ -405,12 +422,12 @@ function ReplayPane({ rec }: { rec: FunctionRecord }) {
   const ok = r.matched === r.total
   return (
     <div className="space-y-2">
-      <div className="rounded-md border border-line bg-raised p-3">
+      <div className="surface rounded-[10px] p-3">
         <div className="flex items-baseline justify-between">
           <span className="text-base"><b className={cn('tnum', ok ? 'text-ok' : 'text-bad')}>{r.matched}/{r.total}</b> recorded calls matched</span>
           <span className="tnum text-xs text-fg3">{r.exc_matches} exception cases identical</span>
         </div>
-        <Bar value={r.matched} max={Math.max(1, r.total)} className="mt-2 h-2" color={ok ? 'bg-ok' : 'bg-bad'} />
+        <ReplayMatrix total={r.total} matched={r.matched} cell={8} className="mt-3" />
         <p className="mt-2 text-xs text-fg3">Return values compare bit for bit (floats via their IEEE bytes); exception classes and the final state of list and dict arguments must match too.</p>
       </div>
       {r.first_mismatch && (
@@ -432,7 +449,7 @@ function BenchPane({ rec }: { rec: FunctionRecord }) {
   const b = rec.bench!
   const max = Math.max(b.py_ms, b.cpp_ms)
   return (
-    <div className="rounded-md border border-line bg-raised p-3">
+    <div className="surface rounded-[10px] p-3">
       <div className="space-y-2">
         {[['CPython', b.py_ms, 'bg-fg3/50'], ['C++', b.cpp_ms, b.speedup >= 1 ? 'bg-accent' : 'bg-bad/80']].map(([l, v, c]) => (
           <div key={l as string} className="flex items-center gap-3">

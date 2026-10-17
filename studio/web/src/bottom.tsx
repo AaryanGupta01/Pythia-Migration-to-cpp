@@ -13,9 +13,9 @@ export function BottomPanel() {
   const s = useStudio()
   const tab = s.bottomTab
   const problems = useProblems()
-  const tabs: { v: BottomTab; l: string; n?: number }[] = [
+  const tabs: { v: BottomTab; l: string; n?: number; tip?: string }[] = [
     { v: 'terminal', l: 'Terminal' },
-    { v: 'problems', l: 'Problems', n: problems.filter((p) => p.sev !== 'info').length },
+    { v: 'problems', l: 'Problems', n: problems.filter((p) => p.sev === 'error').length, tip: 'Errors from this run: typechecker rejections of LLM rewrites, compile errors and failed replays' },
     { v: 'fidelity', l: 'Fidelity' },
     { v: 'benchmarks', l: 'Benchmarks' },
   ]
@@ -28,10 +28,11 @@ export function BottomPanel() {
             role="tab"
             aria-selected={tab === t.v}
             onClick={() => s.set({ bottomTab: t.v })}
+            data-tip={t.tip}
             className={cn('relative flex h-8 items-center gap-1.5 px-2.5 text-sm transition-colors', tab === t.v ? 'text-fg' : 'text-fg3 hover:text-fg2')}
           >
             {t.l}
-            {t.n ? <span className="tnum rounded-full bg-hover px-1.5 text-2xs text-fg2">{t.n}</span> : null}
+            {t.n ? <span className="tnum rounded-full bg-bad/15 px-1.5 text-2xs text-bad">{t.n}</span> : null}
             {tab === t.v && <span className="absolute inset-x-2 bottom-0 h-[2px] bg-accent" />}
           </button>
         ))}
@@ -76,7 +77,7 @@ function TerminalPane({ visible }: { visible: boolean }) {
     const timer = setTimeout(() => {
       if (!alive || !host.current) return
       t = new XTerm({
-        fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+        fontFamily: "'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace",
         fontSize: 12,
         lineHeight: 1.35,
         cursorBlink: false,
@@ -185,6 +186,7 @@ function ProblemsPane({ problems }: { problems: Problem[] }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-7 flex-none items-center gap-3 border-b border-line px-3 text-xs">
+        <span className="hidden text-fg3 xl:inline">Typechecker, compiler and replay diagnostics for this run.</span>
         {(['all', 'error', 'warn', 'info'] as const).map((k) => (
           <button key={k} onClick={() => setF(k)} aria-pressed={f === k} className={cn('capitalize transition-colors', f === k ? 'text-fg' : 'text-fg3 hover:text-fg2')}>
             {k === 'all' ? `All ${problems.length}` : `${k === 'warn' ? 'warnings' : k === 'info' ? 'notes' : 'errors'} ${n(k)}`}

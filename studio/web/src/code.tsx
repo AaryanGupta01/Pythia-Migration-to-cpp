@@ -167,6 +167,10 @@ export function TreeView({ root, selected, onSelect, maxH = 340, showGuards }: {
   )
 }
 
+const STMT = new Set(['FunctionDef', 'For', 'While', 'If', 'Return', 'Assign', 'AugAssign', 'AnnAssign', 'Expr', 'Pass', 'Break', 'Continue', 'Module'])
+const EXPR = new Set(['BinOp', 'UnaryOp', 'BoolOp', 'Compare', 'Call', 'Subscript', 'Attribute', 'IfExp', 'Coerce', 'Slice', 'ListComp'])
+const nodeColor = (t: string) => (STMT.has(t) ? 'text-accent' : EXPR.has(t) ? 'text-[#6fa8e6]' : t === 'Constant' ? 'text-warn' : t === 'Name' || t === 'Arg' ? 'text-fg' : t === 'Coerce' ? 'text-warn' : 'text-ok/90')
+
 function TNode({ n, depth, selected, onSelect, label, showGuards }: { n: TreeNodeT; depth: number; selected: TreeNodeT | null; onSelect: (n: TreeNodeT) => void; label: string | null; showGuards?: boolean }) {
   const ks = kidsOf(n)
   const [open, setOpen] = useState(depth < 3)
@@ -177,9 +181,12 @@ function TNode({ n, depth, selected, onSelect, label, showGuards }: { n: TreeNod
     <div role="treeitem" aria-expanded={ks.length ? open : undefined}>
       <div
         onClick={() => onSelect(n)}
-        className={cn('flex cursor-pointer items-center gap-1.5 whitespace-nowrap pr-3 leading-[20px] hover:bg-hover/60', sel && 'bg-accent/15')}
+        className={cn('relative flex cursor-pointer items-center gap-1.5 whitespace-nowrap pr-3 leading-[20px] hover:bg-hover/60', sel && 'bg-accent/15 shadow-[inset_2px_0_0_rgb(var(--accent))]')}
         style={{ paddingLeft: 6 + depth * 14 }}
       >
+        {Array.from({ length: depth }, (_, g) => (
+          <span key={g} aria-hidden className="pointer-events-none absolute top-0 h-full w-px bg-line" style={{ left: 14 + g * 14 }} />
+        ))}
         <span
           className="flex h-4 w-4 flex-none items-center justify-center text-fg3"
           onClick={(e) => {
@@ -192,7 +199,7 @@ function TNode({ n, depth, selected, onSelect, label, showGuards }: { n: TreeNod
           {ks.length ? open ? <ChevronDown size={12} /> : <ChevronRight size={12} /> : <span className="h-1 w-1 rounded-full bg-line2" />}
         </span>
         {label && <span className="text-fg3">{label}</span>}
-        <span className={cn(isCoerce ? 'text-warn' : 'text-accent')}>{n.t}</span>
+        <span className={cn('font-medium', isCoerce ? 'text-warn' : nodeColor(n.t))}>{n.t}</span>
         <span className="text-fg">{attrText(n)}</span>
         {n.ty && <span className="rounded bg-hover px-1 text-[11px] text-ok/90">{n.ty}</span>}
         {showGuards && noGuard === true && <span className="rounded bg-ok/15 px-1 text-[10.5px] text-ok">guard elided</span>}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Copy, Download, FileDown, Play, Printer } from 'lucide-react'
+import { Check, Copy, Download, FileDown, Play, Printer, Sparkles } from 'lucide-react'
 import { api, errMsg } from './api'
 import { useStudio } from './store'
 import { CodeView, cppNotes, pyNotes, type LineNote } from './editors'
@@ -8,7 +8,7 @@ import { BenchChart, E2EBars } from './charts'
 import { useBenchRows } from './bottom'
 import { exportProject } from './actions'
 import { Btn, Empty, IconBtn, Segmented, Skeleton, StatusChip, useDebounced, MOD, Kbd } from './ui'
-import { STATUS, basename, cn, fmtInt, fmtPct, fmtX } from './lib/format'
+import { STATUS, basename, cn, compilerLabel, fmtInt, fmtPct, fmtX, llmLabel } from './lib/format'
 import { Legend } from './journey'
 import { countStatus, totalSpeedup } from './reducer'
 import type { FunctionRecord, PlaygroundCompile, PlaygroundRun } from './types'
@@ -274,7 +274,7 @@ export function Report() {
 
         <dl className="tnum mb-10 grid grid-cols-6 gap-4 max-md:grid-cols-3">
           {([['Verified', c.verified, 'text-ok'], ['Guarded', c.guarded, 'text-warn'], ['Declined', c.declined, 'text-fg2'], ['Failed', c.failed, 'text-bad'], ['Fixable', c.fixable, 'text-accent'], ['Not eligible', c.not_eligible, 'text-fg3']] as const).map(([k, v, cl]) => (
-            <div key={k} className="rounded-lg border border-line bg-raised px-3 py-2.5"><dt className="text-xs text-fg3">{k}</dt><dd className={cn('text-xl font-semibold', v ? cl : 'text-fg3')}>{v}</dd></div>
+            <div key={k} className="surface rounded-[12px] px-3 py-2.5"><dt className="text-xs text-fg3">{k}</dt><dd className={cn('text-xl font-semibold', v ? cl : 'text-fg3')}>{v}</dd></div>
           ))}
         </dl>
 
@@ -309,7 +309,7 @@ export function Report() {
 
         <Section title="Fidelity" note="Where compiled behaviour could differ from CPython, and what guards it.">
           {loading && !allFid.length ? <Skeleton className="h-16" /> : allFid.length === 0 ? <p className="text-sm text-fg3">No notes recorded.</p> : (
-            <ul className="divide-y divide-line rounded-lg border border-line bg-raised">
+            <ul className="divide-y divide-line surface rounded-[12px]">
               {[...byCls.entries()].sort((a, b) => b[1].n - a[1].n).map(([cls, v]) => (
                 <li key={cls} className="flex items-center gap-3 px-4 py-2 text-sm">
                   <span className={cn('h-2 w-2 rounded-sm', v.sev === 'exact' ? 'bg-ok' : v.sev === 'guarded' ? 'bg-warn' : 'bg-bad')} />
@@ -332,7 +332,7 @@ export function Report() {
         </Section>
 
         <Section title="Left as Python" note="Each stop is a decision, not a failure. The reason is the one PYTHIA recorded.">
-          <ul className="divide-y divide-line rounded-lg border border-line bg-raised">
+          <ul className="divide-y divide-line surface rounded-[12px]">
             {stopped.map((f) => (
               <li key={f.id} className="px-4 py-2 text-sm break-inside-avoid">
                 <div className="flex items-center gap-3"><span className="mono flex-1">{f.name}</span><StatusChip status={f.status} dense /></div>
@@ -358,7 +358,7 @@ const Section = ({ title, note, children }: { title: string; note?: string; chil
 export function SettingsPage() {
   const s = useStudio()
   const [key, setKey] = useState('')
-  const [model, setModel] = useState(s.settings?.model ?? 'claude-sonnet-5-5')
+  const [model, setModel] = useState(s.settings?.model ?? '')
   const [saved, setSaved] = useState(false)
   useEffect(() => { if (s.settings?.model) setModel(s.settings.model) }, [s.settings?.model])
   const save = async (patch: Record<string, unknown>) => {
@@ -372,53 +372,73 @@ export function SettingsPage() {
     }
   }
   const env = s.env
-  const offline = s.settings?.offline ?? false
+  const provider = (s.settings?.offline ? 'offline' : s.settings?.provider && s.settings.provider !== 'offline' ? s.settings.provider : 'auto') as 'auto' | 'groq' | 'anthropic' | 'offline'
+  const pickProvider = (p: 'auto' | 'groq' | 'anthropic' | 'offline') => save({ provider: p, offline: p === 'offline' })
+  const hints: Record<string, string> = {
+    auto: 'Use Anthropic if a key is set, otherwise Groq (free tier).',
+    groq: 'Groq runs open models such as gpt-oss-120b on a free tier. Needs a GROQ_API_KEY.',
+    anthropic: 'Claude models through the Anthropic API. Needs an ANTHROPIC_API_KEY.',
+    offline: 'Replay recorded rewrites and prebuilt modules. No network, no key.',
+  }
   return (
     <div className="h-full overflow-auto">
-      <div className="mx-auto max-w-[680px] space-y-8 px-8 py-8">
-        <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
-        <Row title="Theme" desc="Dark is the default and easiest on the code.">
-          <Segmented value={s.theme} onChange={s.setTheme} options={[{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }]} />
-        </Row>
-        <Row title="Offline mode" desc="Replay recorded LLM rewrites and prebuilt modules. Works with no network and no API key.">
-          <button role="switch" aria-checked={offline} aria-label="Offline mode" onClick={() => save({ offline: !offline })} className={cn('relative h-5 w-9 rounded-full border transition-colors', offline ? 'border-accent bg-accent/30' : 'border-line2 bg-bg')}>
-            <span className={cn('absolute top-[2px] h-3.5 w-3.5 rounded-full transition-all', offline ? 'left-[18px] bg-accent' : 'left-[2px] bg-fg3')} />
-          </button>
-        </Row>
-        <Row title="Model" desc="Used by the LLM fixer to rewrite functions into PySub.">
-          <div className="flex gap-2">
-            <input value={model} onChange={(e) => setModel(e.target.value)} aria-label="Model" className="mono h-7 w-56 rounded-md border border-line2 bg-bg px-2 text-sm outline-none focus:border-accent" />
-            <Btn onClick={() => save({ model })} disabled={model === s.settings?.model}>Save</Btn>
+      <div className="mx-auto max-w-[720px] px-8 py-9">
+        <h1 className="text-[22px] font-semibold tracking-tight">Settings</h1>
+        <p className="mt-1.5 text-sm text-fg3">Stored by the local PYTHIA server. Keys are write-only: the browser never reads them back.</p>
+
+        <SettingsGroup title="Appearance">
+          <Row title="Theme" desc="Dark is the default and easiest on the code.">
+            <Segmented value={s.theme} onChange={s.setTheme} options={[{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }]} />
+          </Row>
+        </SettingsGroup>
+
+        <SettingsGroup title="LLM fixer">
+          <Row title="Provider" desc={hints[provider]}>
+            <Segmented value={provider} onChange={pickProvider} options={[{ value: 'auto', label: 'Auto' }, { value: 'groq', label: 'Groq' }, { value: 'anthropic', label: 'Anthropic' }, { value: 'offline', label: 'Offline' }]} />
+          </Row>
+          <Row title="Model" desc="Leave empty to use the provider default.">
+            <div className="flex gap-2">
+              <input value={model} onChange={(e) => setModel(e.target.value)} placeholder={env?.llm.model ?? ''} aria-label="Model" className="mono h-7 w-56 rounded-md border border-line2 bg-bg px-2 text-sm outline-none transition-colors focus:border-accent" />
+              <Btn onClick={() => save({ model })} disabled={model === (s.settings?.model ?? '')}>Save</Btn>
+            </div>
+          </Row>
+          <Row title="API key" desc="Paste a Groq (gsk_…) or Anthropic (sk-ant-…) key. The provider is inferred from the prefix.">
+            <div className="flex gap-2">
+              <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder={s.settings?.api_key_set ? 'Key saved (hidden)' : 'Paste a key'} autoComplete="off" aria-label="API key" className="mono h-7 w-56 rounded-md border border-line2 bg-bg px-2 text-sm outline-none transition-colors placeholder:text-fg3 focus:border-accent" />
+              <Btn onClick={() => { save({ api_key: key }); setKey('') }} disabled={!key}>Save key</Btn>
+            </div>
+          </Row>
+          <div className="flex items-center gap-2 px-5 py-3 text-sm">
+            <Sparkles size={14} className={env?.llm.enabled ? 'text-accent' : 'text-fg3'} />
+            <span className="text-fg3">Currently:</span>
+            <span className="text-fg">{env ? (env.llm.enabled ? llmLabel(env).replace('LLM: ', '') : env.llm.hint || 'LLM off') : 'checking'}</span>
           </div>
-        </Row>
-        <Row title="Anthropic API key" desc="Stored by the server and never sent back to the browser. Leave empty to use ANTHROPIC_API_KEY.">
-          <div className="flex gap-2">
-            <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder={s.settings?.api_key_set ? 'Key saved (hidden)' : 'sk-ant-…'} autoComplete="off" aria-label="API key" className="mono h-7 w-56 rounded-md border border-line2 bg-bg px-2 text-sm outline-none placeholder:text-fg3 focus:border-accent" />
-            <Btn onClick={() => { save({ api_key: key }); setKey('') }} disabled={!key}>Save key</Btn>
-          </div>
-        </Row>
-        {saved && <p className="flex items-center gap-1.5 text-sm text-ok"><Check size={14} /> Saved</p>}
-        <section>
-          <h2 className="mb-2 text-sm font-medium text-fg2">Environment</h2>
-          <dl className="divide-y divide-line rounded-lg border border-line bg-raised text-sm">
-            {env ? ([
-              ['C++ compiler', env.compiler.found ? `${env.compiler.name} ${env.compiler.version}` : 'not found'],
-              ['pybind11', env.pybind11 ? 'available' : 'missing'],
-              ['Python', env.python],
-              ['Platform', env.platform + (env.wsl ? ' (WSL)' : '')],
-              ['LLM fixer', env.llm.enabled ? `on · ${env.llm.model}` : env.llm.hint ?? 'off'],
-              ['Offline cache', env.offline_available ? 'available' : 'not recorded'],
-            ] as const).map(([k, v]) => <div key={k} className="flex justify-between px-4 py-2"><dt className="text-fg3">{k}</dt><dd className="mono text-fg">{v}</dd></div>) : <div className="p-4"><Skeleton className="h-4" /></div>}
-          </dl>
-        </section>
+        </SettingsGroup>
+        {saved && <p className="mt-3 flex items-center gap-1.5 text-sm text-ok"><Check size={14} /> Saved</p>}
+
+        <SettingsGroup title="Environment">
+          {env ? ([
+            ['C++ compiler', compilerLabel(env)],
+            ['pybind11', env.pybind11 ? 'available' : 'missing'],
+            ['Python', env.python],
+            ['Platform', env.platform.length > 40 ? env.platform.split('-').slice(0, 2).join(' ') + (env.wsl ? ' (WSL)' : '') : env.platform + (env.wsl ? ' (WSL)' : '')],
+            ['Offline cache', env.offline_available ? 'available' : 'not recorded'],
+          ] as const).map(([k, v]) => <div key={k} className="flex justify-between px-5 py-2.5 text-sm"><dt className="text-fg3">{k}</dt><dd className="mono text-fg">{v}</dd></div>) : <div className="p-5"><Skeleton className="h-4" /></div>}
+        </SettingsGroup>
       </div>
     </div>
   )
 }
+const SettingsGroup = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <section className="mt-8">
+    <h2 className="mb-2 text-xs font-medium text-fg3">{title}</h2>
+    <div className="surface divide-y divide-line overflow-hidden rounded-[14px]">{children}</div>
+  </section>
+)
 const Row = ({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) => (
-  <div className="flex items-start justify-between gap-8">
-    <div className="max-w-[360px]"><h2 className="text-base font-medium">{title}</h2><p className="text-sm text-fg3">{desc}</p></div>
-    <div className="flex-none pt-0.5">{children}</div>
+  <div className="flex items-center justify-between gap-8 px-5 py-4">
+    <div className="max-w-[340px]"><h3 className="text-sm font-medium">{title}</h3><p className="mt-0.5 text-xs leading-4 text-fg3">{desc}</p></div>
+    <div className="flex-none">{children}</div>
   </div>
 )
 export { IconBtn, fmtInt }

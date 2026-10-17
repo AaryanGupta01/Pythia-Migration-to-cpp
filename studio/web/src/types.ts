@@ -293,14 +293,22 @@ export type JobInput =
   | { kind: 'file'; filename: string; content_b64: string }
   | { kind: 'folder'; path: string }
   | { kind: 'git'; url: string }
-  | { kind: 'demo' }
+  | { kind: 'demo'; demo?: string }
+
+export interface DemoInfo {
+  id: string
+  name: string
+  description?: string
+  functions?: number
+  [k: string]: unknown
+}
 
 export interface EnvInfo {
   compiler: { found: boolean; name: string | null; version: string | null; hint: string | null }
   pybind11: boolean
   python: string
   platform: string
-  llm: { enabled: boolean; model: string; hint: string | null }
+  llm: { enabled: boolean; model: string; hint: string | null; provider?: 'groq' | 'anthropic' | 'offline-cache' | null }
   offline_available: boolean
   offline: boolean
   wsl: boolean
@@ -350,6 +358,7 @@ export interface FsList {
 export interface Settings {
   offline: boolean
   model: string
+  provider?: 'auto' | 'groq' | 'anthropic' | 'offline'
   api_key_set?: boolean
   api_key?: string
   [k: string]: unknown

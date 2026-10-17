@@ -15,7 +15,7 @@ let script: StudioEvent[] | null = null
 const P = () => (proj ??= buildProject())
 const S = () => (script ??= buildScript(P()))
 const decisions: Record<string, Decision> = {}
-const settings: Settings = { offline: true, model: 'claude-sonnet-5-5', api_key_set: false }
+const settings: Settings = { offline: true, model: 'claude-sonnet-5-5', provider: 'offline', api_key_set: false }
 
 const jobInfo = (): JobInfo => {
   const done = S()[S().length - 1] as Extract<StudioEvent, { type: 'job.done' }>
@@ -30,7 +30,7 @@ export const mockApi: Api = {
       ? { found: false, name: null, version: null, hint: 'Install a C++17 compiler: on Ubuntu or WSL run `sudo apt install g++ python3-dev`; on macOS run `xcode-select --install`.' }
       : { found: true, name: 'g++', version: '15.2.0', hint: null },
     pybind11: true, python: '3.14.0', platform: 'linux', wsl: true,
-    llm: { enabled: !settings.api_key_set ? settings.offline : true, model: settings.model, hint: settings.offline ? 'Replaying recorded rewrites (offline cache)' : 'Set ANTHROPIC_API_KEY to enable the LLM fixer' },
+    llm: { enabled: true, model: settings.offline ? settings.model : 'openai/gpt-oss-120b', provider: settings.offline ? 'offline-cache' : 'groq', hint: settings.offline ? 'Offline: replaying cached LLM responses' : '' },
     offline_available: true, offline: settings.offline,
   }, 30),
   getSettings: () => wait({ ...settings }, 20),
