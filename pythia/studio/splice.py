@@ -15,7 +15,7 @@ from typing import List, Optional
 
 from .models import FunctionRecord, Workspace
 
-RUNTIME = Path(__file__).resolve().parents[2] / "runtime"
+from ..paths import RUNTIME  # wheel or checkout
 SHIM_DIR = RUNTIME / "pythia_accel"
 GUARD = ["try:  # pythia-accel",
          "    from _pythia_accel import accelerated as _pythia_accelerated",

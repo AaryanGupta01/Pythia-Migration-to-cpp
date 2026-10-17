@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 ROOT = Path(__file__).resolve().parents[3]
-RUNTIME = ROOT / "runtime"
+from pythia.paths import RUNTIME  # wheel or checkout
 MAX_SOURCE = 200_000          # bytes
 MAX_OUTPUT = 1_000_000        # bytes kept per stream
 RUN_TIMEOUT = 10              # seconds, CPython and compiled binary

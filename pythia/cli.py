@@ -19,7 +19,8 @@ from .emit_cpp import emit
 from .lexer import LexError
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RUNTIME = os.path.join(HERE, "runtime")
+from .paths import RUNTIME as _RUNTIME  # noqa: E402  (wheel or checkout)
+RUNTIME = str(_RUNTIME)
 
 
 def render(diags, src_lines, path):

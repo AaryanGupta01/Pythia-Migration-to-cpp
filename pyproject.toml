@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pythia-studio"
+version = "1.0.0"
+description = "PYTHIA Studio: find Python hotspots, verify C++ replacements against CPython, splice them in."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "PYTHIA team" }]
+keywords = ["python", "compiler", "performance", "c++", "pybind11"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
+  "Topic :: Software Development :: Compilers",
+]
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "pybind11",
+  "anthropic",
+  "pathspec",
+  "websockets",
+]
+
+[project.scripts]
+pythia-studio = "pythia.studio.launcher:main"
+pythia = "pythia.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pythia", "pythia_studio"]
+
+# The checkout stays the single source of truth; the wheel gets copies at these paths (see pythia/paths.py).
+[tool.hatch.build.targets.wheel.force-include]
+"runtime" = "pythia/_runtime"
+"studio/web/dist" = "pythia/studio/web_dist"
+"demo" = "pythia/studio/demo_data"
+
+[tool.hatch.build.targets.sdist]
+include = ["/pythia", "/pythia_studio", "/runtime", "/studio/web/dist", "/demo", "/tools", "/tests", "/scripts",
+           "/README.md", "/LICENSE", "/pyproject.toml", "/Makefile", "/INSTALL.md"]
+exclude = ["__pycache__", "*.pyc", "tests/*.exe"]

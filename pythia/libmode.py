@@ -37,7 +37,8 @@ from .typecheck import Ty, typecheck
 from .emit_cpp import emit
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RUNTIME = os.path.join(HERE, "runtime")
+from .paths import RUNTIME as _RUNTIME  # noqa: E402  (wheel or checkout)
+RUNTIME = str(_RUNTIME)
 RUNTIME_FILES = ("pyrt.cpp", "pyrt.hpp", "pyrt_bridge.hpp")
 FLAGS = ["-std=c++17", "-O3", "-flto", "-fPIC", "-fvisibility=hidden", "-w"]
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")

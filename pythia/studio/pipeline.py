@@ -20,7 +20,7 @@ from .jobstate import Cancelled, JobState
 from .models import FunctionRecord, STATUSES, Workspace
 
 REPO = Path(__file__).resolve().parents[2]
-OFFLINE_DIR = REPO / "demo" / "offline_cache"
+from ..paths import OFFLINE_DIR  # noqa: E402  (wheel or checkout)
 SLOWER_THAN = 1.1             # measured speedup below this => declined (a wash is not worth the boundary risk)
 
 

@@ -26,6 +26,7 @@ SKIP_SUFFIX = (".pyc", ".pyo")
 MAX_FILE_BYTES = 5 * 1024 * 1024
 GIT_TIMEOUT_S = 300
 REPO_ROOT = Path(__file__).resolve().parents[2]
+from ..paths import DEMO  # noqa: E402  (wheel or checkout)
 
 
 def _noop(*_a, **_k):
@@ -182,7 +183,7 @@ def ingest(input: dict, home, emit=None) -> Workspace:
                     raise ValueError(f"folder not found: {src}")
                 origin, name = str(src), src.resolve().name
             elif kind == "demo":
-                src = REPO_ROOT / "demo" / "textlab"
+                src = DEMO / "textlab"
                 if not src.is_dir():
                     raise ValueError(f"demo project not found at {src}")
                 origin, name = "demo/textlab", "textlab"
