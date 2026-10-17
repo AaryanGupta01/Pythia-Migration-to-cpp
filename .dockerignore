@@ -1,0 +1,16 @@
+.git
+.claude
+.venv
+**/__pycache__
+**/*.pyc
+build
+dist
+*.so
+studio/web/node_modules
+studio/web/src
+tests/*.exe
+docs
+*.pptx
+*.docx
+*.pdf
+.env

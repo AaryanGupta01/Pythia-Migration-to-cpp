@@ -34,3 +34,7 @@
 - `elide_guards(mod, exposed=...)`: literal-call-site parameter bounds are dropped for exposed functions (they are called from Python with arbitrary ints); default behaviour unchanged.
 - Marshalling: int outside int64 -> OverflowError (contract); any other type mismatch (float for int, non-bool for bool, tuple for list, non-ASCII str) -> FallbackError.
 - Library builds precompile `pyrt_bridge.hpp` (PCH, ~135 MB per toolchain in the build cache) and cache one `pyrt.cpp` object: cold build ~9 s, further builds ~4 s, cache hit ~20 ms.
+- (I) Packaging: hatchling wheel; `runtime/`, `studio/web/dist`, `demo/` stay where they are in the checkout and are copied into the wheel via `force-include` (to `pythia/_runtime`, `pythia/studio/web_dist`, `pythia/studio/demo_data`). `pythia/paths.py` is the single resolver (wheel path first, checkout fallback); `tools/oracle.py` still uses `<repo>/runtime` directly.
+- (I) `pythia-studio` = `pythia/studio/launcher.py` (doctor banner, single-instance probe via GET /api/doctor, `--app` chromeless window with its own profile dir, closing the window stops the server). `python -m pythia.studio.server` is unchanged.
+- (I) PWA manifest, icons and the `<link rel=manifest>` injection are served by the backend (`pythia/studio/branding.py`), so `studio/web` is untouched. Host guard accepts localhost plus `PYTHIA_ALLOWED_HOSTS`.
+- (I) Docker image installs the wheel into python:3.12-slim + g++; compose publishes on 127.0.0.1 only. Windows support is via WSL2 (`scripts/install.ps1`), not native.

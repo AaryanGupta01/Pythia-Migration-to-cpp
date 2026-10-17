@@ -1,0 +1,22 @@
+# docker compose up        ->  http://localhost:8765
+#
+#   PROJECTS=~/code docker compose up      # the folder the "Open folder" picker can browse (mounted read-only at /projects)
+#   GROQ_API_KEY=gsk_... docker compose up # or ANTHROPIC_API_KEY; without a key use "Offline" mode in the UI for the demo
+services:
+  pythia:
+    build: .
+    image: pythia-studio
+    ports:
+      - "127.0.0.1:8765:8765"        # loopback only: the UI can read any mounted folder, so do not expose it to your LAN
+    environment:
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      PYTHIA_OFFLINE: ${PYTHIA_OFFLINE:-0}
+      # PYTHIA_ALLOWED_HOSTS: pythia.local          # extra Host names to accept (comma separated)
+    volumes:
+      - pythia-data:/data            # workspaces, jobs and the build cache survive restarts
+      - ${PROJECTS:-./demo}:/projects:ro
+    restart: unless-stopped
+
+volumes:
+  pythia-data:

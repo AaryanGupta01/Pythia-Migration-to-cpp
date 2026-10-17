@@ -180,7 +180,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
 
     print(f"PYTHIA Studio {report['version']}  (data: {home})\n{doctor.render(report)}", flush=True)
-    if a.host not in ("127.0.0.1", "localhost", "::1"):
+    if a.host not in ("127.0.0.1", "localhost", "::1") and not os.path.exists("/.dockerenv"):   # in Docker the port mapping decides exposure
         _say(f"WARNING: listening on {a.host}. The UI can browse and compile files this user can read; expose it only on a network you trust "
              "(other Host names must be listed in PYTHIA_ALLOWED_HOSTS).")
 
