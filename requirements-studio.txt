@@ -1,7 +1,6 @@
 fastapi
 uvicorn[standard]
-websockets
-python-multipart
+pybind11
 anthropic
 pathspec
-pybind11
+websockets

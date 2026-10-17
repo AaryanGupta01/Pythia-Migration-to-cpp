@@ -11,6 +11,11 @@
 - Demo project root is `demo/textlab/` (main.py + package `textlab/`), so fids look like `textlab/text/distance.py::edit_distance`; scale factor 1 for `--small`, 4 otherwise.
 - Demo "guarded" vs "verified": expected by D1 (int +,-,* not provable) sites; the global D7 note (line 0) appears on every list/str function and is ignored for that split. Interval analysis elides 0 guards in the demo wins (bounds come from len()/params), so n-body and k-means are the fully exact ones.
 - Authored offline rewrites live in `demo/offline_cache/authored_rewrites.json` (keyed by function name, provenance "authored"); `scripts/author_offline_cache.py` converts them to `llm/<key>.json`.
+- (C) Server adds `mock_data.py` (demo project text + per-function outcomes) next to `mock_engine.py`; mock C++/fidelity come from the real front-end (`pythia.cli.compile_source`) when importable, so they are real, not invented.
+- (C) Event `seq` starts at 1 and is contiguous per job; the bus (not the engine) writes `events.jsonl`, buffering events emitted before `start_job` returns the job id.
+- (C) Mock export is user-triggered (`export.done` after POST /export); pass `options.export=true` to make the scripted stream cover every §4 event type.
+- (C) `/api/upload` parses multipart with the stdlib `email` parser (no python-multipart dependency); `/api/stages` falls back to a stdlib tokenize/ast dump flagged `"mock": true` when `pythia.stages` is absent.
+- (C) Server answers only requests whose Host header is localhost/127.0.0.1 (DNS-rebinding guard) and binds 127.0.0.1.
 - B2: ingest.ingest honours optional input["ws_id"] (one-line edit) so POST /jobs can return workspace_id immediately.
 - B2: replay compares dict results order-insensitively; print() side effects inside functions are not compared; measured speedup <0.95 turns a verified function into `declined` (never splice a slowdown).
 - B2: rec.sources.pysub = scan.Extract.source (standalone module incl. helpers); rec.build gains additive keys exposed, cpp_path; shim also falls back to Python on TypeError (unmarshallable arg); PYTHIA_ACCEL=0 disables the shim.
