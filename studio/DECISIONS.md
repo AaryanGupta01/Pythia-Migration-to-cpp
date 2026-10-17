@@ -13,3 +13,7 @@
 - (C) Mock export is user-triggered (`export.done` after POST /export); pass `options.export=true` to make the scripted stream cover every §4 event type.
 - (C) `/api/upload` parses multipart with the stdlib `email` parser (no python-multipart dependency); `/api/stages` falls back to a stdlib tokenize/ast dump flagged `"mock": true` when `pythia.stages` is absent.
 - (C) Server answers only requests whose Host header is localhost/127.0.0.1 (DNS-rebinding guard) and binds 127.0.0.1.
+- Library wrappers use a reusable header `runtime/pyrt_bridge.hpp` (marshalling templates); generated glue stays short. Exporting a module needs `-I runtime` and `runtime/pyrt.cpp`.
+- `elide_guards(mod, exposed=...)`: literal-call-site parameter bounds are dropped for exposed functions (they are called from Python with arbitrary ints); default behaviour unchanged.
+- Marshalling: int outside int64 -> OverflowError (contract); any other type mismatch (float for int, non-bool for bool, tuple for list, non-ASCII str) -> FallbackError.
+- Library builds precompile `pyrt_bridge.hpp` (PCH, ~135 MB per toolchain in the build cache) and cache one `pyrt.cpp` object: cold build ~9 s, further builds ~4 s, cache hit ~20 ms.

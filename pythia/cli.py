@@ -51,6 +51,39 @@ def compile_source(src: str, path: str):
     return code, notes, [], opt_stats
 
 
+def lib_main(a, src: str) -> int:
+    import json
+    from .libmode import build_library
+    funcs = [f.strip() for f in a.lib.split(",") if f.strip()]
+    out_dir = a.out or os.path.join("build", "lib")
+    r = build_library(src, funcs, out_dir, modname=a.modname, filename=a.source,
+                      build=not a.no_build)
+    if a.json:
+        print(json.dumps(r.to_dict()))
+    elif r.diagnostics:
+        print(render([_Diag(d) for d in r.diagnostics],
+                     src.splitlines(), a.source), file=sys.stderr)
+        print(f"\n{len(r.diagnostics)} error(s); no output written.", file=sys.stderr)
+    elif not r.ok:
+        print(r.error, file=sys.stderr)
+    else:
+        print(f"wrote {r.cpp_path}")
+        if r.so_path:
+            print(f"built {r.so_path}" + (" (cache hit)" if r.cached else f" in {r.compile_s}s"))
+        print("exposed: " + ", ".join(f"{e['name']}({', '.join(e['params'])}) -> {e['ret']}"
+                                       for e in r.exposed))
+    if r.diagnostics:
+        return 2
+    if not r.ok:
+        return 3 if (r.error or "").startswith(("C++", "no C++")) else 2
+    return 0
+
+
+class _Diag:
+    def __init__(self, d):
+        self.line, self.col, self.kind, self.msg = d["line"], d["col"], d["kind"], d["msg"]
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="pythia",
                                  description="Typed Python-subset -> C transpiler")
@@ -61,9 +94,16 @@ def main(argv=None) -> int:
     ap.add_argument("--build", action="store_true", help="compile with c++17")
     ap.add_argument("--run", action="store_true", help="compile and execute")
     ap.add_argument("--emit-only", action="store_true", help="print C to stdout")
+    ap.add_argument("--lib", help="library mode: comma-separated functions to expose "
+                    "to Python (with --out <dir>)")
+    ap.add_argument("--modname", help="library mode: extension module name")
+    ap.add_argument("--no-build", action="store_true", help="library mode: write .cpp only")
+    ap.add_argument("--json", action="store_true", help="library mode: print LibResult as JSON")
     a = ap.parse_args(argv)
 
     src = open(a.source, encoding="utf-8").read()
+    if a.lib is not None:
+        return lib_main(a, src)
     code, notes, errs, opt_stats = compile_source(src, a.source)
 
     if errs:

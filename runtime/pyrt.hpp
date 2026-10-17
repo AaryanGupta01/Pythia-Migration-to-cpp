@@ -7,6 +7,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace pyrt {
@@ -30,6 +31,20 @@ class OverflowError : public PythonException { public: explicit OverflowError(co
 class ValueError : public PythonException { public: explicit ValueError(const char *m) : PythonException("ValueError", m) {} };
 class KeyError : public PythonException { public: explicit KeyError(const char *m) : PythonException("KeyError", m) {} };
 class PythiaSemanticError : public PythonException { public: explicit PythiaSemanticError(const char *m) : PythonException("PythiaSemanticError", m) {} };
+
+// Optional per-call arena (used only by library/extension-module wrappers).
+// Inactive by default: allocation then behaves exactly as plain `new` and
+// nothing is ever freed (divergence D7).  While active, every PyStr / list /
+// dict created through arena_new is freed by the matching arena_end().
+extern bool arena_active;
+void arena_push(void *p, void (*del)(void *));
+void arena_begin();
+void arena_end();
+template <class T, class... A> T *arena_new(A &&...a) {
+    T *p = new T(std::forward<A>(a)...);
+    if (arena_active) arena_push(p, [](void *q) { delete static_cast<T *>(q); });
+    return p;
+}
 
 [[noreturn]] void py_raise(const char *exc, const char *msg);
 [[noreturn]] void py_raise_pystr(const char *exc, const struct PyStr *msg);
