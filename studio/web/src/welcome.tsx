@@ -31,6 +31,7 @@ export function Welcome() {
   const headline = best?.summary?.e2e_speedup ?? 5.7
   const [bestRows, setBestRows] = useState<{ name: string; x: number }[] | null>(null)
   const bestId = best?.job_id
+  const sample = s.jobs.find((j) => j.sample && j.state === 'done')
   useEffect(() => {
     setBestRows(null)
     if (!bestId || IS_MOCK) return
@@ -101,6 +102,11 @@ export function Welcome() {
                 Open the demo project
                 <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
               </button>
+              {sample && (
+                <Btn onClick={() => s.openJob(sample.job_id, { replay: true })} className="h-10 rounded-[10px] px-4 text-[14px]" title="Replay a finished run of the demo project instantly">
+                  <RotateCcw size={15} /> Replay sample run
+                </Btn>
+              )}
               <Btn onClick={() => s.openSpecial('playground')} className="h-10 rounded-[10px] px-4 text-[14px]">
                 <Braces size={15} /> Playground
               </Btn>

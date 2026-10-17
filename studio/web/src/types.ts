@@ -325,6 +325,7 @@ export interface JobInfo {
   started: number | null
   finished: number | null
   summary: JobSummary | null
+  sample?: boolean
 }
 
 export interface RecentWorkspace {

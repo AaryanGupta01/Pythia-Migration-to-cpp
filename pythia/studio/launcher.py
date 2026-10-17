@@ -130,6 +130,48 @@ def open_ui(url: str, app: bool, home: Path) -> Optional[subprocess.Popen]:
 
 # ---- main ---------------------------------------------------------------------------------------------
 
+def _wsl_path(p: Path) -> Optional[str]:
+    try:
+        r = subprocess.run(["wsl", "-e", "wslpath", "-a", str(p)], capture_output=True, text=True, timeout=30)
+        out = r.stdout.strip().replace("\x00", "")
+        return out if r.returncode == 0 and out else None
+    except Exception:
+        return None
+
+
+def _delegate_to_wsl(a) -> Optional[int]:
+    """Native Windows has no C++17 toolchain PYTHIA can use; run the real thing inside WSL2 instead."""
+    import shlex
+    if shutil.which("wsl") is None:
+        _say("PYTHIA Studio compiles to C++ and needs Linux tools. On Windows it runs inside WSL2:")
+        _say("  1. open PowerShell as administrator and run:  wsl --install     (then reboot)")
+        _say("  2. run:  powershell -ExecutionPolicy Bypass -File scripts\\install.ps1      (from the PYTHIA folder)")
+        return 1
+    flags = ["--port", str(a.port)]
+    if a.offline:
+        flags.append("--offline")
+    if a.no_open:
+        flags.append("--no-open")
+    if a.app:
+        flags.append("--app")
+    root = Path(__file__).resolve().parents[2]
+    if (root / "studio.sh").exists():                      # a source checkout: let studio.sh set everything up
+        wp = _wsl_path(root)
+        if not wp:
+            return None
+        inner = (f"cd {shlex.quote(wp)} && sed -i 's/\\r$//' studio.sh scripts/*.sh 2>/dev/null; bash ./studio.sh "
+                 + " ".join(map(shlex.quote, flags)))
+    else:                                                   # an installed package: use the WSL-side install
+        inner = ('export PATH="$HOME/.local/bin:$PATH"; if command -v pythia-studio >/dev/null; then pythia-studio '
+                 + " ".join(map(shlex.quote, flags))
+                 + '; else echo "PYTHIA Studio is not installed inside WSL yet: run scripts\\\\install.ps1"; exit 3; fi')
+    _say("Windows detected: running PYTHIA Studio inside WSL2 (Linux compiler toolchain)")
+    try:
+        return subprocess.call(["wsl", "-e", "bash", "-lc", inner])
+    except KeyboardInterrupt:
+        return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     from .envfile import load_env
     load_env()
@@ -162,6 +204,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     if a.version:
         print(doctor._version())
         return 0
+    if sys.platform == "win32" and os.environ.get("PYTHIA_NO_WSL") != "1" and not a.doctor and not a.engine:
+        rc = _delegate_to_wsl(a)
+        if rc is not None:
+            return rc
     report = doctor.run(home)
     if a.doctor:
         print(doctor.render(report))

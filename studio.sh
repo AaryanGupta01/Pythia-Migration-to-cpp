@@ -5,6 +5,7 @@
 #   ./studio.sh --offline        # replay cached LLM answers + prebuilt .so files for the demo project
 #   ./studio.sh --port 9000      # different port
 #   ./studio.sh --no-open        # do not launch the browser
+#   ./studio.sh --app            # chromeless app window instead of a browser tab
 #
 # Env: PYTHIA_VENV=<dir> reuse/create that venv (default ./.venv), PYTHIA_PORT, PYTHIA_HOME, ANTHROPIC_API_KEY.
 set -euo pipefail
@@ -14,6 +15,7 @@ cd "$ROOT"
 
 PORT="${PYTHIA_PORT:-8765}"
 OPEN="--open"
+APP=""
 OFFLINE="${PYTHIA_OFFLINE:-0}"
 
 while [ $# -gt 0 ]; do
@@ -22,6 +24,7 @@ while [ $# -gt 0 ]; do
     --port) PORT="${2:?--port needs a number}"; shift ;;
     --port=*) PORT="${1#--port=}" ;;
     --no-open) OPEN="" ;;
+    --app) APP="--app" ;;
     -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option: $1 (try --help)" >&2; exit 2 ;;
   esac
@@ -94,9 +97,10 @@ export PYTHIA_PORT="$PORT"
 if [ "$OFFLINE" = "1" ]; then
   export PYTHIA_OFFLINE=1
   say "offline mode: cached LLM answers and prebuilt .so files from demo/offline_cache"
-elif [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-  say "no ANTHROPIC_API_KEY set: the LLM fixer is disabled (use --offline for the cached demo rewrites)"
+elif [ -z "${ANTHROPIC_API_KEY:-}${GROQ_API_KEY:-}" ] && ! grep -qs "API_KEY" "$ROOT/.env" "$HOME/.pythia-studio/.env"; then
+  say "no LLM key found: the LLM fixer is off. Free key: https://console.groq.com -> put GROQ_API_KEY=... in .env (or use --offline for the cached demo rewrites)"
 fi
 say "starting PYTHIA Studio on http://127.0.0.1:$PORT"
 # shellcheck disable=SC2086
-exec "$PY" -m pythia.studio.server $OPEN
+NO_OPEN=""; [ -z "$OPEN" ] && NO_OPEN="--no-open"
+exec "$PY" -m pythia_studio --port "$PORT" $NO_OPEN $APP

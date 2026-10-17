@@ -98,7 +98,8 @@ class JobState:
         return {"job_id": self.job_id, "workspace_id": self.ws.ws_id if self.ws else self.ws_id,
                 "name": self.ws.name if self.ws else self.name, "state": self.state,
                 "options": self.options, "input": self.input, "started": self.started,
-                "finished": self.finished, "summary": self.summary, "e2e": self.e2e}
+                "finished": self.finished, "summary": self.summary, "e2e": self.e2e,
+                "sample": (self.dir / "sample.flag").exists()}
 
     def persist_job(self) -> None:
         with self.lock:

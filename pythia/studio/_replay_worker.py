@@ -135,13 +135,17 @@ def bench(job, fn_py, mod):
         raw = [raw[int(k * step)] for k in range(cap)]
     signal.signal(signal.SIGALRM, _alarm)
     keep = []
+    spent = 0.0
     for c in raw:                                  # drop calls the .so can't take or that are pathologically slow in Python
+        if spent > job.get("py_budget_s", 1.5) and len(keep) >= 5:
+            break                                  # enough samples: a 90 s benchmark of one function helps nobody
         a = codec.decode(c["args"])
         try:
             signal.setitimer(signal.ITIMER_REAL, 5)
             t0 = time.perf_counter()
             outcome(fn_py, a)
             dt = time.perf_counter() - t0
+            spent += dt
         except CallTimeout:
             continue
         finally:

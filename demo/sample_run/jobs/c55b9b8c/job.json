@@ -1,0 +1,38 @@
+{
+ "job_id": "c55b9b8c",
+ "workspace_id": "096fc0cc",
+ "name": "quanta",
+ "state": "done",
+ "options": {
+  "trace_cmd": "python main.py --small",
+  "trace_timeout_s": 240.0,
+  "offline": true,
+  "llm": true,
+  "model": null,
+  "pace_ms": 0
+ },
+ "input": {
+  "kind": "demo"
+ },
+ "started": 1792266167.7726514,
+ "finished": 1792266828.4325929,
+ "summary": {
+  "functions": 278,
+  "verified": 3,
+  "guarded": 45,
+  "fixable": 8,
+  "not_eligible": 184,
+  "failed": 0,
+  "declined": 38,
+  "e2e_speedup": 5.018908393873985,
+  "geomean_speedup": 16.24036085859237
+ },
+ "e2e": {
+  "cmd": "python main.py --small",
+  "before_s": 25.698833139998897,
+  "after_s": 5.120402909000404,
+  "speedup": 5.018908393873985,
+  "output_match": true,
+  "ok": true
+ }
+}

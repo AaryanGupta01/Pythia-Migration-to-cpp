@@ -36,12 +36,14 @@ class Engine:
     def __init__(self, home: Optional[str] = None):
         from .envfile import load_env
         load_env()
+        from . import samples
         self.home = Path(home) if home else default_home()
         (self.home / "jobs").mkdir(parents=True, exist_ok=True)
         (self.home / "workspaces").mkdir(parents=True, exist_ok=True)
         self._jobs: Dict[str, JobState] = {}
         self._lock = threading.RLock()
         self._env_cache: Optional[Dict[str, Any]] = None
+        samples.seed(self.home)
 
     # ------------------------------------------------------------ settings / env
     def _settings_full(self) -> Dict[str, Any]:
@@ -262,6 +264,7 @@ class Engine:
         return d
 
     def decide(self, job_id: str, fid: str, decision: str) -> Dict[str, Any]:
+        from . import samples
         if decision not in ("accepted", "rejected", "pending"):
             raise ValueError(f"bad decision {decision!r}")
         js = self._job(job_id)
@@ -276,7 +279,9 @@ class Engine:
                 if r.status not in ("verified", "guarded"):
                     continue                                   # failed/declined/etc. can't be accepted
                 try:
-                    if decision == "rejected":
+                    if samples.is_sample(js.dir):               # bundled sample: nothing to splice, just record
+                        pass
+                    elif decision == "rejected":
                         splice_mod.revert(js.ws, r)
                     else:
                         splice_mod.apply(js.ws, r, r.build["module"], r.build["so"])
@@ -392,7 +397,10 @@ class Engine:
 
     # ------------------------------------------------------------ export / report
     def export(self, job_id: str, dest: Optional[str] = None, zip: bool = False) -> str:
+        from . import samples
         js = self._job(job_id)
+        if samples.is_sample(js.dir):
+            raise ValueError("This is the bundled sample run (nothing was compiled on this machine). Run the demo project to export a real accelerated copy.")
         with js.lock:
             recs = list(js.records.values())
             jd = self._report_job(js)

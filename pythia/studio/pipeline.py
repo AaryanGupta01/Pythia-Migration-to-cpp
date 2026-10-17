@@ -105,6 +105,15 @@ class Pipeline:
             js.persist_job()
             self.emit("job.done", {"state": js.state, "summary": js.summary})
             js.close()
+            self._cleanup_scratch()
+
+    def _cleanup_scratch(self) -> None:
+        """Replay inputs and trace samples run to hundreds of MB per job; nothing reads them after the run."""
+        if os.environ.get("PYTHIA_KEEP_SCRATCH") == "1" or getattr(self, "ws", None) is None:
+            return
+        import shutil
+        for d in ("tmp", "trace"):
+            shutil.rmtree(self.ws.root / d, ignore_errors=True)
 
     def summary(self) -> Dict[str, Any]:
         recs = self.recs()

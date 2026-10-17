@@ -13,6 +13,10 @@ def main() -> None:
     ap.add_argument("--engine", choices=["mock", "real"], help="override PYTHIA_ENGINE")
     ap.add_argument("--home", help="data root (default $PYTHIA_HOME or ~/.pythia-studio)")
     a = ap.parse_args()
+    import sys
+    if sys.platform == "win32" and os.environ.get("PYTHIA_NO_WSL") != "1" and a.engine != "mock":
+        from ..launcher import main as launch
+        raise SystemExit(launch(["--port", str(a.port)] + (["--no-open"] if not a.open else [])))
     if a.engine:
         os.environ["PYTHIA_ENGINE"] = a.engine
     import uvicorn
