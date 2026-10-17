@@ -29,6 +29,19 @@ export function Welcome() {
   const notPy = lang !== 'Python'
   const best = [...s.jobs].filter((j) => j.summary?.e2e_speedup).sort((a, b) => (b.summary!.e2e_speedup ?? 0) - (a.summary!.e2e_speedup ?? 0))[0]
   const headline = best?.summary?.e2e_speedup ?? 5.7
+  const [bestRows, setBestRows] = useState<{ name: string; x: number }[] | null>(null)
+  const bestId = best?.job_id
+  useEffect(() => {
+    setBestRows(null)
+    if (!bestId || IS_MOCK) return
+    let live = true
+    api.functions(bestId).then((fs) => {
+      const rows = fs.filter((f) => f.speedup && f.speedup > 1 && (f.status === 'verified' || f.status === 'guarded'))
+        .sort((a, b) => (b.speedup ?? 0) - (a.speedup ?? 0)).slice(0, 5).map((f) => ({ name: f.name, x: f.speedup as number }))
+      if (live && rows.length) setBestRows(rows)
+    }).catch(() => {})
+    return () => { live = false }
+  }, [bestId])
 
   useEffect(() => {
     s.loadRecent()
@@ -103,7 +116,7 @@ export function Welcome() {
             </motion.div>
           </div>
           <motion.div {...rise(2)}>
-            <SpeedTicker headline={headline} caption={best ? `Best run so far · ${best.name}` : 'Sample result · textlab demo'} />
+            <SpeedTicker headline={headline} rows={bestRows ?? undefined} caption={bestRows ? `Best run so far · ${best?.name}` : 'Sample result · illustrative'} />
           </motion.div>
         </div>
 

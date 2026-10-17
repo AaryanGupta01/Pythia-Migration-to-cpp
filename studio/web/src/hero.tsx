@@ -176,7 +176,7 @@ export const SAMPLE_ROWS = [
   { name: 'char_histogram', x: 14.9 },
 ]
 
-export function SpeedTicker({ headline, caption }: { headline: number; caption: string }) {
+export function SpeedTicker({ headline, caption, rows = SAMPLE_ROWS }: { headline: number; caption: string; rows?: { name: string; x: number }[] }) {
   return (
     <div className="surface relative overflow-hidden rounded-[16px] p-5">
       <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-accent/20 blur-3xl" />
@@ -187,7 +187,7 @@ export function SpeedTicker({ headline, caption }: { headline: number; caption: 
           <span className="pb-1.5 text-sm text-fg3">end to end</span>
         </div>
         <ul className="mt-5 space-y-2.5">
-          {SAMPLE_ROWS.map((r, i) => (
+          {rows.map((r, i) => (
             <li key={r.name} className="flex items-center gap-3">
               <span className="mono w-[116px] flex-none truncate text-xs text-fg2">{r.name}</span>
               <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-hover">
