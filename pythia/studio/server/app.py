@@ -102,7 +102,8 @@ def create_app(engine=None, home: Optional[str] = None) -> FastAPI:
     home_p = Path(home) if home else default_home()
     home_p.mkdir(parents=True, exist_ok=True)
     engine = engine or make_engine(home_p)
-    bus = Bus(home_p)
+    # an engine that writes jobs/<id>/events.jsonl itself (it exposes .events) stays the single writer
+    bus = Bus(home_p, persist=not hasattr(engine, "events"))
     app = FastAPI(title="PYTHIA Studio", docs_url="/api/docs", openapi_url="/api/openapi.json")
     app.state.engine, app.state.bus, app.state.home = engine, bus, home_p
     app.add_middleware(CORSMiddleware, allow_origins=DEV_ORIGINS, allow_methods=["*"], allow_headers=["*"])
@@ -236,10 +237,10 @@ def create_app(engine=None, home: Optional[str] = None) -> FastAPI:
             await ws.send_json({"error": f"unknown job '{job}'"})
             await ws.close(code=4404)
             return
-        q, backlog = ch.subscribe(asyncio.get_running_loop(), after)
+        q, backlog, finished = ch.subscribe(asyncio.get_running_loop(), after)
         last = after
         try:
-            done = False
+            done = finished          # job.done already behind us: replay the tail and close
             for ev in backlog:
                 await ws.send_json(ev)
                 last = ev["seq"]

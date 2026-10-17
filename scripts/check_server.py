@@ -159,6 +159,7 @@ def main():
     rest = stream(port, j2, after=first[-1]["seq"])
     contiguous(first + rest)
     assert (first + rest)[-1]["type"] == "job.done"
+    assert stream(port, j2, after=(first + rest)[-1]["seq"]) == [], "WS on a finished job must close, not hang"
     print(f"ok  reconnect: {len(first)} + {len(rest)} events, contiguous")
     cancel_job = ok(api, "POST", "/api/jobs", {"input": {"kind": "demo"}, "options": {"pace_ms": 20}})["job_id"]
     time.sleep(0.3)

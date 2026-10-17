@@ -15,8 +15,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 class Channel:
-    def __init__(self, home: Path, job_id: Optional[str] = None, live: bool = True):
+    def __init__(self, home: Path, job_id: Optional[str] = None, live: bool = True, persist: bool = True):
         self._home = home
+        self._persist = persist       # False when the engine already writes events.jsonl itself (same seq numbering)
         self._lock = threading.Lock()
         self._events: List[dict] = []
         self._subs: List[Tuple[asyncio.AbstractEventLoop, asyncio.Queue]] = []
@@ -24,7 +25,7 @@ class Channel:
         self.job_id = job_id
         self.live = live              # False for logs reloaded from disk: nothing more will arrive
         self.finished = False         # job.done seen
-        if job_id:
+        if job_id and persist:
             self._open()
 
     # -- persistence -----------------------------------------------------------------------
@@ -37,10 +38,11 @@ class Channel:
         """Attach to a job id once the engine returned it; flushes events emitted before that."""
         with self._lock:
             self.job_id = job_id
-            self._open()
-            for ev in self._events:
-                self._fh.write(json.dumps(ev, ensure_ascii=False) + "\n")
-            self._fh.flush()
+            if self._persist:
+                self._open()
+                for ev in self._events:
+                    self._fh.write(json.dumps(ev, ensure_ascii=False) + "\n")
+                self._fh.flush()
 
     @staticmethod
     def from_disk(home: Path, job_id: str) -> Optional["Channel"]:
@@ -84,13 +86,14 @@ class Channel:
         with self._lock:
             return len(self._events)
 
-    def subscribe(self, loop: asyncio.AbstractEventLoop, after: int = 0) -> Tuple[asyncio.Queue, List[dict]]:
+    def subscribe(self, loop: asyncio.AbstractEventLoop, after: int = 0) -> Tuple[asyncio.Queue, List[dict], bool]:
         q: asyncio.Queue = asyncio.Queue()
         with self._lock:
             backlog = self._events[max(0, after):]
+            finished = self.finished
             if self.live:
                 self._subs.append((loop, q))
-        return q, backlog
+        return q, backlog, finished
 
     def unsubscribe(self, q: asyncio.Queue) -> None:
         with self._lock:
@@ -108,13 +111,14 @@ class Channel:
 
 
 class Bus:
-    def __init__(self, home: Path):
+    def __init__(self, home: Path, persist: bool = True):
         self.home = Path(home)
+        self.persist = persist
         self._chans: Dict[str, Channel] = {}
         self._lock = threading.Lock()
 
     def new_channel(self) -> Channel:
-        return Channel(self.home)
+        return Channel(self.home, persist=self.persist)
 
     def register(self, ch: Channel) -> None:
         with self._lock:
