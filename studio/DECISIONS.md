@@ -8,3 +8,6 @@
 - No ANTHROPIC_API_KEY here: offline LLM cache entries are marked `provenance: "authored"` until re-recorded with a real key.
 - Frontend `dist/` is committed so the app runs without Node on the evaluator's machine.
 - Oracle baseline is 16/17 on CPython 3.14 (t15 message text differs from 3.12); not touched.
+- B2: ingest.ingest honours optional input["ws_id"] (one-line edit) so POST /jobs can return workspace_id immediately.
+- B2: replay compares dict results order-insensitively; print() side effects inside functions are not compared; measured speedup <0.95 turns a verified function into `declined` (never splice a slowdown).
+- B2: rec.sources.pysub = scan.Extract.source (standalone module incl. helpers); rec.build gains additive keys exposed, cpp_path; shim also falls back to Python on TypeError (unmarshallable arg); PYTHIA_ACCEL=0 disables the shim.
