@@ -307,7 +307,7 @@ class GuardElider:
         # Pass / Break / Continue / Raise: no expression to annotate
 
 
-def elide_guards(mod: A.Module) -> Stats:
+def elide_guards(mod: A.Module, exposed=()) -> Stats:
     """Run the pass over every function, method, and the module body.
     Each gets a fresh environment: PySub functions are closed over their
     own parameters and locals only (see typecheck.py), so nothing about
@@ -336,7 +336,9 @@ def elide_guards(mod: A.Module) -> Stats:
                 env[p.name] = None
             elider.block(m.body, env)
     for f in mod.funcs:
-        bounds = param_bounds.get(f.name, {})
+        # library mode: an exposed function is also called from outside the
+        # module with arbitrary values, so literal call sites prove nothing.
+        bounds = {} if f.name in exposed else param_bounds.get(f.name, {})
         env = {p.name: bounds.get(p.name) for p in f.params}
         elider.block(f.body, env)
     elider.block(mod.main, {})

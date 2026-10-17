@@ -24,7 +24,19 @@ namespace pyrt {
 }
 [[noreturn]] void py_raise_pystr(const char *exc, const PyStr *msg) { py_raise(exc, msg ? msg->data.c_str() : ""); }
 
-static PyStr *make_str(std::string value) { return new PyStr{std::move(value)}; }
+bool arena_active = false;
+static std::vector<std::pair<void *, void (*)(void *)>> g_arena;
+static std::vector<size_t> g_arena_marks;
+void arena_push(void *p, void (*del)(void *)) { g_arena.emplace_back(p, del); }
+void arena_begin() { g_arena_marks.push_back(g_arena.size()); arena_active = true; }
+void arena_end() {
+    if (g_arena_marks.empty()) return;
+    size_t mark = g_arena_marks.back(); g_arena_marks.pop_back();
+    while (g_arena.size() > mark) { auto e = g_arena.back(); g_arena.pop_back(); e.second(e.first); }
+    if (g_arena_marks.empty()) { arena_active = false; g_arena.shrink_to_fit(); }
+}
+
+static PyStr *make_str(std::string value) { return arena_new<PyStr>(PyStr{std::move(value)}); }
 PyStr *pystr_new(const char *s, int64_t len) { return make_str(std::string(s, static_cast<size_t>(len))); }
 PyStr *pystr_lit(const char *s) { return make_str(s ? s : ""); }
 PyStr *pystr_concat(PyStr *a, PyStr *b) { return make_str(a->data + b->data); }
@@ -75,18 +87,18 @@ double py_mod_f64(double a, double b) { if (!b) throw ZeroDivisionError("float m
 double py_pow_f64(double a, double b) { return std::pow(a, b); }
 
 #define LIST_IMPL(NAME, T, EQ) \
-NAME *NAME##_new() { return new NAME; } void NAME##_append(NAME *l,T v){l->data.push_back(v);} \
+NAME *NAME##_new() { return arena_new<NAME>(); } void NAME##_append(NAME *l,T v){l->data.push_back(v);} \
 T NAME##_get(NAME *l,int64_t i){return l->data[static_cast<size_t>(l->index(i))];} void NAME##_set(NAME *l,int64_t i,T v){l->data[static_cast<size_t>(l->index(i))]=v;} \
 T NAME##_pop(NAME *l){if(l->data.empty()) throw IndexError("pop from empty list"); T v=l->data.back(); l->data.pop_back(); return v;} \
-NAME *NAME##_concat(NAME *a,NAME *b){auto *r=new NAME; r->data=a->data; r->data.insert(r->data.end(),b->data.begin(),b->data.end()); return r;} \
+NAME *NAME##_concat(NAME *a,NAME *b){auto *r=arena_new<NAME>(); r->data=a->data; r->data.insert(r->data.end(),b->data.begin(),b->data.end()); return r;} \
 bool NAME##_eq(NAME *a,NAME *b){return a->data.size()==b->data.size() && std::equal(a->data.begin(),a->data.end(),b->data.begin(),EQ);} bool NAME##_contains(NAME *l,T v){return std::find_if(l->data.begin(),l->data.end(),[&](T x){return EQ(x,v);})!=l->data.end();}
 LIST_IMPL(PyListI64,int64_t,[](auto a,auto b){return a==b;})
 LIST_IMPL(PyListF64,double,[](auto a,auto b){return a==b;})
 LIST_IMPL(PyListBool,bool,[](auto a,auto b){return a==b;})
 LIST_IMPL(PyListStr,PyStr*,[](auto a,auto b){return pystr_cmp(a,b)==0;})
-PyListList *PyListList_new(){return new PyListList;} void PyListList_append(PyListList*l,void*v){l->data.push_back(v);} void *PyListList_get(PyListList*l,int64_t i){return l->data[static_cast<size_t>(l->index(i))];} void PyListList_set(PyListList*l,int64_t i,void*v){l->data[static_cast<size_t>(l->index(i))]=v;} void *PyListList_pop(PyListList*l){if(l->data.empty())throw IndexError("pop from empty list");void*v=l->data.back();l->data.pop_back();return v;} PyListList *PyListList_concat(PyListList*a,PyListList*b){auto*r=new PyListList;r->data=a->data;r->data.insert(r->data.end(),b->data.begin(),b->data.end());return r;}
+PyListList *PyListList_new(){return arena_new<PyListList>();} void PyListList_append(PyListList*l,void*v){l->data.push_back(v);} void *PyListList_get(PyListList*l,int64_t i){return l->data[static_cast<size_t>(l->index(i))];} void PyListList_set(PyListList*l,int64_t i,void*v){l->data[static_cast<size_t>(l->index(i))]=v;} void *PyListList_pop(PyListList*l){if(l->data.empty())throw IndexError("pop from empty list");void*v=l->data.back();l->data.pop_back();return v;} PyListList *PyListList_concat(PyListList*a,PyListList*b){auto*r=arena_new<PyListList>();r->data=a->data;r->data.insert(r->data.end(),b->data.begin(),b->data.end());return r;}
 
-#define DICT_IMPL(NAME,KT,VT,EQ) NAME *NAME##_new(){return new NAME;} static int64_t NAME##_find(NAME*d,KT k){for(int64_t i=0;i<d->size();++i)if(EQ(d->keys[i],k))return i;return -1;} void NAME##_set(NAME*d,KT k,VT v){auto i=NAME##_find(d,k);if(i<0){d->keys.push_back(k);d->vals.push_back(v);}else d->vals[i]=v;} VT NAME##_get(NAME*d,KT k){auto i=NAME##_find(d,k);if(i<0)throw KeyError("key not found");return d->vals[i];} VT NAME##_get_default(NAME*d,KT k,VT v){auto i=NAME##_find(d,k);return i<0?v:d->vals[i];} bool NAME##_contains(NAME*d,KT k){return NAME##_find(d,k)>=0;}
+#define DICT_IMPL(NAME,KT,VT,EQ) NAME *NAME##_new(){return arena_new<NAME>();} static int64_t NAME##_find(NAME*d,KT k){for(int64_t i=0;i<d->size();++i)if(EQ(d->keys[i],k))return i;return -1;} void NAME##_set(NAME*d,KT k,VT v){auto i=NAME##_find(d,k);if(i<0){d->keys.push_back(k);d->vals.push_back(v);}else d->vals[i]=v;} VT NAME##_get(NAME*d,KT k){auto i=NAME##_find(d,k);if(i<0)throw KeyError("key not found");return d->vals[i];} VT NAME##_get_default(NAME*d,KT k,VT v){auto i=NAME##_find(d,k);return i<0?v:d->vals[i];} bool NAME##_contains(NAME*d,KT k){return NAME##_find(d,k)>=0;}
 DICT_IMPL(PyDictIntInt,int64_t,int64_t,[](auto a,auto b){return a==b;})
 DICT_IMPL(PyDictIntFloat,int64_t,double,[](auto a,auto b){return a==b;})
 DICT_IMPL(PyDictIntBool,int64_t,bool,[](auto a,auto b){return a==b;})
