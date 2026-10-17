@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+pybind11
+anthropic
+pathspec
+websockets
