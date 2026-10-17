@@ -13,6 +13,16 @@
 - (C) Mock export is user-triggered (`export.done` after POST /export); pass `options.export=true` to make the scripted stream cover every §4 event type.
 - (C) `/api/upload` parses multipart with the stdlib `email` parser (no python-multipart dependency); `/api/stages` falls back to a stdlib tokenize/ast dump flagged `"mock": true` when `pythia.stages` is absent.
 - (C) Server answers only requests whose Host header is localhost/127.0.0.1 (DNS-rebinding guard) and binds 127.0.0.1.
+- B2: ingest.ingest honours optional input["ws_id"] (one-line edit) so POST /jobs can return workspace_id immediately.
+- B2: replay compares dict results order-insensitively; print() side effects inside functions are not compared; measured speedup <0.95 turns a verified function into `declined` (never splice a slowdown).
+- B2: rec.sources.pysub = scan.Extract.source (standalone module incl. helpers); rec.build gains additive keys exposed, cpp_path; shim also falls back to Python on TypeError (unmarshallable arg); PYTHIA_ACCEL=0 disables the shim.
+- B1: ingest copies project contents to the workspace ROOT (no extra top-level folder), so fids are project-relative and `trace_cmd` is relative to the project root.
+- B1: only module-level *scalar* constants (int/float/bool/str/None, simple constant expressions) are inlined into PySub functions; list/dict globals make a function not_eligible (mutation + per-call rebuild cost).
+- B1: not_eligible by design: bitwise ops, default parameter values, tuple returns, user classes, module/third-party calls, closures, I/O. Methods are listed as not_eligible ("method of class X"); nested defs are not listed separately.
+- B1: any typechecker rejection of otherwise-clean code is `fixable` (LLM may fix), except type rebinding / unknown types / undefined names which are `not_eligible`.
+- B1: `Extract.helpers` = names of pulled-in same-module callees; `Extract.uses` = names of inlined constants. Scratch state lives in `rec.private` (`modinfo`, `siblings`, `own`, `fix_kind` = "annotations"|"rewrite").
+- B1: ranker declines (net saving < 0 from trace numbers) only verifiable functions and annotation-only fixable ones; rewrite-fixable ones just get a note. Constants MARSHAL_S_PER_ELEM / CALL_OVERHEAD_S in rank.py are the calibration knobs.
+- B1: `llm.make_client(model, offline_cache_dir=None, *, offline=None)`: offline defaults to "cache dir given". Fixer sets `rec.rewrites`, and on success `rec.sources["pysub"]` + `line_map_ok=False`. Anthropic calls send no temperature (rejected by newer models).
 - Library wrappers use a reusable header `runtime/pyrt_bridge.hpp` (marshalling templates); generated glue stays short. Exporting a module needs `-I runtime` and `runtime/pyrt.cpp`.
 - `elide_guards(mod, exposed=...)`: literal-call-site parameter bounds are dropped for exposed functions (they are called from Python with arbitrary ints); default behaviour unchanged.
 - Marshalling: int outside int64 -> OverflowError (contract); any other type mismatch (float for int, non-bool for bool, tuple for list, non-ASCII str) -> FallbackError.
