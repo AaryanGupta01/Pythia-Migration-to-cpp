@@ -6,3 +6,4 @@
 *.json text eol=lf
 *.ts text eol=lf
 *.tsx text eol=lf
+requirements*.txt text eol=lf
