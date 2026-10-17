@@ -18,3 +18,7 @@
 - B1: `Extract.helpers` = names of pulled-in same-module callees; `Extract.uses` = names of inlined constants. Scratch state lives in `rec.private` (`modinfo`, `siblings`, `own`, `fix_kind` = "annotations"|"rewrite").
 - B1: ranker declines (net saving < 0 from trace numbers) only verifiable functions and annotation-only fixable ones; rewrite-fixable ones just get a note. Constants MARSHAL_S_PER_ELEM / CALL_OVERHEAD_S in rank.py are the calibration knobs.
 - B1: `llm.make_client(model, offline_cache_dir=None, *, offline=None)`: offline defaults to "cache dir given". Fixer sets `rec.rewrites`, and on success `rec.sources["pysub"]` + `line_map_ok=False`. Anthropic calls send no temperature (rejected by newer models).
+- Library wrappers use a reusable header `runtime/pyrt_bridge.hpp` (marshalling templates); generated glue stays short. Exporting a module needs `-I runtime` and `runtime/pyrt.cpp`.
+- `elide_guards(mod, exposed=...)`: literal-call-site parameter bounds are dropped for exposed functions (they are called from Python with arbitrary ints); default behaviour unchanged.
+- Marshalling: int outside int64 -> OverflowError (contract); any other type mismatch (float for int, non-bool for bool, tuple for list, non-ASCII str) -> FallbackError.
+- Library builds precompile `pyrt_bridge.hpp` (PCH, ~135 MB per toolchain in the build cache) and cache one `pyrt.cpp` object: cold build ~9 s, further builds ~4 s, cache hit ~20 ms.
