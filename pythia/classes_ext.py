@@ -394,7 +394,9 @@ def prepare(tc) -> None:
     for name in cx.order:
         _class_attrs(tc, cx, cx.defs[name])
     _rewrite_static_calls(tc, cx)
-    _Infer(tc, cx).run()
+    inf = _Infer(tc, cx)
+    inf.run()
+    _none_locals(tc, cx, inf)
     for name in cx.order:
         _object_params(tc, cx, cx.defs[name])
 
@@ -1043,6 +1045,39 @@ class _Infer:
         return None
 
 
+def _none_locals(tc, cx: Ctx, inf: _Infer) -> None:
+    """`prev = None` followed by `prev = node` (a class instance): the local is an object reference, as if it were
+    annotated `prev: Optional[Node] = None`.  Only class types are inferred this way (None flows into them)."""
+    units = [(f, None) for f in tc.mod.funcs] + [(m, n) for n in cx.order for m in cx.defs[n].methods]
+    units.append((A.FuncDef(0, 0, name="<module>", params=[], body=tc.mod.main), None))
+    for f, cls in units:
+        firsts: Dict[str, A.Assign] = {}
+        later: Dict[str, list] = {}
+        params = {p.name for p in f.params}
+        for n in walk(f.body):
+            if isinstance(n, A.Assign) and isinstance(n.target, A.Name) and n.target.id not in params:
+                nm = n.target.id
+                if nm not in firsts:
+                    firsts[nm] = n
+                else:
+                    later.setdefault(nm, []).append(n.value)
+        for nm, s in firsts.items():
+            if s.ann is not None or not isinstance(s.value, A.NoneLit) or nm not in later:
+                continue
+            ts = [inf.guess(cls or "", v, f, 0) for v in later[nm]]
+            ts = [t for t in ts if t is not None and t != NONE]
+            if not ts or not all(is_cls(tc, t) for t in ts):
+                continue
+            t = ts[0]
+            for u in ts[1:]:
+                t = t if u == t else (join(t, u) or ERR)
+            if t is ERR:
+                continue
+            te = A.TypeExpr(line=s.line, col=s.col, name="<inferred>")
+            te.pre = t
+            s.ann = te
+
+
 def _is_self_attr(e, f: str) -> bool:
     return isinstance(e, A.Attribute) and e.attr == f and isinstance(e.value, A.Name) and e.value.id == "self"
 
@@ -1371,6 +1406,12 @@ def _call(tc, cx: Ctx, e) -> Optional[Ty]:
         return _diag(tc, e, "super() is supported only as super().method(...)")
     if f in ("str", "repr", "len", "bool", "abs") and len(e.args) == 1 and not e.kwargs:
         t = tc.synth(e.args[0])
+        if f == "str" and t.name in ("list", "dict"):         # str(xs) == repr(xs) for lists and dicts
+            from . import tuples as _tup
+            if _tup.reprable(t) or (t.name == "list" and is_cls(tc, t.elem) and can_repr(tc, t.elem.name)):
+                e.cls_builtin = ("strrepr", None)
+                return STR
+            return None
         if f == "repr" and t.name == "list" and is_cls(tc, t.elem):
             if not can_repr(tc, t.elem.name):
                 return _diag(tc, e.args[0], f"repr() of a list of {t.elem.name}: class {t.elem.name!r} has no "
@@ -1620,11 +1661,23 @@ def check_stmt(tc, s) -> bool:
         return True
     if isinstance(s, A.AugAssign) and isinstance(s.target, A.Subscript):
         bt = tc.synth(s.target.value)
-        if is_cls(tc, bt):
-            _diag(tc, s, f"augmented assignment to an item of a {bt.name} instance is outside the PySub subset; "
-                         f"write x[i] = x[i] {s.op} v")
+        if not is_cls(tc, bt):
+            return False
+        g, st = resolve(tc, bt.name, "__getitem__"), resolve(tc, bt.name, "__setitem__")
+        if g is None or st is None:
+            _diag(tc, s.target, f"{bt.name!r} object needs __getitem__ and __setitem__ for x[i] {s.op}= v")
             return True
-        return False
+        _want_arg(tc, s.target.index, g[1].params[0], f"{bt.name}.__getitem__")
+        if g[1].params[0] != st[1].params[0]:
+            _diag(tc, s.target, f"{bt.name}.__getitem__ and __setitem__ take different index types")
+            return True
+        v = tc.synth(s.value)
+        res = tc.binop_result(s, s.op, g[1].ret, v)
+        if res is not ERR and not widens_to(res, st[1].params[1]):
+            _diag(tc, s, f"{s.op}= produces {res} but {bt.name}.__setitem__ stores {st[1].params[1]}")
+        s.aug_item = (bt.name, g[1].ret, res)
+        s.ty = res
+        return True
     if isinstance(s, A.AugAssign) and isinstance(s.target, A.Name):
         t = tc.synth(s.target)
         if not is_cls(tc, t):
@@ -1709,6 +1762,7 @@ def _store(tc, s, tgt, value, aug, want: Ty, what: str) -> None:
     if res is not ERR and not widens_to(res, want):
         _diag(tc, s, f"{aug}= produces {res} but {what} has type {want}")
     s.ty = want
+    s.aug_ty = res
 
 
 # ---- types_ext hooks: isinstance / narrowing ---------------------------------------------------------------
@@ -1874,7 +1928,10 @@ def _tn(tc, t: Ty, v: str) -> str:
 def _emit_binary(em, plan: dict, l: str, r: str) -> str:
     tc = em.tc
     lt, rt, op = plan["lt"], plan["rt"], plan["op"]
-    parts = [f"auto _a = {l};", f"auto _b = {r};"]
+    sig = plan["sig"]
+    la = f"{_c(sig.params[0])} _a = nullptr;" if lt == NONE else f"auto _a = {l};"
+    lb = f"{_c(sig.params[0])} _b = nullptr;" if rt == NONE else f"auto _b = {r};"
+    parts = [la, lb]
     if plan["plan"] == "fwd":
         fn = call_name(tc, lt.name, plan["fwd_name"])
         parts.append(f"if (_a) return {fn}(_a, _b);")
@@ -1964,6 +2021,8 @@ def _emit_builtin(em, e, cb) -> str:
     tc = em.tc
     f, cls = cb
     x = em.ex(e.args[0])
+    if f == "strrepr":
+        return f"py_repr_pystr({x})"
     if f == "str":
         return f"pyc_str_{cls}({x})"
     if f == "repr":
@@ -2037,6 +2096,39 @@ def stmt(em, s, d: int) -> bool:
                     f"assignment\"), _k, _v);")
         em.w(d, "}")
         return True
+    if isinstance(s, A.AugAssign) and getattr(s, "aug_item", None):
+        cls, gty, res = s.aug_item
+        em.w(d, "{")
+        em.w(d + 1, f"auto _o = pyc_nn_type({em.ex(s.target.value)}, \"'NoneType' object is not subscriptable\");")
+        em.w(d + 1, f"auto _k = {em.ex(s.target.index)};")
+        fake = A.BinOp(s.line, s.col, op=s.op, left=A.Name(s.line, s.col, id="__cur"), right=s.value)
+        fake.left.raw = f"{call_name(tc, cls, '__getitem__')}(_o, _k)"
+        fake.left.ty = gty
+        fake.ty = res
+        fake.dunder = getattr(s, "dunder", None)
+        em.w(d + 1, f"auto _v = {em.binop(fake)};")
+        em.w(d + 1, f"{call_name(tc, cls, '__setitem__')}(_o, _k, _v);")
+        em.w(d, "}")
+        return True
+    if isinstance(s, A.AugAssign) and getattr(s, "dunder", None) is not None and not getattr(s, "aug_item", None) \
+            and not getattr(s, "prop_set", None) and not getattr(s, "cattr_set", False):
+        tgt = s.target
+        if isinstance(tgt, A.Name):
+            em.w(d, f"p_{tgt.id} = {_emit_binary(em, s.dunder, em.ex(tgt), em.ex(s.value))};")
+            return True
+        if isinstance(tgt, A.Attribute):
+            em.w(d, "{")
+            em.w(d + 1, f"auto _o = {_nn(em, tgt.value, tgt.attr)};")
+            em.w(d + 1, f"_o->{tgt.attr} = {_emit_binary(em, s.dunder, f'_o->{tgt.attr}', em.ex(s.value))};")
+            em.w(d, "}")
+            return True
+        if isinstance(tgt, A.Subscript) and tgt.value.ty is not None and tgt.value.ty.name == "list":
+            em.w(d, "{")
+            em.w(d + 1, f"auto _l = {em.ex(tgt.value)};")
+            em.w(d + 1, f"auto _i = {em.ex(tgt.index)};")
+            em.w(d + 1, f"pyl_set(_l, _i, {_emit_binary(em, s.dunder, 'pyl_get(_l, _i)', em.ex(s.value))});")
+            em.w(d, "}")
+            return True
     if isinstance(s, A.AugAssign) and getattr(s, "iop", None):
         cls, name = s.iop
         em.w(d, f"p_{s.target.id} = {call_name(tc, cls, name)}(pyc_nn_type({em.ex(s.target)}, "
@@ -2047,7 +2139,8 @@ def stmt(em, s, d: int) -> bool:
 
 def _aug_value(em, s, tgt) -> str:
     fake = A.BinOp(s.line, s.col, op=s.op, left=tgt, right=s.value)
-    fake.ty = s.ty
+    fake.ty = getattr(s, "aug_ty", None) or s.ty
+    fake.dunder = getattr(s, "dunder", None)
     return em.binop(fake)
 
 
