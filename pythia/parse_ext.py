@@ -159,6 +159,24 @@ def parse_import(p) -> A.Node:
     return pas
 
 
+def parse_string_run(p) -> A.Node:
+    """One or more adjacent string literals (plain and f-strings, possibly on several lines inside parentheses)."""
+    nodes: List[A.Node] = []
+    while p.cur.kind in ("STRING", "FSTRING"):
+        t = p.next()
+        nodes.append(A.StrLit(t.line, t.col, value=t.value) if t.kind == "STRING" else p._fstring(t))
+    merged: List[A.Node] = []
+    for n in nodes:
+        if merged and isinstance(merged[-1], A.StrLit) and isinstance(n, A.StrLit):
+            merged[-1] = A.StrLit(merged[-1].line, merged[-1].col, value=merged[-1].value + n.value)
+        else:
+            merged.append(n)
+    node = merged[0]
+    for q in merged[1:]:
+        node = A.BinOp(q.line, q.col, op="+", left=node, right=q)
+    return node
+
+
 # ------------------------------------------------------------------------------------------------- slicing
 def parse_subscript(p, base: A.Node, t) -> A.Node:
     """After '[': an index `a[i]` or a slice `a[i:j]`, `a[::k]`; consumes the closing ']'."""

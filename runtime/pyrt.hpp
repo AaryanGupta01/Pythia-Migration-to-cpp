@@ -524,6 +524,15 @@ inline PyStr *px_radix_str(int64_t v, int base) {                            // 
     return px_str(std::string(v < 0 ? "-" : "") + (base == 2 ? "0b" : base == 8 ? "0o" : "0x") + digs);
 }
 inline PyStr *px_repr_str_obj(PyStr *s) { return px_str(py_repr_str(s->data)); }
+inline std::tuple<double, double> px_divmod_f64(double vx, double wx) {      // divmod(float, float), as float_divmod
+    if (wx == 0.0) throw ZeroDivisionError(py_minor >= 14 ? "division by zero" : "float divmod()");
+    double mod = std::fmod(vx, wx), div = (vx - mod) / wx, fl;
+    if (mod) { if ((wx < 0) != (mod < 0)) { mod += wx; div -= 1.0; } }
+    else mod = std::copysign(0.0, wx);
+    if (div) { fl = std::floor(div); if (div - fl > 0.5) fl += 1.0; }
+    else fl = std::copysign(0.0, vx / wx);
+    return std::tuple<double, double>{fl, mod};
+}
 
 // format(int, spec) with the radix codes x X o b (all other int specs go to py_format_i64)
 PyStr *py_format_i64(int64_t, PyStr *);

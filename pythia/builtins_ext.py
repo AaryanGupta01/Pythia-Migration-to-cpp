@@ -26,7 +26,7 @@ METHOD_TABLE = {
     "list": ["index", "append", "pop", "insert", "extend", "clear", "reverse", "copy", "count", "remove", "sort"],
     "dict": ["keys", "values", "pop", "setdefault", "update", "copy", "clear", "fromkeys"],
 }
-BUILTIN_NAMES = {"pow", "bin", "hex", "oct", "repr"}
+BUILTIN_NAMES = {"pow", "bin", "hex", "oct", "repr", "divmod"}
 
 _VIEW_CONSUMERS = ("len", "sorted", "list", "sum", "min", "max")
 
@@ -96,8 +96,18 @@ def synth_call(tc, e: A.Call) -> Optional[Ty]:
         return STR
     if f == "repr":
         if _nokw(tc, e) and _count(tc, e, 1, 1, f):
-            _need(tc, e.args[0], lambda t: t.name in NUMERIC or t == STR, "repr() supports int, float, bool and str in PySub")
+            from . import tuples as _tup
+            _need(tc, e.args[0], _tup.reprable, "repr() supports int, float, bool, str and lists / dicts / tuples of those in PySub")
         return STR
+    if f == "divmod":
+        if not (_nokw(tc, e) and _count(tc, e, 2, 2, f)):
+            return ERR
+        from . import tuples as _tup
+        ts = [_need(tc, a, lambda t: t.name in NUMERIC, "divmod() needs numbers") for a in e.args]
+        if any(t is ERR or t.name not in NUMERIC for t in ts):
+            return ERR
+        r = FLOAT if FLOAT in ts else INT
+        return _tup.tuple_of([r, r])
     if f == "__pct_d":
         _need(tc, e.args[0], lambda t: t.name in NUMERIC, "%d format: a real number is required (TypeError in CPython)")
         return INT
@@ -369,7 +379,15 @@ def emit_call(em, e: A.Call) -> Optional[str]:
         t = a[0].ty
         x = em.ex(a[0])
         return (f"px_repr_str_obj({x})" if t == STR else f"pystr_from_f64({x})" if t == FLOAT
-                else f"pystr_from_bool({x})" if t == BOOL else f"pystr_from_i64({x})")
+                else f"pystr_from_bool({x})" if t == BOOL else f"pystr_from_i64({x})" if t == INT
+                else f"py_repr_pystr({x})")
+    if n == "divmod":
+        from .tuples import ctype_tuple
+        x, y = em.fresh(), em.fresh()
+        if e.ty.elts[0] == INT:
+            return (f"[&]() {{ int64_t {x} = {_i(em, a[0])}; int64_t {y} = {_i(em, a[1])}; "
+                    f"return {ctype_tuple(e.ty).strip()}{{py_floordiv_i64({x}, {y}), py_mod_i64({x}, {y})}}; }}()")
+        return f"px_divmod_f64({_f(em, a[0])}, {_f(em, a[1])})"
     if n == "__pct_d":
         return f"px_f2i({em.ex(a[0])})" if a[0].ty == FLOAT else _i(em, a[0])
     if n == "__pct_i":

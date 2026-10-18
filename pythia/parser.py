@@ -514,10 +514,8 @@ class Parser:
             self.next(); return A.IntLit(t.line, t.col, value=int(t.value))
         if t.kind == "FLOAT":
             self.next(); return A.FloatLit(t.line, t.col, value=float(t.value))
-        if t.kind == "STRING":
-            self.next(); return A.StrLit(t.line, t.col, value=t.value)
-        if t.kind == "FSTRING":
-            self.next(); return self._fstring(t)
+        if t.kind in ("STRING", "FSTRING"):
+            return PX.parse_string_run(self)             # adjacent literals (plain and f-strings) concatenate
         if t.kind == "KEYWORD" and t.value in ("True", "False"):
             self.next(); return A.BoolLit(t.line, t.col, value=(t.value == "True"))
         if t.kind == "KEYWORD" and t.value == "None":
@@ -697,14 +695,16 @@ def _fstring(self, tok):
             spec = rest[1:]
         if expr_text.rstrip().endswith("=") and not expr_text.rstrip().endswith(("==", "!=", "<=", ">=")):
             _fstring_fail(self, tok, "f-string self-documenting fields {x=} are outside the PySub subset")
-        if conv not in (None, "s"):
-            _fstring_fail(self, tok, f"f-string conversion '!{conv}' is outside the PySub subset; use str()")
+        if conv not in (None, "s", "r"):
+            _fstring_fail(self, tok, f"f-string conversion '!{conv}' is outside the PySub subset (use !r, !s or none)")
         if spec and "{" in spec:
             _fstring_fail(self, tok, "nested format specs in f-strings are outside the PySub subset")
         if lit:
             parts.append(A.StrLit(tok.line, tok.col, value=lit))
             lit = ""
         e = _sub_expr(self, expr_text, tok)
+        if conv == "r":
+            e = A.Call(tok.line, tok.col, func="repr", args=[e])
         if spec:
             parts.append(A.Call(tok.line, tok.col, func="format", args=[e, A.StrLit(tok.line, tok.col, value=spec)]))
         else:
