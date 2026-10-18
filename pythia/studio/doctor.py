@@ -63,14 +63,10 @@ def run(home: Optional[Path] = None) -> dict:
                     platform.python_version() + ("" if v >= (3, 12) else " (3.12+ gives a faster tracer)"),
                     "Install Python 3.10 or newer (3.12+ recommended)."))
 
-    cxx = next((p for p in (shutil.which(n) for n in ("c++", "g++", "clang++")) if p), None)
-    ver = ""
-    if cxx:
-        try:
-            ver = subprocess.run([cxx, "--version"], capture_output=True, text=True, timeout=10).stdout.splitlines()[0]
-        except Exception:
-            pass
-    c.append(_check("compiler", "C++17 compiler", cxx, ver or "not found", _CXX_HINT))
+    from .. import toolchain
+    cxx, ver, skipped = toolchain.find_cxx()
+    c.append(_check("compiler", "C++17 compiler", cxx, (ver or "not found") + (f" [skipped: {'; '.join(skipped)}]" if skipped else ""),
+                    toolchain.describe()["hint"] or _CXX_HINT))
 
     try:
         import pybind11

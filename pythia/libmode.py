@@ -40,7 +40,8 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 from .paths import RUNTIME as _RUNTIME  # noqa: E402  (wheel or checkout)
 RUNTIME = str(_RUNTIME)
 RUNTIME_FILES = ("pyrt.cpp", "pyrt.hpp", "pyrt_bridge.hpp")
-FLAGS = ["-std=c++17", "-O3", "-flto", "-fPIC", "-fvisibility=hidden", "-w"]
+from . import toolchain as _tc  # noqa: E402
+FLAGS = ["-std=c++17", "-O3", "-flto", *_tc.pic_flags(), "-fvisibility=hidden", "-w"]
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -70,14 +71,8 @@ class LibResult:
 # ---------------------------------------------------------------- toolchain
 @lru_cache(maxsize=None)
 def _compiler() -> Tuple[Optional[str], str]:
-    cc = os.environ.get("CXX") or shutil.which("c++") or shutil.which("g++") or shutil.which("clang++")
-    if not cc:
-        return None, ""
-    try:
-        r = subprocess.run([cc, "--version"], capture_output=True, text=True, timeout=30)
-        return cc, (r.stdout.splitlines() or [""])[0]
-    except Exception:
-        return cc, ""
+    cc, line, _ = _tc.find_cxx()
+    return cc, line
 
 
 @lru_cache(maxsize=None)
@@ -128,7 +123,7 @@ def _install(src: str, dst: str) -> None:
 
 
 def _run(cmd: List[str]) -> Tuple[int, str]:
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=600, env=_tc.env_for(cmd[0]))
     return r.returncode, (r.stdout or "") + (r.stderr or "")
 
 
@@ -560,8 +555,9 @@ def build_library(src: str, funcs: Sequence[str], out_dir: str, modname: Optiona
     cc = _compiler()[0]
     if cc is None:
         res.ok = False
-        res.error = ("no C++ compiler found (install g++ or clang++, or set CXX); "
-                     "on Windows run PYTHIA inside WSL")
+        skipped = _tc.find_cxx()[2]
+        res.error = ("no usable C++17 compiler found. " + (_tc.describe()["hint"] or "")
+                     + (f" ({'; '.join(skipped)})" if skipped else ""))
         return res
     t0 = time.perf_counter()
     with ThreadPoolExecutor(max_workers=2) as ex:       # runtime object and PCH build concurrently
@@ -574,9 +570,10 @@ def build_library(src: str, funcs: Sequence[str], out_dir: str, modname: Optiona
         return res
     tmp_so = os.path.join(cache_dir, f"{bh}.{uuid.uuid4().hex[:8]}.tmp.so")
     cmd = [cc, *FLAGS, "-shared", *_includes()]
-    rc, log = _run(cmd + (["-include", pch] if pch else []) + [cpp_path, obj, "-o", tmp_so])
+    link = _tc.python_link_args()
+    rc, log = _run(cmd + (["-include", pch] if pch else []) + [cpp_path, obj, *link, "-o", tmp_so])
     if rc != 0 and pch and ("gch" in log or "pch" in log.lower()):
-        rc, log = _run(cmd + [cpp_path, obj, "-o", tmp_so])        # PCH trouble: build without
+        rc, log = _run(cmd + [cpp_path, obj, *link, "-o", tmp_so])  # PCH trouble: build without
     res.compile_s = round(time.perf_counter() - t0, 3)
     res.build_log = (rt_log + log).strip()
     if rc != 0:

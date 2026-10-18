@@ -40,6 +40,32 @@ def _alarm(_s, _f):
     raise CallTimeout()
 
 
+# Per-call watchdog: SIGALRM where it exists, else (Windows) a timer thread that interrupts the main thread.
+TIMEOUT_EXC = (CallTimeout, KeyboardInterrupt)
+if hasattr(signal, "setitimer"):
+    def arm(seconds):
+        signal.signal(signal.SIGALRM, _alarm)
+        signal.setitimer(signal.ITIMER_REAL, seconds)
+
+    def disarm():
+        signal.setitimer(signal.ITIMER_REAL, 0)
+else:
+    import _thread
+    import threading
+    _timer = [None]
+
+    def arm(seconds):
+        t = threading.Timer(seconds, _thread.interrupt_main)
+        t.daemon = True
+        _timer[0] = t
+        t.start()
+
+    def disarm():
+        t = _timer[0]
+        if t is not None:
+            t.cancel()
+
+
 def load_original(root, rel, name):
     sys.path.insert(0, root)
     mod = rel[:-3].replace("/", ".")
@@ -64,7 +90,7 @@ def load_so(path, modname):
 def outcome(fn, args):
     try:
         return ("ret", fn(*args))
-    except CallTimeout:
+    except TIMEOUT_EXC:
         raise
     except Exception as e:
         return ("exc", type(e).__name__)
@@ -80,7 +106,6 @@ def replay(job, fn_py, mod):
     calls = [json.loads(l) for l in open(job["calls"], encoding="utf-8") if l.strip()][: job["n_max"]]
     res = {"total": 0, "matched": 0, "exc_matches": 0, "skipped": 0, "mismatches": 0,
            "first_mismatch": None, "timeouts": 0}
-    signal.signal(signal.SIGALRM, _alarm)
     t_start = time.monotonic()
     for i, c in enumerate(calls):
         if time.monotonic() - t_start > job.get("budget_s", 30):
@@ -88,15 +113,15 @@ def replay(job, fn_py, mod):
             break
         PROTO.write(f"@{i}\n")
         pa, ca = codec.decode(c["args"]), codec.decode(c["args"])
-        signal.setitimer(signal.ITIMER_REAL, job.get("call_timeout", 1))
+        arm(job.get("call_timeout", 1))
         try:
             po = outcome(fn_py, pa)
-        except CallTimeout:
+        except TIMEOUT_EXC:
             res["timeouts"] += 1
             res["skipped"] += 1
             continue
         finally:
-            signal.setitimer(signal.ITIMER_REAL, 0)
+            disarm()
         if po[0] == "exc" and po[1] in ("RecursionError", "MemoryError"):
             res["skipped"] += 1
             continue
@@ -133,7 +158,6 @@ def bench(job, fn_py, mod):
     if len(raw) > cap:
         step = len(raw) / cap
         raw = [raw[int(k * step)] for k in range(cap)]
-    signal.signal(signal.SIGALRM, _alarm)
     keep = []
     spent = 0.0
     for c in raw:                                  # drop calls the .so can't take or that are pathologically slow in Python
@@ -141,15 +165,15 @@ def bench(job, fn_py, mod):
             break                                  # enough samples: a 90 s benchmark of one function helps nobody
         a = codec.decode(c["args"])
         try:
-            signal.setitimer(signal.ITIMER_REAL, 5)
+            arm(5)
             t0 = time.perf_counter()
             outcome(fn_py, a)
             dt = time.perf_counter() - t0
             spent += dt
-        except CallTimeout:
+        except TIMEOUT_EXC:
             continue
         finally:
-            signal.setitimer(signal.ITIMER_REAL, 0)
+            disarm()
         try:
             fn_c(*codec.decode(c["args"]))
         except fb:

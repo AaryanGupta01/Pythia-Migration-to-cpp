@@ -189,21 +189,72 @@ class Lexer:
 
     def _lex_name(self) -> None:
         ln, cl = self.line, self.col
+        if self._peek() in "fF" and self._peek(1) in "\"'":
+            self._advance()
+            self._lex_fstring(ln, cl)
+            return
         buf = ""
         while self._peek().isalnum() or self._peek() == "_":
             buf += self._advance()
         self._emit("KEYWORD" if buf in KEYWORDS else "NAME", buf, ln, cl)
 
+    def _lex_fstring(self, ln: int, cl: int) -> None:
+        """f"..." is kept raw (escapes and {expr[:spec]} fields intact) as one FSTRING token; the parser
+        splits it into literal and expression parts. Inside a field brackets nest and quotes of the other
+        kind are allowed, as in Python 3.11."""
+        quote = self._advance()
+        triple = self.src.startswith(quote * 2, self.pos)
+        if triple:
+            self._advance(2)
+        buf, depth = "", 0
+        while True:
+            c = self._peek()
+            if c == "":
+                raise LexError("unterminated f-string", ln, cl)
+            if c == "\n" and not triple and depth == 0:
+                raise LexError("unterminated f-string (newline in string)", ln, cl)
+            if depth == 0 and c == quote and (not triple or self.src.startswith(quote * 3, self.pos)):
+                self._advance(3 if triple else 1)
+                break
+            if c == "\\" and depth == 0:
+                buf += self._advance() + self._advance()
+                continue
+            if c == "{":
+                if depth == 0 and self._peek(1) == "{":
+                    buf += self._advance(2)
+                    continue
+                depth += 1
+            elif c == "}" and depth > 0:
+                depth -= 1
+            elif c in "\"'" and depth > 0:              # a nested string inside a field
+                q = self._advance()
+                buf += q
+                while self._peek() and self._peek() != q:
+                    buf += self._advance()
+                if not self._peek():
+                    raise LexError("unterminated string inside an f-string field", ln, cl)
+            buf += self._advance()
+        self._emit("FSTRING", buf, ln, cl)
+
     def _lex_string(self) -> None:
         ln, cl = self.line, self.col
         quote = self._advance()
+        triple = self.src.startswith(quote * 2, self.pos)
+        if triple:                                         # """docstrings""" and multi-line strings
+            self._advance(2)
         buf = ""
         while True:
             c = self._peek()
             if c == "":
                 raise LexError("unterminated string literal", ln, cl)
-            if c == "\n":
+            if c == "\n" and not triple:
                 raise LexError("unterminated string literal (newline in string)", ln, cl)
+            if c == quote and triple:
+                if self.src.startswith(quote * 3, self.pos):
+                    self._advance(3)
+                    break
+                buf += self._advance()
+                continue
             if c == "\\":
                 self._advance()
                 esc = self._advance()

@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 ROOT = Path(__file__).resolve().parents[3]
+from pythia import toolchain
 from pythia.paths import RUNTIME  # wheel or checkout
 MAX_SOURCE = 200_000          # bytes
 MAX_OUTPUT = 1_000_000        # bytes kept per stream
@@ -125,13 +126,14 @@ def _runtime_object(tmp_cache: Path) -> Path:
     h = hashlib.sha256()
     for f in ("pyrt.cpp", "pyrt.hpp"):
         h.update((RUNTIME / f).read_bytes())
-    h.update(b"c++17-O2")
+    h.update(b"c++17-O2" + (toolchain.find_cxx()[1] or "").encode())
     obj = tmp_cache / f"pyrt-{h.hexdigest()[:16]}.o"
     if not obj.exists():
         tmp_cache.mkdir(parents=True, exist_ok=True)
         part = obj.with_suffix(f".{os.getpid()}.part")
-        r = subprocess.run(["c++", "-std=c++17", "-O2", "-c", "-I", str(RUNTIME), str(RUNTIME / "pyrt.cpp"), "-o", str(part)],
-                           capture_output=True, text=True, timeout=BUILD_TIMEOUT)
+        cxx = toolchain.find_cxx()[0]
+        r = subprocess.run([cxx, "-std=c++17", "-O2", "-c", "-I", str(RUNTIME), str(RUNTIME / "pyrt.cpp"), "-o", str(part)],
+                           capture_output=True, text=True, timeout=BUILD_TIMEOUT, env=toolchain.env_for(cxx))
         if r.returncode != 0:
             raise PlaygroundError("runtime failed to compile: " + r.stderr[-800:], 500)
         os.replace(part, obj)
@@ -145,8 +147,8 @@ def run_snippet(source: str, cache_dir: Path) -> Dict[str, Any]:
         d = comp["diagnostics"][0]
         return {"ok": False, "error": f"{d['kind']} at line {d['line']}: {d['msg']}", "diagnostics": comp["diagnostics"],
                 "python": None, "cpp": None, "same": False}
-    if shutil.which("c++") is None:
-        return {"ok": False, "error": "no C++ compiler found (install g++ or clang++, or run inside WSL)",
+    if toolchain.find_cxx()[0] is None:
+        return {"ok": False, "error": "no C++17 compiler found. " + (toolchain.describe()["hint"] or ""),
                 "python": None, "cpp": None, "same": False}
     tmp = Path(tempfile.mkdtemp(prefix="pythia-pg-"))
     try:
@@ -160,8 +162,10 @@ def run_snippet(source: str, cache_dir: Path) -> Dict[str, Any]:
         obj = _runtime_object(cache_dir)
         binp = tmp / ("snippet.exe" if os.name == "nt" else "snippet")
         t = time.perf_counter()
-        cc = subprocess.run(["c++", "-std=c++17", "-O2", "-I", str(tmp), str(cpp_path), str(obj), "-o", str(binp)],
-                            capture_output=True, text=True, timeout=BUILD_TIMEOUT)
+        cxx = toolchain.find_cxx()[0]
+        cc = subprocess.run([cxx, "-std=c++17", "-O2", "-I", str(tmp), str(cpp_path), str(obj),
+                             *toolchain.exe_link_args(), "-o", str(binp)],
+                            capture_output=True, text=True, timeout=BUILD_TIMEOUT, env=toolchain.env_for(cxx))
         build_ms = round((time.perf_counter() - t) * 1000, 1)
         if cc.returncode != 0:
             return {"ok": False, "error": "generated C++ failed to compile (internal error): " + cc.stderr[-1500:],

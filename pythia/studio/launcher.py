@@ -130,6 +130,16 @@ def open_ui(url: str, app: bool, home: Path) -> Optional[subprocess.Popen]:
 
 # ---- main ---------------------------------------------------------------------------------------------
 
+def native_ready() -> bool:
+    """Can this interpreter build and load extension modules by itself? (The Windows app bundles MinGW-w64.)"""
+    try:
+        import pybind11  # noqa: F401
+        from .. import toolchain
+        return bool(toolchain.find_cxx()[0] and toolchain.python_headers())
+    except Exception:
+        return False
+
+
 def _wsl_path(p: Path) -> Optional[str]:
     try:
         r = subprocess.run(["wsl", "-e", "wslpath", "-a", str(p)], capture_output=True, text=True, timeout=30)
@@ -204,7 +214,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if a.version:
         print(doctor._version())
         return 0
-    if sys.platform == "win32" and os.environ.get("PYTHIA_NO_WSL") != "1" and not a.doctor and not a.engine:
+    if sys.platform == "win32" and os.environ.get("PYTHIA_NO_WSL") != "1" and not a.doctor and not a.engine \
+            and not native_ready():
         rc = _delegate_to_wsl(a)
         if rc is not None:
             return rc

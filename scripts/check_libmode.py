@@ -304,6 +304,20 @@ def main():
 
     # memory: repeated calls must not leak (arena)
     def rss_kb():
+        if os.name == "nt":                     # working set via psapi (no third-party deps)
+            import ctypes
+            from ctypes import wintypes
+
+            class PMC(ctypes.Structure):
+                _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + \
+                           [(n, ctypes.c_size_t) for n in ("PeakWorkingSetSize", "WorkingSetSize",
+                            "QuotaPeakPagedPoolUsage", "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage",
+                            "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")]
+            pmc = PMC()
+            pmc.cb = ctypes.sizeof(PMC)
+            k32 = ctypes.WinDLL("kernel32")
+            k32.K32GetProcessMemoryInfo(k32.GetCurrentProcess(), ctypes.byref(pmc), pmc.cb)
+            return pmc.WorkingSetSize // 1024
         with open("/proc/self/statm") as f:
             return int(f.read().split()[1]) * 4
     big = list(range(2000))

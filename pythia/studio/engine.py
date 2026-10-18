@@ -78,19 +78,10 @@ class Engine:
 
     def env(self) -> Dict[str, Any]:
         s = self._settings_full()
-        cxx = None
-        for c in ("c++", "g++", "clang++"):
-            p = shutil.which(c)
-            if p:
-                try:
-                    v = subprocess.run([p, "--version"], capture_output=True, text=True, timeout=10).stdout.splitlines()[0]
-                except Exception:
-                    v = ""
-                cxx = {"found": True, "name": c, "version": v, "hint": None}
-                break
-        if not cxx:
-            cxx = {"found": False, "name": None, "version": None,
-                   "hint": "Install a C++17 compiler: sudo apt install build-essential (Linux/WSL) or xcode-select --install (macOS)"}
+        from .. import toolchain
+        d = toolchain.describe()
+        cxx = {"found": d["found"], "name": "c++" if d["found"] else None, "version": d["version"], "hint": d["hint"],
+               "path": d["path"], "skipped": d["skipped"]}
         try:
             import pybind11  # noqa: F401
             pyb = True

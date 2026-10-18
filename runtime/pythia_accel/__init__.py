@@ -20,7 +20,7 @@ def _load(modname):
     if modname not in _mods:
         mod = None
         for p in sorted(glob.glob(os.path.join(_HERE, "lib", modname + ".*")) +
-                        glob.glob(os.path.join(_HERE, "lib", modname + "*.so"))):
+                        (glob.glob(os.path.join(_HERE, "lib", modname + "*.so")) + glob.glob(os.path.join(_HERE, "lib", modname + "*.pyd")))):
             try:
                 spec = importlib.util.spec_from_file_location(modname, p)
                 mod = importlib.util.module_from_spec(spec)

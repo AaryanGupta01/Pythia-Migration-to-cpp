@@ -142,9 +142,11 @@ def main(argv=None) -> int:
         for fn in ("pyrt.cpp", "pyrt.hpp"):
             shutil.copy(os.path.join(RUNTIME, fn), outdir)
         binpath = os.path.join(outdir, stem)
-        cc = ["c++", "-std=c++17", "-O2", "-flto", "-I", outdir, cpath,
-              os.path.join(outdir, "pyrt.cpp"), "-o", binpath]
-        r = subprocess.run(cc, capture_output=True, text=True)
+        from . import toolchain
+        cxx = toolchain.find_cxx()[0] or "c++"
+        cc = [cxx if os.name == "nt" else "c++", "-std=c++17", "-O2", "-flto", "-I", outdir, cpath,
+              os.path.join(outdir, "pyrt.cpp"), *toolchain.exe_link_args(), "-o", binpath]
+        r = subprocess.run(cc, capture_output=True, text=True, env=toolchain.env_for(cxx))
         if r.returncode != 0:
             print(r.stderr, file=sys.stderr)
             print("internal error: generated C++ failed to compile", file=sys.stderr)

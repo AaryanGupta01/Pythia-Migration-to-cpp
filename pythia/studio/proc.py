@@ -11,12 +11,17 @@ import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
+IS_WIN = os.name == "nt"
+
 
 def make_bin_dir(d: Path) -> Path:
     """`python`/`python3` wrappers that exec THIS interpreter (keeps the venv)."""
     b = d / "bin"
     b.mkdir(parents=True, exist_ok=True)
     for n in ("python", "python3"):
+        if IS_WIN:                                   # cmd.exe finds .bat through PATHEXT, ahead of python.exe
+            (b / f"{n}.bat").write_text(f'@"{sys.executable}" %*\r\n', encoding="utf-8")
+            continue
         p = b / n
         p.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
         try:
@@ -26,8 +31,23 @@ def make_bin_dir(d: Path) -> Path:
     return b
 
 
+def _kill_tree_win(pid: int) -> None:
+    try:
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True, timeout=15,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except Exception:
+        pass
+
+
 def kill_group(p: subprocess.Popen, grace: float = 3.0) -> None:
     if p.poll() is not None:
+        return
+    if IS_WIN:
+        _kill_tree_win(p.pid)
+        try:
+            p.wait(timeout=5)
+        except Exception:
+            pass
         return
     try:
         if hasattr(os, "killpg"):
@@ -68,13 +88,15 @@ def run_cmd(cmd: str, cwd: Path, env: Dict[str, str], timeout_s: float,
     """Run `cmd` (shell if it has shell syntax) in its own process group; merge
     stderr into stdout; hard timeout; `on_tick(elapsed, tail)` roughly every tick_s."""
     import shlex
-    shell = any(c in cmd for c in "&|;<>$`()")
+    shell = IS_WIN or any(c in cmd for c in "&|;<>$`()")   # Windows: cmd.exe resolves the python.bat shim
     argv = cmd if shell else shlex.split(cmd)
     r = Run()
     t0 = time.perf_counter()
     p = subprocess.Popen(argv, cwd=str(cwd), env=env, shell=shell, stdin=subprocess.DEVNULL,
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                         start_new_session=hasattr(os, "setsid"))
+                         start_new_session=hasattr(os, "setsid"),
+                         creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP | getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                         if IS_WIN else 0)
     chunks: List[bytes] = []
     kept = [0]
     tail = [b""]
