@@ -1129,10 +1129,10 @@ _RE_REBIND = re.compile(r"variable '(\w+)' was inferred as ([^;]+); cannot rebin
 _RE_STATIC = re.compile(r"'(\w+)' has static type ([^;]+); cannot assign (.+)")
 
 
-def classify_errors(diags: List[dict]) -> Tuple[str, str, str]:
+def classify_errors(diags: List[dict], source: Optional[str] = None) -> Tuple[str, str, str]:
     """(eligibility, reason, fix_kind) from real typechecker/parser diagnostics."""
     from .reasons import explain
-    return explain(diags)
+    return explain(diags, source)
 
 
 def _decide(project: Project, info: ModuleInfo, name: str, node: ast.AST):
@@ -1148,7 +1148,7 @@ def _decide(project: Project, info: ModuleInfo, name: str, node: ast.AST):
         return "not_eligible", _short(ex.hard, 2), "rewrite", [], scratch
     if ex.ok:
         return "verifiable", None, "rewrite", [], scratch
-    diags, kind = ex.diagnostics, "rewrite"
+    diags, kind, src = ex.diagnostics, "rewrite", ex.source
     slots = infer_mod._build_slots([infer_mod._Chunk(t) for t in u.texts], {})
     if slots:
         ex2, u2 = _run_extract(project, info, name, text, infer=True)
@@ -1158,8 +1158,8 @@ def _decide(project: Project, info: ModuleInfo, name: str, node: ast.AST):
             scratch["inferred"] = ex2.inferred
             names = own.missing or [s.name or "return type" for s in slots if s.chunk == 0]
             return "fixable", _missing_reason(names) + " — types will be inferred from usage", "annotations", [], scratch
-        diags = ex2.diagnostics
-    elig, reason, k2 = classify_errors(diags)
+        diags, src = ex2.diagnostics, ex2.source
+    elig, reason, k2 = classify_errors(diags, src)
     if any(d.get("fn") != name for d in diags) and elig != "not_eligible":
         reason = f"a function it calls has a problem — {reason}"
     return elig, reason, k2, [d for d in diags if d.get("fn") == name], scratch
