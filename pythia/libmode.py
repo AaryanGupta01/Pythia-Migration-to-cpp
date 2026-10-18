@@ -265,7 +265,7 @@ def _mutated_params(mod: A.Module) -> Dict[str, Set[int]]:
                     elif isinstance(n.target, A.Attribute):
                         hits |= hit(n.value)
                 elif isinstance(n, A.MethodCall):
-    return _lx.is_container(t) or (t is not None and t.name == "tuple")   # a tuple may hold a list
+                    if n.method in (set(_MUTATORS) | _lx.MUTATORS) and _is_container(n.recv.ty):
                         hits |= hit(n.recv)
                         for a in n.args:
                             hits |= hit(a)
