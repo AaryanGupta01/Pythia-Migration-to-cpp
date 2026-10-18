@@ -215,6 +215,9 @@ def _roots(e: Optional[A.Node]) -> Set[str]:
     return set()
 
 
+_MUTATORS = ("append", "pop", "insert", "extend", "clear", "reverse", "remove", "sort")
+
+
 def _mutated_params(mod: A.Module) -> Dict[str, Set[int]]:
     """For each function: indices of list/dict params the call may mutate.
     Conservative: any escape (stored in an object, passed to a method, ...)
@@ -261,7 +264,7 @@ def _mutated_params(mod: A.Module) -> Dict[str, Set[int]]:
                     elif isinstance(n.target, A.Attribute):
                         hits |= hit(n.value)
                 elif isinstance(n, A.MethodCall):
-                    if n.method in ("append", "pop") and _is_container(n.recv.ty):
+                    if n.method in _MUTATORS and _is_container(n.recv.ty):
                         hits |= hit(n.recv)
                         for a in n.args:
                             hits |= hit(a)
