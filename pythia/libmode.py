@@ -37,6 +37,7 @@ from .parser import parse
 from .typecheck import Ty, typecheck
 from .emit_cpp import emit
 from . import lib_ext as _lx
+from . import classes_lib as _cl
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 from .paths import RUNTIME as _RUNTIME  # noqa: E402  (wheel or checkout)
@@ -335,6 +336,9 @@ def _trait(t: Optional[Ty]) -> Optional[str]:
     ext = _lx.trait(t, _trait)            # Optional, set, dicts of lists/dicts
     if ext is not None:
         return ext
+    ext = _cl.trait(t, _trait)            # user-class objects, lists of them (classes_lib)
+    if ext is not None:
+        return ext
     if t.name in _SCALAR:
         return _SCALAR[t.name]
     if t.name == "list" and t.elem is not None:
@@ -370,19 +374,28 @@ def _gen_wrapper(modname: str, funcs: List[A.FuncDef], tc, mut: Dict[str, Set[in
            ' * ---------------------------------------------------------------- */',
            '#include "pyrt_bridge.hpp"',
            'namespace py = pybind11;', '']
+    out += _cl.glue(tc)                   # user-class traits, bound classes, class-attribute sync
     for f in funcs:
-        sig = tc.funcs[f.name]
-        ps = f.params
-        args = ", ".join(f"py::object a_{p.name}" for p in ps)
+        sig, owner = getattr(f, "lib_sig", None) or (tc.funcs[f.name], None)
+        ps = f.params[1:] if owner else f.params
+        wname = f"{owner}__{f.name}" if owner else f.name
+        args = ", ".join(f"py::object a_{p.name}" for p in (f.params[:1] if owner else []) + ps)
         out.append(f"// {f.name}({', '.join(p.name + ': ' + str(t) for p, t in zip(ps, sig.params))}) -> {sig.ret}")
-        out.append(f"static py::object w_{f.name}({args}) {{")
+        out.append(f"static py::object w_{wname}({args}) {{")
         out.append("    pyb::Arena _arena;")
+        out += _cl.wrapper_prologue(tc, sig, owner)
+        if owner:
+            out.append(f"    pyc_T_{owner}::C c_self = pyc_T_{owner}::in(a_{f.params[0].name}.ptr());")
+            out.append(f"    if (!c_self) pyb::fallback(\"{owner}.{f.name}() called with None as self\");")
         for i, (p, t) in enumerate(zip(ps, sig.params)):
             out.append(f"    using T{i} = {_trait(t)};")
             out.append(f"    T{i}::C c_{p.name} = T{i}::in(a_{p.name}.ptr());")
+        muts = set(range(len(ps))) if owner else mut[f.name]
         wb = [f"T{i}::back(a_{ps[i].name}.ptr(), c_{ps[i].name});"
-              for i in sorted(mut[f.name]) if _is_container(sig.params[i])]
-        call = f"f_{f.name}({', '.join('c_' + p.name for p in ps)})"
+              for i in sorted(muts) if _is_container(sig.params[i])]
+        wb += _cl.writeback_lines(tc, sig, owner)
+        call = (f"m_{owner}_{f.name}(c_self{''.join(', c_' + p.name for p in ps)})" if owner
+                else f"f_{f.name}({', '.join('c_' + p.name for p in ps)})")
         has_ret = sig.ret.name != "None"
         if has_ret:
             out.append(f"    using TR = {_trait(sig.ret)};")
@@ -412,9 +425,12 @@ def _gen_wrapper(modname: str, funcs: List[A.FuncDef], tc, mut: Dict[str, Set[in
     out.append('    m.attr("PythiaSemanticError") = py::reinterpret_borrow<py::object>(pyb::SemanticError);')
     if getattr(tc, "_fn_globals", None):
         out.append('    pythia_init_globals();')
+    out += _cl.module_init(tc)            # m._pythia_bind_classes(globals())
     for f in funcs:
         pa = "".join(", " + _lx.arg_spec(p) for p in f.params)
-        out.append(f'    m.def("{f.name}", &w_{f.name}{pa});')
+        owner = (getattr(f, "lib_sig", None) or (None, None))[1]
+        wname = f"{owner}__{f.name}" if owner else f.name
+        out.append(f'    m.def("{wname}", &w_{wname}{pa});')
     out.append("}")
     return "\n".join(out) + "\n"
 
@@ -453,18 +469,20 @@ def _front(src: str, filename: str, funcs: Sequence[str], res: LibResult):
     # exposure checks
     diags = []
     for name in funcs:
-        f = next((g for g in mod.funcs if g.name == name), None)
+        hit = _cl.find_exposed(mod, tc, name)          # functions, and C.method / static methods (classes_lib)
+        f = hit[0] if hit else None
         if f is None:
             diags.append({"line": 1, "col": 1, "kind": "LibraryError",
                           "msg": f"function {name!r} is not defined at module level"})
             continue
-        sig = tc.funcs[name]
+        sig, owner = hit[1], hit[2]
+        f.lib_sig = (sig, owner) if owner else None
         _lx.check_exposed(f, lambda ln, col, msg: diags.append(
             {"line": ln, "col": col, "kind": "LibraryError", "msg": msg}))
-        for p, t in list(zip(f.params, sig.params)) + [(None, sig.ret)]:
+        for p, t in list(zip(f.params[1:] if owner else f.params, sig.params)) + [(None, sig.ret)]:
             if t.name != "None" and _trait(t) is None:
                 what = f"parameter {p.name!r}" if p else "return value"
-                why = ("class marshalling not supported" if t.name in tc.classes
+                why = (_cl.why_not(tc, t) if _cl.involves_class(tc, t)
                        else "unsupported type for marshalling")
                 diags.append({"line": f.line, "col": f.col, "kind": "LibraryError",
                               "msg": f"{name}(): {why} ({what}: {t})"})
@@ -474,7 +492,7 @@ def _front(src: str, filename: str, funcs: Sequence[str], res: LibResult):
         _fail(res, diags, _fmt_diag(diags[0]))
         return None
     notes = lower(mod, tc)
-    stats = elide_guards(mod, exposed=set(funcs))
+    stats = elide_guards(mod, exposed=set(funcs) | _cl.exposed_names(funcs))
     line_map: dict = {}
     cpp = emit(mod, tc, os.path.basename(filename), library=True, line_map=line_map)
     res.cpp_line_map = line_map
@@ -548,7 +566,7 @@ def build_library(src: str, funcs: Sequence[str], out_dir: str, modname: Optiona
         return res
     mod, tc, notes, stats, cpp = front
     mut = _mutated_params(mod)
-    fdefs = [next(g for g in mod.funcs if g.name == n) for n in funcs]
+    fdefs = [_cl.find_exposed(mod, tc, n)[0] for n in funcs]
 
     # modname default depends on the hash, the hash on the wrapper text: hash a
     # wrapper generated with a placeholder name, then substitute the real one.
@@ -560,12 +578,16 @@ def build_library(src: str, funcs: Sequence[str], out_dir: str, modname: Optiona
     res.modname, res.cpp, res.wrapper_cpp, res.build_hash = modname, cpp, wrapper, bh
     res.fidelity = _library_notes(mod, notes) + res.fidelity
     res.guard_elision = {"elided": stats.elided, "kept": stats.kept}
-    res.exposed = [{"name": f.name,
-                    "params": [str(t) for t in tc.funcs[f.name].params],
-                    "ret": str(tc.funcs[f.name].ret),
+    def _sig(f):
+        return getattr(f, "lib_sig", None) or (tc.funcs[f.name], None)
+    res.exposed = [{"name": n if _sig(f)[1] else f.name,
+                    "params": [str(t) for t in _sig(f)[0].params],
+                    "ret": str(_sig(f)[0].ret),
                     "param_names": [p.name for p in f.params],
                     "mutates": [f.params[i].name for i in sorted(mut[f.name])
-                                if _is_container(tc.funcs[f.name].params[i])]} for f in fdefs]
+                                if _is_container(tc.funcs[f.name].params[i])] if not _sig(f)[1] else
+                               [p.name for p, t in zip(f.params[1:], _sig(f)[0].params) if _is_container(t)]}
+                   for n, f in zip(funcs, fdefs)]
 
     os.makedirs(out_dir, exist_ok=True)
     cpp_path = os.path.join(out_dir, modname + ".cpp")

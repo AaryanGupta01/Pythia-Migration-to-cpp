@@ -12,7 +12,9 @@
 #include <pybind11/pybind11.h>
 #include <algorithm>
 #include <cstring>
+#include <functional>
 #include <string>
+#include <unordered_map>
 #include "pyrt.hpp"
 
 namespace pyb {
@@ -260,6 +262,74 @@ template <class E, class T> struct Set {
     static PyObject *out(C s) { py::object r = steal(PySet_New(nullptr)); fill(r.ptr(), s); return r.release().ptr(); }
     static void back(PyObject *dst, C s) { if (PySet_Clear(dst) < 0) throw py::error_already_set(); fill(dst, s); }
 };
+
+// ---- user-class objects (pythia/classes_lib.py generates the per-class traits) ------------------------------
+// Attributes are written back after the call, so their Python type must survive the round trip exactly:
+// an int stored in a float attribute / a bool in an int attribute runs in Python instead.
+struct I64x : I64 {
+    static C in(PyObject *o) { if (PyBool_Check(o)) fallback("expected int, found bool"); return I64::in(o); }
+};
+struct F64x : F64 {
+    static C in(PyObject *o) {
+        if (!PyFloat_Check(o)) fallback("expected float (an int stored in a float attribute runs in Python)");
+        return PyFloat_AS_DOUBLE(o);
+    }
+};
+// One ObjCtx per call: Python object <-> C++ object memo (identity, shared / cyclic graphs), the original Python
+// containers of list/dict/set fields (written back in place), write-back actions for every inbound object.
+struct ObjCtx {
+    std::unordered_map<PyObject *, std::shared_ptr<void>> in;
+    std::unordered_map<const void *, PyObject *> out;
+    std::unordered_map<const void *, PyObject *> conts;
+    std::vector<std::function<void()>> wb;
+    std::vector<py::object> keep;
+};
+inline ObjCtx *&objctx() { static thread_local ObjCtx *c = nullptr; return c; }
+struct ObjScope {
+    ObjCtx c;
+    ObjCtx *prev;
+    ObjScope() : prev(objctx()) { objctx() = &c; }
+    ~ObjScope() { objctx() = prev; }
+    ObjScope(const ObjScope &) = delete;
+    ObjScope &operator=(const ObjScope &) = delete;
+    void writeback() { for (size_t i = 0; i < c.wb.size(); ++i) c.wb[i](); }
+};
+inline py::object getattr_fb(PyObject *o, const char *name) {
+    PyObject *v = PyObject_GetAttrString(o, name);
+    if (!v) {
+        PyErr_Clear();
+        std::string m = std::string("attribute '") + name + "' is not set on the object";
+        fallback(m.c_str());
+    }
+    return steal(v);
+}
+inline py::object class_attr(PyObject *cls, const char *name) {      // the class's own attribute (its __dict__)
+    py::object d = steal(PyObject_GetAttrString(cls, "__dict__"));
+    PyObject *v = PyMapping_GetItemString(d.ptr(), name);
+    if (!v) { PyErr_Clear(); std::string m = std::string("class attribute '") + name + "' is missing"; fallback(m.c_str()); }
+    return steal(v);
+}
+inline void setattr_(PyObject *o, const char *name, PyObject *v) {
+    if (PyObject_SetAttrString(o, name, v) < 0) throw py::error_already_set();
+}
+template <class T> void track(const typename T::C &v, PyObject *py) {      // a container that came from Python
+    if (v) {
+        objctx()->conts[static_cast<const void *>(v)] = py;
+        objctx()->keep.push_back(py::reinterpret_borrow<py::object>(py));
+    }
+}
+template <class T> void put_field(PyObject *o, const char *name, const typename T::C &v) {
+    py::object x = steal(T::out(v));
+    setattr_(o, name, x.ptr());
+}
+template <class T> void put_cont(PyObject *o, const char *name, const typename T::C &v) {
+    ObjCtx *c = objctx();
+    if (v) {
+        auto it = c->conts.find(static_cast<const void *>(v));
+        if (it != c->conts.end()) { T::back(it->second, v); setattr_(o, name, it->second); return; }
+    }
+    put_field<T>(o, name, v);
+}
 
 }  // namespace pyb
 #endif

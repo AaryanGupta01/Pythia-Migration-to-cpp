@@ -55,6 +55,8 @@ def widens_to(src: Ty, dst: Ty) -> bool:
     """Implicit-conversion lattice.  bool -> int -> float."""
     if src == dst or src is ERR or dst is ERR:
         return True
+    if _cls.sub_widens(src, dst):              # Sub -> Base upcast (classes_ext)
+        return True
     ext = _x.widens(src, dst)                 # Optional / nullable objects (types_ext)
     if ext is not None:
         return ext
@@ -71,7 +73,7 @@ def join(a: Ty, b: Ty) -> Ty:
         return FLOAT if FLOAT in (a, b) else INT
     if a.name == b.name and a.name in ("list", "dict") and (a.elem is None or b.elem is None):
         return b if a.elem is None else a                     # [] next to [1, 2], {} next to {"k": 1}
-    return ERR
+    return _cls.join(a, b) or ERR                             # nearest common base class (classes_ext)
 
 
 # ------------------------------------------------------------ symbol table
@@ -188,6 +190,8 @@ class TypeChecker:
     def resolve_type(self, te: Optional[A.TypeExpr]) -> Ty:
         if te is None:
             return NONE
+        if getattr(te, "pre", None) is not None:  # resolved ahead of pass 1 (classes_ext field inference)
+            return te.pre
         ext = _x.resolve_type(self, te)       # typing names, Optional, unions, set, dict values (types_ext)
         if ext is not None:
             return ext
@@ -249,6 +253,7 @@ class TypeChecker:
                 self.err(c, f"class {c.name!r} is already defined")
                 continue
             self.classes[c.name] = ClassInfo(c.name, [], [], {}, {}, c)
+        _cls.prepare(self)                    # bases, decorators, class attributes, inferred fields (classes_ext)
 
         # pass 1: resolve field types and method signatures
         for c in self.mod.classes:
@@ -256,6 +261,7 @@ class TypeChecker:
             if info is None:
                 continue
             seen = set()
+            _cls.inherit(self, c, info)           # base-class fields first
             for fld in c.fields:
                 if fld.name in seen:
                     self.err(fld, f"duplicate field {fld.name!r} in class {c.name!r}")
@@ -279,10 +285,12 @@ class TypeChecker:
                         self.err(m, "__init__ must not declare a return type "
                                     "other than None, matching Python")
                     info.init = sig
-            if info.fields and info.init is None:
+            if info.fields and info.init is None and _cls.needs_init(self, c, info):
                 self.err(c, f"class {c.name!r} declares typed fields but no "
                             f"__init__; PySub requires an explicit constructor "
                             f"so field initialisation can never be skipped")
+
+        _cls.after_pass1(self)                # inherited methods, overrides, class ids, dunder signatures
 
         # pass 2: collect function signatures so functions may be mutually recursive
         for f in self.mod.funcs:
@@ -368,6 +376,8 @@ class TypeChecker:
 
     # ---- statements --------------------------------------------------------
     def check_stmt(self, s: A.Node) -> None:
+        if _cls.check_stmt(self, s):          # class attributes, properties, __setitem__, __iadd__ (classes_ext)
+            return
         if isinstance(s, A.ForEach) and _comp().is_special_foreach(self, s):   # enumerate/zip/reversed loops
             _comp().check_foreach(self, s)
             return
@@ -635,6 +645,9 @@ class TypeChecker:
         return t
 
     def _synth(self, e: A.Node) -> Ty:
+        ext = _cls.synth(self, e)             # user-class constructs: dunders, super(), class attributes ...
+        if ext is not None:
+            return ext
         ext = _x.synth(self, e)               # names (narrowing, globals), sets, None tests, isinstance ...
         if ext is not None:
             return ext
@@ -813,6 +826,9 @@ class TypeChecker:
         return self.err(e, f"unsupported expression {type(e).__name__}")
 
     def binop_result(self, node: A.Node, op: str, lt: Ty, rt: Ty) -> Ty:
+        ext = _cls.binop(self, node, op, lt, rt)  # __add__ / __radd__ ... on user classes
+        if ext is not None:
+            return ext
         ext = _x.binop(self, node, op, lt, rt)
         if ext is not None:
             return ext
@@ -858,6 +874,9 @@ class TypeChecker:
         if _bx.is_fromkeys(self, e):
             return _bx.synth_fromkeys(self, e)
         hooked = _comp().synth_method_hook(self, e)
+        if hooked is not None:
+            return hooked
+        hooked = _cls.synth_method(self, e)           # super().m(), C.m(obj), list[C].sort(), static/property misuse
         if hooked is not None:
             return hooked
         recv = self.synth(e.recv)
@@ -1005,6 +1024,9 @@ class TypeChecker:
         hooked = _comp().synth_call_hook(self, e)     # generator / key= / enumerate-zip arguments: claim them first
         if hooked is not None:
             return hooked
+        hooked = _cls.synth_call(self, e)             # str/repr/len/bool/abs/sorted/min/max of user objects, super()
+        if hooked is not None:
+            return hooked
         ext = _x.synth_call(self, e)          # isinstance, set(), defaults/keywords of user functions ...
         if ext is not None:
             return ext
@@ -1021,11 +1043,11 @@ class TypeChecker:
                 t = self.synth(a)
                 if t == NONE:
                     self.err(a, "cannot print a value of type None")
-                if t.name in self.classes:
+                if t.name in self.classes and not _cls.print_ok(self, t, a):
                     self.err(a, f"cannot print a {t.name} instance directly: "
                                 f"PySub classes have no reproducible repr(); "
                                 f"print specific fields instead")
-                if t.name == "list" and t.elem is not None and t.elem.name in self.classes:
+                if t.name == "list" and t.elem is not None and t.elem.name in self.classes and not _cls.print_ok(self, t, a):
                     self.err(a, f"cannot print a list of {t.elem.name} instances: "
                                 f"PySub classes have no reproducible repr(); "
                                 f"print specific fields instead")
@@ -1146,7 +1168,7 @@ class TypeChecker:
                 if t.name == "tuple":
                     return STR if _tup.reprable(t) else self.err(
                         e.args[0], f"str() of a {t} has no reproducible repr in PySub")
-                if t.name in self.classes:
+                if t.name in self.classes and not _cls.can_str(self, t.name):
                     return self.err(e.args[0], f"str() of a {t.name} instance has no reproducible repr in PySub; "
                                                f"format its fields instead")
                 return STR
@@ -1193,6 +1215,7 @@ class TypeChecker:
 from . import builtins_ext as _bx  # noqa: E402  (math / bitwise / slice / extra methods; imports this module's types)
 from . import tuples as _tup  # noqa: E402  (tuples.py builds on Ty, defined above)
 from . import types_ext as _x  # noqa: E402  (PySub 1.3 type-system extensions; imports this module)
+from . import classes_ext as _cls  # noqa: E402  (user classes: inheritance, dunders, class attributes ...)
 
 
 def _comp():

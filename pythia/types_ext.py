@@ -398,6 +398,10 @@ def _declared(tc, e) -> Optional[Ty]:
 
 def facts(tc, e) -> Tuple[Dict[str, Ty], Dict[str, Ty]]:
     """(names narrowed when e is true, names narrowed when e is false)."""
+    from . import classes_ext
+    cf = classes_ext.facts(tc, e)                 # isinstance(x, Sub) narrows a base-typed x
+    if cf is not None:
+        return cf
     if isinstance(e, A.UnaryOp) and e.op == "not":
         t, f = facts(tc, e.operand)
         return f, t
@@ -616,6 +620,11 @@ def _name(tc, e) -> Optional[Ty]:
         e.global_ref = True
         tc._fn_globals.add(e.id)
     nt = tc._narrow.get(e.id)
+    if nt is not None and is_class(t):
+        from . import classes_ext
+        dn = classes_ext.narrowed(tc, e, t, nt)    # isinstance-narrowed object reference: a downcast
+        if dn is not None:
+            return dn
     if nt is not None and t.name == "optional":
         e.unwrap = opt_scalar(t)
         return nt
@@ -690,6 +699,10 @@ def _matches(c: str, cls: str, exact: bool) -> bool:
 
 def decide(tc, x_node, t: Ty, wanted: List[str], exact: bool, what: str, at) -> Optional[tuple]:
     """('const', bool) | ('test', node, nonnull) | None after an error."""
+    from . import classes_ext
+    hier = classes_ext.decide(tc, x_node, t, wanted, exact, what, at)   # class hierarchies: run-time class id
+    if hier is not None:
+        return hier
     nullable = t.name == "optional" or is_class(t)
     base = t.elem if t.name == "optional" else t
     cs = _classes(base, x_node)

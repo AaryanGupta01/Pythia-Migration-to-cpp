@@ -1155,4 +1155,36 @@ template <class D> auto *pyd_most_common(D *d, int64_t n, bool all) {
     return r;
 }
 }  // namespace pyrt
+
+// ==== user classes (pythia/classes_ext.py): ordering through user __lt__/__gt__, dunder result checks ==========
+namespace pyrt {
+[[noreturn]] inline void pyc_type_error(const std::string &m) { throw PythonException("TypeError", m); }
+// len(obj): CPython checks the __len__ result
+inline int64_t pyc_len_check(int64_t n) { if (n < 0) throw ValueError("__len__() should return >= 0"); return n; }
+// an operation on None that CPython reports as TypeError (len(None), None[i], -None, ...)
+template <class P> inline const P &pyc_nn_type(const P &p, const char *msg) { if (!p) throw PythonException("TypeError", msg); return p; }
+template <class P> inline const P &pyc_nn_iter(const P &p) {
+    if (!p) throw PythonException("TypeError", "argument of type 'NoneType' is not iterable");
+    return p;
+}
+// list.sort() / sorted() with a user comparison: stable like timsort; the list keeps its old contents if a
+// comparison raises.  (Which pairs get compared differs from timsort: only a side-effect-free __lt__ is exact.)
+template <class T, class L> void pyc_sort(PyList<T> *l, bool rev, L lt) {
+    std::vector<T> items = l->data;
+    if (rev) std::reverse(items.begin(), items.end());
+    std::stable_sort(items.begin(), items.end(), [&](const T &a, const T &b) { return lt(a, b); });
+    if (rev) std::reverse(items.begin(), items.end());
+    l->data.swap(items);
+}
+template <class T, class L> PyList<T> *pyc_sorted(PyList<T> *l, bool rev, L lt) {
+    auto *r = pyl_copy(l); pyc_sort(r, rev, lt); return r;
+}
+// min(xs) keeps the first item no later item is `<`; max(xs) the first no later item is `>` (CPython's order)
+template <class T, class L> T pyc_minmax(PyList<T> *l, L better, const char *fn) {
+    if (l->data.empty()) py_minmax_empty(fn);
+    T r = l->data[0];
+    for (size_t i = 1; i < l->data.size(); ++i) { T x = l->data[i]; if (better(x, r)) r = x; }
+    return r;
+}
+}  // namespace pyrt
 #endif

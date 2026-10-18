@@ -74,6 +74,7 @@ class Lowerer:
             self.block(f.body)
         self.block(mod.main)
         _x.lower_defaults(self, mod)
+        _cls.lower_notes(self, mod)           # user comparisons in sort/min/max (classes_ext)
         if mod.classes:
             self.notes.append(FidelityNote(
                 0, 0, D_FIELDINIT,
@@ -385,6 +386,7 @@ class Lowerer:
 
 
 from . import types_ext as _x  # noqa: E402
+from . import classes_ext as _cls  # noqa: E402
 
 
 def lower(mod: A.Module, tc: TypeChecker) -> List[FidelityNote]:
