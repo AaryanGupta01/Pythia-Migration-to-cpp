@@ -107,21 +107,27 @@ def ranked(fn: ast.FunctionDef, name: str) -> List[object]:
 
 def best_assignment(unresolved: List[Tuple[str, ast.FunctionDef, str]],
                     build: Callable[[Dict[tuple, object]], Optional[str]],
-                    accepts: Callable[[str], bool]):
+                    errors: Callable[[str], int]):
     """unresolved: [(qualname, FunctionDef, param name)]. build(seeds) -> converted source (or None);
-    accepts(source) -> the PySub type checker takes it. Best-first over the product of the per-parameter rankings."""
+    errors(source) -> how many problems the PySub type checker reports (0 = accepted). Best-first over the product
+    of the per-parameter rankings; the first program with no errors wins, otherwise the guess that leaves the
+    fewest errors (the rest of the program may need things only the user can fix)."""
     lists = [ranked(fn, p) for _q, fn, p in unresolved]
     combos = sorted(itertools.product(*[range(len(x)) for x in lists]), key=lambda ix: (sum(ix), ix))
-    for ix in combos[:MAX_TRIES]:
+    best = None
+    for n, ix in enumerate(combos[:MAX_TRIES]):
         seeds = {("var", q, p): lists[k][ix[k]] for k, (q, _fn, p) in enumerate(unresolved)}
         out = build(seeds)
-        if out is not None and accepts(out):
+        if out is None:
+            continue
+        e = errors(out)
+        if e == 0:
             return seeds, out
-        if out is not None and not best_assignment.tried:
-            best_assignment.first = (seeds, out)      # the most plausible guess, kept for diagnostics
-        best_assignment.tried += 1
-    return None
+        if best is None or e < best[0]:
+            best = (e, seeds, out)
+        if n >= MAX_UNSUCCESSFUL:
+            break
+    return (best[1], best[2]) if best else None
 
 
-best_assignment.tried = 0
-best_assignment.first = None
+MAX_UNSUCCESSFUL = 150

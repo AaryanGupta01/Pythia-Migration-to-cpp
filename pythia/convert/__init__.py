@@ -236,12 +236,16 @@ def strip_doctest(source: str) -> str:
     return "\n".join(lines)
 
 
-def _compiles(src: str) -> bool:
+def _error_count(src: str) -> int:
     try:
         from ..cli import compile_source
-        return not compile_source(src, "convert.py")[2]
+        return len(compile_source(src, "convert.py")[2])
     except Exception:
-        return False
+        return 10 ** 6
+
+
+def _compiles(src: str) -> bool:
+    return _error_count(src) == 0
 
 
 def _guess_uncalled(tree, eng, seeds, build_with, plan, out):
@@ -271,7 +275,7 @@ def _guess_uncalled(tree, eng, seeds, build_with, plan, out):
         o2 = p2.apply()
         cache[o2] = p2
         return o2
-    hit = search.best_assignment(unresolved, build, _compiles)
+    hit = search.best_assignment(unresolved, build, _error_count)
     if hit is None:
         return None
     sd, o = hit

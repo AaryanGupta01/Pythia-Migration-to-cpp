@@ -199,6 +199,9 @@ class Lowerer:
             return e
 
         if isinstance(e, A.BoolOp):
+            if getattr(e, "cond_only", False):
+                e.values = [self.expr(v) for v in e.values]          # truthiness of each operand, no common type
+                return e
             e.values = [self.coerce(self.expr(v), e.ty) for v in e.values]
             return e
 
@@ -332,10 +335,11 @@ class Lowerer:
             c.ty = want
             if e.ty == INT and want == FLOAT:
                 self.note(e, D_TRUEDIV,
-                          "int operand widened to float, matching CPython's "
-                          "numeric tower.",
-                          "explicit (double) conversion; exact for |n| < 2**53.",
-                          "exact")
+                          "an int is stored or passed where a float is declared. CPython keeps it an int (it prints "
+                          "0, not 0.0, when the value is shown as it is); the compiled code holds a float.",
+                          "arithmetic is identical (exact for |n| < 2**53); only printing or str() of an "
+                          "unmodified widened value differs (0 vs 0.0).",
+                          "guarded")
             return c
         if e.ty.name == "list" and e.ty.elem is None and want.name == "list":
             e.ty = want

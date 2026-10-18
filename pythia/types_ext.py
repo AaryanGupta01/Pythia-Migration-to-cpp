@@ -41,7 +41,7 @@ def opt_of(t: Ty) -> Ty:
 
 
 def opt_scalar(t: Optional[Ty]) -> bool:
-    return t is not None and t.name == "optional" and t.elem.name in SCALARS
+    return t is not None and t.name == "optional" and (t.elem.name in SCALARS or t.elem.name == "tuple")
 
 
 def set_of(t: Ty) -> Ty:
@@ -640,6 +640,8 @@ def _boolop(tc, e) -> Ty:
     t1 = _narrowed(tc, tt if e.op == "and" else ff, v1)
     if ERR in (t0, t1):
         return ERR
+    if getattr(e, "cond_only", False):
+        return BOOL                              # only the truthiness is used (if / while / not)
     if t0 == t1:
         return t0
     j = join(t0, t1)
@@ -870,6 +872,9 @@ def _repr_ok(t: Ty, top: bool = True) -> bool:
         return _repr_ok(t.elem, False)
     if t.name == "optional":
         return _repr_ok(t.elem, top)
+    if t.name == "tuple":
+        from . import tuples
+        return tuples.reprable(t)
     return False
 
 

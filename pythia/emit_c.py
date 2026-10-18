@@ -75,7 +75,7 @@ def ctype(t: Optional[Ty]) -> str:
 
 
 def zero(t: Ty) -> str:
-    if t.name == "optional" and t.elem.name in ("int", "float", "bool"):
+    if t.name == "optional" and t.elem.name in ("int", "float", "bool", "tuple"):
         return "std::nullopt"
     return {"int": "0", "float": "0.0", "bool": "false", "tuple": "{}"}.get(t.name, "NULL")
 

@@ -41,6 +41,8 @@ def reprable(t: Optional[Ty]) -> bool:
         return False
     if t.name in PRIM:
         return True
+    if t.name == "optional":                    # shown as None or the value's repr
+        return reprable(t.elem)
     if t.name == "tuple":
         return all(reprable(x) for x in t.elts)
     if t.name == "list":

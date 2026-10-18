@@ -585,7 +585,17 @@ class TypeChecker:
             self.err(s.value, f"returning {got} from a function declared -> {want}")
         s.ty = want
 
+    def mark_cond(self, e: A.Node) -> None:
+        """`a and b` / `a or b` / `not a` used only as a condition: their operands need no common type."""
+        if isinstance(e, A.BoolOp):
+            e.cond_only = True
+            for v in e.values:
+                self.mark_cond(v)
+        elif isinstance(e, A.UnaryOp) and e.op == "not":
+            self.mark_cond(e.operand)
+
     def check_truthy(self, e: A.Node) -> None:
+        self.mark_cond(e)
         t = self.synth(e)
         if t.name == "None" or t is ERR:
             if t.name == "None":
@@ -709,6 +719,8 @@ class TypeChecker:
         if isinstance(e, A.BoolOp):
             for v in e.values:
                 self.synth(v)
+            if getattr(e, "cond_only", False):
+                return BOOL                      # only its truthiness is used (if / while / not)
             ts = [v.ty for v in e.values]
             # Python returns an operand, not a bool. If both sides share a type
             # we keep it; otherwise we require bool to stay translatable.

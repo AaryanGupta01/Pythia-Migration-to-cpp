@@ -21,6 +21,8 @@ def ctype(t: Ty) -> Optional[str]:
     if t.name == "optional":
         if t.elem.name in ("int", "float", "bool"):
             return f"std::optional<{_SCALAR_C[t.elem.name]}> "
+        if t.elem.name == "tuple":                 # a value type: std::optional, like the scalars
+            return f"std::optional<{_c(t.elem)}> "
         return _c(t.elem) + " "
     if t.name == "set":
         return f"PySet<{_SCALAR_C[t.elem.name]}> *"
