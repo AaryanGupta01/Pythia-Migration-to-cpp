@@ -127,7 +127,7 @@ PyListList *PyListList_new(){return arena_new<PyListList>();} void PyListList_ap
 
 static std::string key_repr(int64_t k) { return std::to_string(k); }
 static std::string key_repr(PyStr *k) { return py_repr_str(k->data); }
-#define DICT_IMPL(NAME,KT,VT,EQ) NAME *NAME##_new(){return arena_new<NAME>();} static int64_t NAME##_find(NAME*d,KT k){for(int64_t i=0;i<d->size();++i)if(EQ(d->keys[i],k))return i;return -1;} void NAME##_set(NAME*d,KT k,VT v){auto i=NAME##_find(d,k);if(i<0){d->keys.push_back(k);d->vals.push_back(v);}else d->vals[i]=v;} VT NAME##_get(NAME*d,KT k){auto i=NAME##_find(d,k);if(i<0)throw KeyError(key_repr(k).c_str());return d->vals[i];} VT NAME##_get_default(NAME*d,KT k,VT v){auto i=NAME##_find(d,k);return i<0?v:d->vals[i];} bool NAME##_contains(NAME*d,KT k){return NAME##_find(d,k)>=0;}
+#define DICT_IMPL(NAME,KT,VT,EQ) NAME *NAME##_new(){return arena_new<NAME>();} static int64_t NAME##_find(NAME*d,KT k){for(int64_t i=0;i<d->size();++i)if(EQ(d->keys[i],k))return i;return -1;} void NAME##_set(NAME*d,KT k,VT v){auto i=NAME##_find(d,k);if(i<0){d->keys.push_back(k);d->vals.push_back(v);}else d->vals[i]=v;} VT NAME##_get(NAME*d,KT k){auto i=NAME##_find(d,k);if(i<0){if(d->mode)return pyd_missing(d,k);throw KeyError(key_repr(k).c_str());}return d->vals[i];} VT NAME##_get_default(NAME*d,KT k,VT v){auto i=NAME##_find(d,k);return i<0?v:d->vals[i];} bool NAME##_contains(NAME*d,KT k){return NAME##_find(d,k)>=0;}
 DICT_IMPL(PyDictIntInt,int64_t,int64_t,[](auto a,auto b){return a==b;})
 DICT_IMPL(PyDictIntFloat,int64_t,double,[](auto a,auto b){return a==b;})
 DICT_IMPL(PyDictIntBool,int64_t,bool,[](auto a,auto b){return a==b;})
@@ -142,7 +142,7 @@ static bool first=true; void py_print_begin(){first=true;} void py_print_sep(){i
 PRINT_LIST(py_print_list_i64,PyListI64,py_print_i64) PRINT_LIST(py_print_list_f64,PyListF64,py_print_f64) PRINT_LIST(py_print_list_bool,PyListBool,py_print_bool)
 static void print_repr(PyStr*s){std::cout<<py_repr_str(s->data);} PRINT_LIST(py_print_list_str,PyListStr,print_repr)
 void py_print_list_generic(PyListList*l,void(*f)(void*)){std::cout<<'[';for(size_t i=0;i<l->data.size();++i){if(i)std::cout<<", ";f(l->data[i]);}std::cout<<']';}
-#define PRINT_DICT(FN,DT,K,V) void FN(DT*d){std::cout<<'{';for(size_t i=0;i<d->keys.size();++i){if(i)std::cout<<", ";K(d->keys[i]);std::cout<<": ";V(d->vals[i]);}std::cout<<'}';}
+#define PRINT_DICT(FN,DT,K,V) void FN(DT*d){if(d->mode){py_print_repr(d);return;}std::cout<<'{';for(size_t i=0;i<d->keys.size();++i){if(i)std::cout<<", ";K(d->keys[i]);std::cout<<": ";V(d->vals[i]);}std::cout<<'}';}
 PRINT_DICT(py_print_dict_intint,PyDictIntInt,py_print_i64,py_print_i64) PRINT_DICT(py_print_dict_intfloat,PyDictIntFloat,py_print_i64,py_print_f64) PRINT_DICT(py_print_dict_intbool,PyDictIntBool,py_print_i64,py_print_bool) PRINT_DICT(py_print_dict_intstr,PyDictIntStr,py_print_i64,print_repr)
 PRINT_DICT(py_print_dict_strint,PyDictStrInt,print_repr,py_print_i64) PRINT_DICT(py_print_dict_strfloat,PyDictStrFloat,print_repr,py_print_f64) PRINT_DICT(py_print_dict_strbool,PyDictStrBool,print_repr,py_print_bool) PRINT_DICT(py_print_dict_strstr,PyDictStrStr,print_repr,print_repr)
 void py_print_exception(const PythonException &e) { std::cerr << e.what() << '\n'; }

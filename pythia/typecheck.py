@@ -602,6 +602,7 @@ class TypeChecker:
             return expected
         if t.name == "dict" and t.key is None and expected.name == "dict":
             e.ty = expected
+            _x.check_factory(self, e)         # defaultdict(int) / Counter() against the declared value type
             return expected
         if t.name == "set" and t.elem is None and expected.name == "set":
             e.ty = expected

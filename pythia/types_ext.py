@@ -28,11 +28,13 @@ SCALARS = ("int", "float", "bool")
 # Modules a PySub program may import, and the names it may import from each (None = any name; the
 # names are then checked where they are used).  Other workstreams add rows here (e.g. "math").
 ALLOWED_IMPORTS: Dict[str, Optional[Set[str]]] = {
-    "typing": {"List", "Dict", "Set", "Tuple", "Optional", "Union", "Sequence", "Iterable"},
+    "typing": {"List", "Dict", "Set", "Tuple", "Optional", "Union", "Sequence", "Iterable", "DefaultDict"},
     "__future__": {"annotations"},
+    "collections": {"defaultdict", "Counter"},
 }
 TYPING_ALIAS = {"List": "list", "Dict": "dict", "Set": "set", "Tuple": "tuple", "Optional": "Optional",
-                "Union": "Union", "Sequence": "list", "Iterable": "list"}
+                "Union": "Union", "Sequence": "list", "Iterable": "list",
+                "DefaultDict": "dict"}
 
 
 def is_class(t: Optional[Ty]) -> bool:
@@ -91,6 +93,7 @@ def check_imports(tc) -> None:
     tc.typing_names = {}             # local name -> typing name
     tc.typing_modules = set()        # local names bound to the typing module
     tc.future_annotations = False
+    tc.collections_names = {}        # local name -> 'defaultdict' | 'Counter'
     for imp in tc.mod.imports:
         if imp.module not in ALLOWED_IMPORTS:
             _err(tc, imp, f"import of {imp.module!r} is outside the PySub subset "
@@ -102,6 +105,9 @@ def check_imports(tc) -> None:
                 _err(tc, imp, "write `from __future__ import annotations`")
             if imp.module == "typing":
                 tc.typing_modules.add(imp.alias or "typing")
+            if imp.module == "collections":
+                _err(tc, imp, "write `from collections import defaultdict, Counter` (collections.X is not "
+                              "supported in PySub)")
             continue
         for n, alias in zip(imp.names, imp.asnames):
             if allowed is not None and n not in allowed:
@@ -112,6 +118,8 @@ def check_imports(tc) -> None:
                 tc.typing_names[alias or n] = n
             elif imp.module == "__future__":
                 tc.future_annotations = True
+            elif imp.module == "collections":
+                tc.collections_names[alias or n] = n
 
 
 def _te(src: A.TypeExpr, name: str, args) -> A.TypeExpr:
@@ -153,6 +161,14 @@ def resolve_type(tc, te: A.TypeExpr) -> Optional[Ty]:
         if mod not in getattr(tc, "typing_modules", ()):
             return _err(tc, te, f"unknown type {name!r}")
         name, via_typing = attr, True
+    elif coll_name(tc, name) == "defaultdict":
+        name = "dict"                              # defaultdict[K, V] annotates a dict[K, V]
+    elif coll_name(tc, name) == "Counter":
+        if args is None or len(args) != 1:
+            return _err(tc, te, "Counter takes exactly 1 type argument, e.g. Counter[str]")
+        k = tc.resolve_type(args[0])
+        return ERR if k is ERR else dict_of(k, INT) if k.name in ("int", "str") else \
+            _err(tc, te, f"Counter keys must be int or str in PySub; found {k}")
     elif name in getattr(tc, "typing_names", {}):
         name, via_typing = tc.typing_names[name], True
     elif name in TYPING_ALIAS:
@@ -818,6 +834,8 @@ def synth_method(tc, e, recv: Ty) -> Optional[Ty]:
         if sig is not None and not bind_args(tc, e, sig, f"{recv.name}.{e.method}"):
             return ERR
         return None
+    if recv.name == "dict" and e.method == "most_common":
+        return most_common(tc, e, recv)
     if recv.name != "set":
         return None
     tc.check_kwargs(e, set())
@@ -874,6 +892,8 @@ def synth_call(tc, e) -> Optional[Ty]:
         return None
     if name == "isinstance":
         return _isinstance(tc, e)
+    if coll_name(tc, name):
+        return synth_collections(tc, e, coll_name(tc, name))
     if name == "type":
         return _err(tc, e, "type() is supported only in comparisons such as `type(x) == int`")
     if name == "set":
@@ -1032,3 +1052,71 @@ def lower_expr(lw, e):
                   for a in e.args]
         return e
     return None
+
+
+# ------------------------------------------------------------------ collections.defaultdict / Counter
+# Both are ordinary dicts at the type level (dict[K, V] / dict[K, int]); the runtime dict object carries the
+# behaviour (missing key: insert the factory's value / read 0), so a defaultdict passed as `dict[...]` behaves
+# exactly as in CPython.
+FACTORIES = {"int": "int", "float": "float", "str": "str", "bool": "bool", "list": "list", "set": "set",
+             "dict": "dict"}
+
+
+def coll_name(tc, name: str) -> Optional[str]:
+    """'defaultdict' / 'Counter' if `name` is bound to collections.defaultdict / collections.Counter."""
+    return getattr(tc, "collections_names", {}).get(name)
+
+
+def _factory_ok(f: str, v: Ty) -> bool:
+    if f == "Counter":
+        return v == INT
+    return v.name == FACTORIES[f] if f in ("list", "set", "dict") else v == Ty(f)
+
+
+def check_factory(tc, e) -> None:
+    """After check mode resolved an empty defaultdict(...)/Counter() to the expected dict type."""
+    f = getattr(e, "factory", None)
+    if f is None or e.ty is None or e.ty.name != "dict":
+        return
+    if not _factory_ok(f, e.ty.elem):
+        what = "Counter()" if f == "Counter" else f"defaultdict({f})"
+        _err(tc, e, f"{what} makes values of type {'int' if f == 'Counter' else f}, but the dict is "
+                    f"declared {e.ty}")
+
+
+def synth_collections(tc, e, kind: str) -> Ty:
+    tc.check_kwargs(e, set())
+    if kind == "defaultdict":
+        if len(e.args) != 1 or not isinstance(e.args[0], A.Name) or e.args[0].id not in FACTORIES:
+            return _err(tc, e, "defaultdict() needs one factory in PySub: int, float, str, bool, list, set or dict")
+        e.factory = e.args[0].id
+        e.args[0].ty = NONE
+        return Ty("dict", None, None)                 # resolved by the annotation, like {}
+    e.factory = "Counter"
+    if not e.args:
+        return Ty("dict", None, None)
+    if len(e.args) != 1:
+        return _err(tc, e, "Counter() takes one list or str in PySub")
+    t = tc.synth(e.args[0])
+    if t is ERR:
+        return ERR
+    if t == STR:
+        return dict_of(STR, INT)
+    if t.name == "list" and t.elem is not None and (t.elem.name in ("int", "str") or t.elem.name == "tuple"):
+        if t.elem.name == "tuple":
+            from . import tuples
+            return tuples.resolve_dict(tc, e, t.elem, INT)
+        return dict_of(t.elem, INT)
+    return _err(tc, e.args[0], f"Counter() counts a str or a list of int, str or tuples in PySub, found {t}")
+
+
+def most_common(tc, e, recv: Ty) -> Ty:
+    from . import tuples
+    tc.check_kwargs(e, set())
+    if recv.elem != INT:
+        return _err(tc, e, f"most_common() needs a Counter (dict[K, int]), found {recv}")
+    if len(e.args) > 1:
+        return _err(tc, e, "most_common() takes at most one argument")
+    if e.args:
+        tc._want(e.args[0], INT, "most_common() n")
+    return list_of(tuples.tuple_of([recv.key, INT]))

@@ -491,6 +491,8 @@ class Emitter:
     def _has_call(n) -> bool:
         if isinstance(n, (A.Call, A.MethodCall)):
             return True
+        if isinstance(n, A.Subscript) and n.value.ty is not None and n.value.ty.name == "dict":
+            return True                   # d[k] may insert (defaultdict)
         if isinstance(n, A.Node):
             return any(Emitter._has_call(getattr(n, f)) for f in n.__dataclass_fields__ if f != "ty")
         if isinstance(n, list):

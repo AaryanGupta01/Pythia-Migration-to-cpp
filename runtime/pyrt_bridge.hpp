@@ -197,7 +197,7 @@ template <class Inner> struct List2 {
 template <class K, class V, class D> struct Dict {
     using C = D *;
     static C in(PyObject *o) {
-        if (!PyDict_Check(o)) fallback("expected dict");
+        if (!PyDict_CheckExact(o)) fallback("expected dict (defaultdict/Counter arguments run in Python)");
         C d = pyrt::arena_new<D>();
         Py_ssize_t pos = 0;
         PyObject *k, *v;
@@ -215,6 +215,7 @@ template <class K, class V, class D> struct Dict {
         }
     }
     static PyObject *out(C d) {
+        if (d->mode) fallback("a defaultdict/Counter result is returned by the original Python");
         py::object r = steal(PyDict_New());
         fill(r.ptr(), d);
         return r.release().ptr();

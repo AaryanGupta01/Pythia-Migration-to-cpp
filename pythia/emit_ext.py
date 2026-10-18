@@ -195,6 +195,10 @@ def ex(em, e) -> Optional[str]:
         return f"{fn}({em.ex(e.left)}, {em.ex(e.right)})"
     if isinstance(e, A.Attribute) and not _is_self(e.value):
         return f"py_nn({em.ex(e.value)}, \"{e.attr}\")->{e.attr}"
+    if isinstance(e, A.MethodCall) and e.method == "most_common" and e.recv.ty is not None \
+            and e.recv.ty.name == "dict":
+        n = em.ex(e.args[0]) if e.args else "0"
+        return f"pyd_most_common({em.ex(e.recv)}, {n}, {'false' if e.args else 'true'})"
     if isinstance(e, A.MethodCall):
         return _method(em, e)
     if isinstance(e, A.Call):
@@ -274,6 +278,14 @@ def _call(em, e) -> Optional[str]:
         return _ordered_call(em, e, f"{n}_new", [])
     if n in em.tc.funcs:
         return _ordered_call(em, e, f"f_{n}", [])
+    f = getattr(e, "factory", None)
+    if f is not None and e.ty is not None and e.ty.name == "dict":
+        from .emit_c import dict_rt_name
+        rt = dict_rt_name(e.ty)
+        if f == "Counter":
+            return f"pyd_counter_of({rt}_new(), {em.ex(e.args[0])})" if e.args else f"pyd_counter({rt}_new())"
+        return (f"pyd_defaultdict({rt}_new(), \"{f}\", +[]() -> {_c(e.ty.elem)} {{ "
+                f"return {_factory_value(em, e.ty.elem)}; }})")
     a0 = e.args[0] if e.args else None
     if n == "set":
         el = _SCALAR_C[e.ty.elem.name]
@@ -295,6 +307,16 @@ def _call(em, e) -> Optional[str]:
         inner.ty = STR
         return f"[&](const auto &_o) {{ return _o ? {Emitter.call(em, inner)} : pystr_lit(\"None\"); }}({em.ex(a0)})"
     return None
+
+
+def _factory_value(em, t: Ty) -> str:
+    if t.name in ("list", "dict"):
+        node = A.ListLit(0, 0) if t.name == "list" else A.DictLit(0, 0)
+        node.ty = t
+        return em.ex(node)
+    if t.name == "set":
+        return f"pyset_new<{_SCALAR_C[t.elem.name]}>()"
+    return {"int": "INT64_C(0)", "float": "0.0", "bool": "false", "str": 'pystr_lit("")'}[t.name]
 
 
 def _typed_var(name: str, opt: Ty):
