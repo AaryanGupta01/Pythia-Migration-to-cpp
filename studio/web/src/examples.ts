@@ -204,11 +204,11 @@ const PRIMES = `def sieve(n: int) -> list[int]:
     return out
 
 
-primes: list[int] = sieve(200000)
+primes: list[int] = sieve(2000000)
 gaps: list[int] = []
 for i in range(1, len(primes)):
     gaps.append(primes[i] - primes[i - 1])
-print(f"{len(primes):,} primes below 200,000; largest {primes[-1]}")
+print(f"{len(primes):,} primes below 2,000,000; largest {primes[-1]}")
 print(f"sum = {sum(primes):,}   mean gap = {sum(gaps) / len(gaps):.3f}   widest gap = {max(gaps)}")
 `
 

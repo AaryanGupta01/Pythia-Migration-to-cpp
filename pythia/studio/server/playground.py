@@ -179,6 +179,13 @@ def run_snippet(source: str, cache_dir: Path, stdin: str = "", reference: Option
         cpp = _run([str(binp)], str(tmp), stdin)
         cpp["build_ms"] = build_ms
         same = python["stdout"] == cpp["stdout"] and python["exception"] == cpp["exception"]
+        # The first launch of a brand-new .exe includes the antivirus scan on Windows (~0.3 s) and Python's first
+        # start warms its caches: for quick programs time a second run of each and keep the faster one.
+        if same and not python.get("timed_out") and python["time_ms"] + cpp["time_ms"] < 4000:
+            py2 = _run([sys.executable, "-I", str(py)], str(tmp), stdin)
+            cpp2 = _run([str(binp)], str(tmp), stdin)
+            python["time_ms"] = min(python["time_ms"], py2["time_ms"])
+            cpp["time_ms"] = min(cpp["time_ms"], cpp2["time_ms"])
         return {"ok": True, "python": _public(python), "cpp": _public(cpp), "same": same}
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": f"C++ build timed out after {BUILD_TIMEOUT} s", "python": None, "cpp": None, "same": False}

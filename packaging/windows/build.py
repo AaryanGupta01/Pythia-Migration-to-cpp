@@ -209,11 +209,19 @@ print("stand-alone executable OK")
     run([py, "-I", "-m", "pythia_studio", "--doctor"], env=env)
 
 
-def prebuild_demo(py: Path) -> None:
+def prebuild_demo(py: Path, reuse: bool = False) -> None:
     """Run the Quanta demo once with the staged app and ship its compiled modules, so a user's first demo run
     reuses them instead of compiling ~50 modules (cache keys are exact, so this is always sound)."""
-    log("prebuilding the demo's compiled modules (takes several minutes)")
     home = WORK / "prebuild-home"
+    if reuse and (home / "build-cache").is_dir():
+        log("reusing the demo modules prebuilt by an earlier build")
+    else:
+        _run_prebuild(py, home)
+    _ship_prebuilt(home)
+
+
+def _run_prebuild(py: Path, home: Path) -> None:
+    log("prebuilding the demo's compiled modules (takes several minutes)")
     shutil.rmtree(home, ignore_errors=True)
     env = clean_env()
     env["PYTHIA_TOOLCHAIN"] = str(STAGE / "mingw64")
@@ -233,6 +241,9 @@ for demo in ("quanta", "textlab"):
     print(demo, sum(f["status"] in ("verified", "guarded") for f in fs), "accelerated", flush=True)
 '''
     run([py, "-I", "-c", code], env=env)
+
+
+def _ship_prebuilt(home: Path) -> None:
     so_dir = next((STAGE / "python" / "Lib" / "site-packages" / "pythia" / "studio").glob("demo_data")) / "offline_cache" / "so"
     for f in so_dir.glob("*"):
         f.unlink()                                          # the checkout's Linux builds are useless here
@@ -269,6 +280,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-prebuild", action="store_true", help="skip shipping prebuilt demo modules")
     ap.add_argument("--no-installer", action="store_true", help="stop after staging (no Inno Setup)")
+    ap.add_argument("--reuse-prebuilt", action="store_true", help="ship the demo modules from the last build instead of rebuilding")
     a = ap.parse_args()
     if os.name != "nt":
         raise SystemExit("build the Windows app on Windows")
@@ -281,7 +293,7 @@ def main() -> None:
     write_extras()
     smoke(py)
     if not a.no_prebuild:
-        prebuild_demo(py)
+        prebuild_demo(py, a.reuse_prebuilt)
     size = sum(f.stat().st_size for f in STAGE.rglob("*") if f.is_file())
     log(f"staged app: {STAGE} ({size / 1e6:.0f} MB)")
     if not a.no_installer:
