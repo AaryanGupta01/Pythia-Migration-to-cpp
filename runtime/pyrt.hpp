@@ -29,10 +29,10 @@ private:
 };
 
 class IndexError : public PythonException { public: explicit IndexError(const char *m) : PythonException("IndexError", m) {} };
-class ZeroDivisionError : public PythonException { public: explicit ZeroDivisionError(const char *m) : PythonException("ZeroDivisionError", m) {} };
-class OverflowError : public PythonException { public: explicit OverflowError(const char *m) : PythonException("OverflowError", m) {} };
-class ValueError : public PythonException { public: explicit ValueError(const char *m) : PythonException("ValueError", m) {} };
-class KeyError : public PythonException { public: explicit KeyError(const char *m) : PythonException("KeyError", m) {} };
+class ZeroDivisionError : public PythonException { public: explicit ZeroDivisionError(const char *m) : PythonException("ZeroDivisionError", m) {} explicit ZeroDivisionError(const std::string &m) : PythonException("ZeroDivisionError", m) {} };
+class OverflowError : public PythonException { public: explicit OverflowError(const char *m) : PythonException("OverflowError", m) {} explicit OverflowError(const std::string &m) : PythonException("OverflowError", m) {} };
+class ValueError : public PythonException { public: explicit ValueError(const char *m) : PythonException("ValueError", m) {} explicit ValueError(const std::string &m) : PythonException("ValueError", m) {} };
+class KeyError : public PythonException { public: explicit KeyError(const char *m) : PythonException("KeyError", m) {} explicit KeyError(const std::string &m) : PythonException("KeyError", m) {} };
 class PythiaSemanticError : public PythonException { public: explicit PythiaSemanticError(const char *m) : PythonException("PythiaSemanticError", m) {} };
 
 // Optional per-call arena (used only by library/extension-module wrappers).

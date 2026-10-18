@@ -561,7 +561,9 @@ class Parser:
 
 
 # ---- helpers: call arguments, f-strings, the __main__ guard ---------------------------------------------
-_ESC = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", "'": "'", '"': '"', "0": "\0"}
+_ESC = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", "'": "'", '"': '"', "0": "\0",
+        "a": "\a", "b": "\b", "f": "\f", "v": "\v"}
+_HEXLEN = {"x": 2, "u": 4, "U": 8}
 
 
 def _relocate(n, line, col):
@@ -635,7 +637,20 @@ def _fstring(self, tok):
     while i < n:
         c = raw[i]
         if c == "\\" and i + 1 < n:
-            lit += _ESC.get(raw[i + 1], "\\" + raw[i + 1])
+            e1 = raw[i + 1]
+            if e1 in "xuU" and e1 in _HEXLEN and all(h in "0123456789abcdefABCDEF" for h in raw[i + 2:i + 2 + _HEXLEN[e1]]) \
+                    and len(raw[i + 2:i + 2 + _HEXLEN[e1]]) == _HEXLEN[e1]:
+                lit += chr(int(raw[i + 2:i + 2 + _HEXLEN[e1]], 16))
+                i += 2 + _HEXLEN[e1]
+                continue
+            if e1 in "1234567" or (e1 == "0" and raw[i + 2:i + 3] in tuple("01234567")):
+                j = i + 1
+                while j < n and j < i + 4 and raw[j] in "01234567":
+                    j += 1
+                lit += chr(int(raw[i + 1:j], 8))
+                i = j
+                continue
+            lit += _ESC.get(e1, "\\" + e1)
             i += 2
             continue
         if raw.startswith("{{", i) or raw.startswith("}}", i):
