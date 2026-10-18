@@ -161,6 +161,9 @@ def to_pysub(source: str, stdin: str = "", run: bool = True, check: bool = True)
     """Convert untyped Python to PySub by adding types (and turning record dicts into classes).
     run=True: if static inference leaves gaps, execute the original once on `stdin` and use the types observed at
     run time to fill them. check=True: run original and conversion under CPython and require identical output."""
+    stripped = strip_doctest(source)
+    doctest_removed = stripped != source
+    source = stripped
     try:
         tree = ast.parse(source)
     except SyntaxError as e:
@@ -202,7 +205,35 @@ def to_pysub(source: str, stdin: str = "", run: bool = True, check: bool = True)
             if not same:
                 res.problems.append("internal: the converted program prints something different under CPython; "
                                     "please report this program")
+    if doctest_removed:
+        res.changes.append("removed doctest.testmod() (it prints nothing when the examples pass)")
     return res
+
+
+def strip_doctest(source: str) -> str:
+    """`import doctest` and `doctest.testmod()` / `run_docstring_examples(...)` calls: they print nothing when the
+    examples pass, and PySub has no doctest. Statements become `pass` (an `if __name__` body must not go empty)."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return source
+    lines = source.split("\n")
+    cuts = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import) and all(a.name == "doctest" for a in n.names):
+            cuts.append(n)
+        elif isinstance(n, ast.Expr) and isinstance(n.value, ast.Call) and isinstance(n.value.func, ast.Attribute) \
+                and isinstance(n.value.func.value, ast.Name) and n.value.func.value.id == "doctest" \
+                and not n.value.args and all(k.arg not in ("verbose", "optionflags") for k in n.value.keywords):
+            cuts.append(n)                         # testmod(verbose=True) prints a transcript: left alone
+    uses = sum(1 for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id == "doctest")
+    cut_uses = sum(1 for c in cuts if isinstance(c, ast.Expr))
+    if uses > cut_uses:                            # something else still needs the module (verbose=True, ...)
+        cuts = []
+    for n in sorted(cuts, key=lambda n: -n.lineno):
+        indent = lines[n.lineno - 1][:len(lines[n.lineno - 1]) - len(lines[n.lineno - 1].lstrip())]
+        lines[n.lineno - 1:n.end_lineno] = [indent + "pass"]
+    return "\n".join(lines)
 
 
 def _compiles(src: str) -> bool:

@@ -390,6 +390,25 @@ class Parser:
         if self.at_op("="):
             self.next()
             val = self.parse_exprlist()
+            if self.at_op("="):                        # a = b = v  ->  tmp = v; a = tmp; b = tmp (v evaluated once)
+                targets = [first, val]
+                while self.at_op("="):
+                    self.next()
+                    targets.append(self.parse_exprlist())
+                value = targets.pop()
+                self.expect("NEWLINE")
+                tmp = self._fresh_unpack()
+                nm = lambda: A.Name(t.line, t.col, id=tmp)          # noqa: E731
+                out = [A.Assign(line=t.line, col=t.col, target=nm(), value=value)]
+                for tg in targets:
+                    if isinstance(tg, A.TupleLit):
+                        out += self._unpack_stmts(tg, nm(), t.line, t.col)
+                    elif isinstance(tg, (A.Name, A.Subscript, A.Attribute)):
+                        out.append(A.Assign(line=t.line, col=t.col, target=tg, value=nm()))
+                    else:
+                        self.error("invalid assignment target")
+                        raise _Panic()
+                return out
             self.expect("NEWLINE")
             if isinstance(first, A.TupleLit):          # a, b = ...  ->  tmp = ...; a = tmp[0]; b = tmp[1]
                 return self._unpack_stmts(first, val, t.line, t.col)
@@ -777,7 +796,10 @@ def _fstring(self, tok):
         if rest.startswith(":"):
             spec = rest[1:]
         if expr_text.rstrip().endswith("=") and not expr_text.rstrip().endswith(("==", "!=", "<=", ">=")):
-            _fstring_fail(self, tok, "f-string self-documenting fields {x=} are outside the PySub subset")
+            lit += expr_text                       # f"{x = }": the text, `=` and spaces included, then the value
+            expr_text = expr_text.rstrip()[:-1]
+            if conv is None and not spec:
+                conv = "r"                         # CPython: repr() unless a format spec or conversion is given
         if conv not in (None, "s", "r"):
             _fstring_fail(self, tok, f"f-string conversion '!{conv}' is outside the PySub subset (use !r, !s or none)")
         if spec and "{" in spec:

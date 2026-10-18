@@ -11,7 +11,7 @@ import ast
 from typing import Dict, List, Optional
 
 # modules whose behaviour a rewrite into plain loops and arithmetic can keep exactly
-REWRITABLE = {"math", "collections", "itertools", "functools", "string", "sys", "typing", "dataclasses", "copy",
+REWRITABLE = {"doctest", "math", "collections", "itertools", "functools", "string", "sys", "typing", "dataclasses", "copy",
               "heapq", "bisect", "operator", "statistics", "__future__", "abc", "enum"}
 
 _WHY = {

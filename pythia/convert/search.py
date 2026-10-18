@@ -117,4 +117,11 @@ def best_assignment(unresolved: List[Tuple[str, ast.FunctionDef, str]],
         out = build(seeds)
         if out is not None and accepts(out):
             return seeds, out
+        if out is not None and not best_assignment.tried:
+            best_assignment.first = (seeds, out)      # the most plausible guess, kept for diagnostics
+        best_assignment.tried += 1
     return None
+
+
+best_assignment.tried = 0
+best_assignment.first = None
