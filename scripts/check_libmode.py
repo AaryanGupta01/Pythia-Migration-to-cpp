@@ -131,10 +131,35 @@ def acc_total(xs: list[int]) -> int:
     for x in xs:
         a.add(x)
     return a.total
+
+def span(xs: list[int]) -> tuple[int, int]:
+    lo, hi = xs[0], xs[0]
+    for x in xs:
+        if x < lo:
+            lo = x
+        if x > hi:
+            hi = x
+    return lo, hi
+
+def pair_sum(p: tuple[int, float]) -> float:
+    a, b = p
+    return a + b
+
+def sort_pts(ps: list[tuple[int, str]]) -> None:
+    ps.sort()
+
+def grid_get(g: dict[tuple[int, int], str], x: int, y: int) -> str:
+    return g.get((x, y), "")
+
+def tally(ws: list[str]) -> list[tuple[str, int]]:
+    d: dict[str, int] = {}
+    for w in ws:
+        d[w] = d.get(w, 0) + 1
+    return sorted(d.items())
 '''
 EXPOSE = ["cube", "fdiv", "half", "neg", "shout", "power", "bubble", "sieve", "total2", "grid_inc",
           "get", "set_then_fail", "words", "reverse_keys", "lookup", "bump", "floats", "strs",
-          "acc_total"]
+          "acc_total", "span", "pair_sum", "sort_pts", "grid_get", "tally"]
 
 
 def load_so(path, name):
@@ -148,7 +173,7 @@ def bits(v):
     if isinstance(v, float):
         return ("f", struct.pack("<d", v))
     if isinstance(v, (list, tuple)):
-        return [bits(x) for x in v]
+        return (type(v).__name__, [bits(x) for x in v])
     if isinstance(v, dict):
         return [(bits(k), bits(x)) for k, x in v.items()]
     return (type(v).__name__ if isinstance(v, bool) else "", v)
@@ -217,6 +242,11 @@ def main():
         "floats": [([],), ([0.1, 0.2, 0.3],), ([1, 2],), ([1e308, 1e308],)],
         "strs": [([],), (["ab", "c"],)],
         "acc_total": [([],), ([1, 2, 3, -10],)],
+        "span": [([3],), ([4, -2, 9],), ([],)],
+        "pair_sum": [((1, 0.5),), ((True, 2.0),)],
+        "sort_pts": [([],), ([(3, "a"), (1, "b"), (1, "a")],)],
+        "grid_get": [({(0, 0): "o", (1, 2): "p"}, 1, 2), ({}, 0, 0)],
+        "tally": [([],), (["b", "a", "b"],)],
     }
     n = 0
     for fn, arglist in cases.items():
@@ -258,7 +288,8 @@ def main():
     # FallbackError: non-ASCII str, wrong types
     for fn, args in [("shout", ("h\u00e9llo",)), ("strs", (["ok", "na\u00efve"],)), ("neg", (1,)),
                      ("half", ("x",)), ("get", ((1, 2), 0)), ("lookup", ({1: 2}, "a")),
-                     ("words", ([1],)), ("sieve", (1.5,)), ("total2", ([1, 2],))]:
+                     ("words", ([1],)), ("sieve", (1.5,)), ("total2", ([1, 2],)),
+                     ("pair_sum", ((1, 2.0, 3),)), ("pair_sum", ([1, 2.0],)), ("sort_pts", ([(1, 2)],))]:
         try:
             getattr(m, fn)(*args)
         except m.FallbackError:

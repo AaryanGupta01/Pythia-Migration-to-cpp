@@ -24,8 +24,11 @@ class Ty:
     name: str                       # int float bool str list dict None
     elem: Optional["Ty"] = None      # list element type, or dict value type
     key: Optional["Ty"] = None       # dict key type only
+    elts: Optional[tuple] = None     # tuple element types only (see tuples.py)
 
     def __str__(self) -> str:
+        if self.name == "tuple":
+            return "tuple[" + (", ".join(map(str, self.elts)) or "()") + "]"
         if self.name == "list":
             return f"list[{self.elem}]"
         if self.name == "dict":
@@ -205,6 +208,8 @@ class TypeChecker:
                 return ERR
             k = self.resolve_type(te.param)
             v = self.resolve_type(te.param2)
+            if k.name == "tuple" or v.name == "tuple":
+                return _tup.resolve_dict(self, te, k, v)
             if k.name not in ("int", "str"):
                 self.errors.append(Diagnostic(
                     f"dict key type must be int or str; found {k}",
@@ -216,6 +221,8 @@ class TypeChecker:
                     te.line, te.col, "TypeError"))
                 return ERR
             return dict_of(k, v)
+        if te.name == "tuple":
+            return _tup.resolve(self, te)
         if te.name in self.classes:
             return Ty(te.name)
         self.errors.append(Diagnostic(f"unknown type {te.name!r}",
@@ -376,9 +383,12 @@ class TypeChecker:
             self.loop_depth -= 1
         elif isinstance(s, A.ForEach):
             _bx.mark_view_ok(self, s.iter)
+            _tup.mark_items(s.iter)
             t = self.synth(s.iter)
             if t.name == "list":
                 self.bind(s, s.var, t.elem)
+            elif t.name == "tuple" and _tup.homogeneous(t) is not None:
+                self.bind(s, s.var, _tup.homogeneous(t))
             elif t == STR:
                 self.bind(s, s.var, STR)
             elif t.name == "dict":
@@ -562,6 +572,8 @@ class TypeChecker:
     # ---- expressions -------------------------------------------------------
     def check_expr(self, e: A.Node, expected: Ty) -> Ty:
         """Checking mode: pushes `expected` inward where it helps inference."""
+        if isinstance(e, A.TupleLit) and e.ty is None:
+            return _tup.check_lit(self, e, expected)
         if isinstance(e, A.ListLit) and not e.elts and expected.name == "list":
             e.ty = expected
             return expected
@@ -607,6 +619,9 @@ class TypeChecker:
                 return self.err(e, f"name {e.id!r} is not defined")
             return t
 
+        if isinstance(e, A.TupleLit):
+            return _tup.synth_lit(self, e)
+
         if isinstance(e, A.ListLit):
             if not e.elts:
                 return Ty("list", None)          # unresolved; fixed in check mode
@@ -630,7 +645,7 @@ class TypeChecker:
             kacc = kts[0]
             for t in kts[1:]:
                 kacc = join(kacc, t)
-            if kacc is ERR or kacc.name not in ("int", "str", "bool"):
+            if kacc is ERR or (kacc.name not in ("int", "str", "bool") and not _tup.hashable_key(kacc)):
                 return self.err(e, "dict literal keys must share one type "
                                    "(int, str or bool)")
             vacc = vts[0]
@@ -691,6 +706,8 @@ class TypeChecker:
             if e.op in ("in", "not in"):
                 _bx.mark_view_ok(self, e.right)
             lt, rt = self.synth(e.left), self.synth(e.right)
+            if rt.name == "tuple" or (lt.name == "tuple" and e.op not in ("in", "not in")):
+                return _tup.compare(self, e, lt, rt)
             if e.op in ("in", "not in"):
                 if lt is ERR or rt is ERR:
                     return BOOL
@@ -728,6 +745,8 @@ class TypeChecker:
             base = self.synth(e.value)
             if base is ERR:
                 return ERR
+            if base.name == "tuple":
+                return _tup.subscript(self, e, base)
             if base.name == "dict":
                 k = self.check_expr(e.index, base.key)
                 if not widens_to(k, base.key):
@@ -755,6 +774,8 @@ class TypeChecker:
             return ERR
         if op in _bx.BITOPS:
             return _bx.bitop_result(self, node, op, lt, rt)
+        if lt.name == "tuple" or rt.name == "tuple":
+            return _tup.binop(self, node, op, lt, rt)
         if op == "+" and lt == STR and rt == STR:
             return STR
         if op == "+" and lt.name == "list" and rt.name == "list" and lt == rt:
@@ -819,10 +840,10 @@ class TypeChecker:
                 return recv
             if m == "sort":
                 self._margs(e, 0, 0, m)
-                if not prim:
+                if not (prim or _tup.orderable(el)):
                     return self.err(e, f"sort() needs a list of int, float, bool or str in PySub, found {recv}")
                 return NONE
-            if not (prim or obj):
+            if not (prim or obj or _tup.orderable(el)):
                 return self.err(e, f"{m}() on a {recv} needs element equality, which nested lists don't have in PySub")
             if self._margs(e, 1, 1, m):
                 self._want(e.args[0], el, f"{m}() value")
@@ -883,6 +904,8 @@ class TypeChecker:
                 if not widens_to(d, recv.elem):
                     self.err(e.args[1], f"default must be {recv.elem}, found {d}")
                 return recv.elem
+            if e.method == "items":
+                return _tup.items_call(self, e, recv)
             return self.err(e, f"dict has no method {e.method!r} in PySub")
         if recv.name in self.classes:
             info = self.classes[recv.name]
@@ -925,6 +948,10 @@ class TypeChecker:
         if _r is not None:
             return _r
         self.check_kwargs(e, {"print": {"sep", "end"}, "sorted": {"reverse"}}.get(name, set()))
+        if name == "__pythia_unpack":
+            return _tup.unpack_call(self, e)
+        if name in ("list", "sorted") and e.args:
+            _tup.mark_items(e.args[0])
         if name == "print":
             for a in e.args:
                 t = self.synth(a)
@@ -938,12 +965,15 @@ class TypeChecker:
                     self.err(a, f"cannot print a list of {t.elem.name} instances: "
                                 f"PySub classes have no reproducible repr(); "
                                 f"print specific fields instead")
+                if _tup.involves_tuple(t) and not _tup.reprable(t):
+                    self.err(a, f"cannot print a {t}: only tuples of int, float, bool, str, tuples and "
+                                f"flat lists of those have a reproducible repr in PySub")
             return NONE
         if name == "len":
             if len(e.args) != 1:
                 return self.err(e, "len() takes exactly one argument")
             t = self.synth(e.args[0])
-            if t.name in ("list", "str", "dict") or t is ERR:
+            if t.name in ("list", "str", "dict", "tuple") or t is ERR:
                 return INT
             return self.err(e.args[0], f"object of type {t} has no len()")
         if name in ("ord", "chr"):
@@ -971,7 +1001,7 @@ class TypeChecker:
                 return ERR
             if len(ts) == 1:
                 t = ts[0]
-                if t.name == "list" and t.elem is not None and t.elem.name in PRIM:
+                if t.name == "list" and t.elem is not None and (t.elem.name in PRIM or _tup.orderable(t.elem)):
                     return t.elem
                 return self.err(e.args[0], f"{name}() of one argument needs a list of numbers or strings, found {t}")
             if all(t.name in NUMERIC for t in ts):
@@ -1033,8 +1063,10 @@ class TypeChecker:
                 return list_of(STR)
             if t.name == "dict":                # keys, in insertion order
                 return list_of(t.key)
-            if t.name == "list" and (name == "list" or (t.elem is not None and t.elem.name in PRIM)):
+            if t.name == "list" and (name == "list" or (t.elem is not None and _tup.orderable(t.elem))):
                 return t
+            if t.name == "tuple" and _tup.homogeneous(t) is not None and (name == "list" or _tup.orderable(t.elts[0])):
+                return list_of(t.elts[0])
             return self.err(e.args[0], f"sorted() needs a list of int, float, bool or str, a str or a dict, found {t}"
                             if name == "sorted" else f"list() takes a list, a str or a dict, found {t}")
         if name in ("int", "float", "str", "bool"):
@@ -1047,6 +1079,9 @@ class TypeChecker:
                     return self.err(e.args[0], "str(list) is outside the PySub subset")
                 if t.name == "dict":
                     return self.err(e.args[0], "str(dict) is outside the PySub subset")
+                if t.name == "tuple":
+                    return STR if _tup.reprable(t) else self.err(
+                        e.args[0], f"str() of a {t} has no reproducible repr in PySub")
                 if t.name in self.classes:
                     return self.err(e.args[0], f"str() of a {t.name} instance has no reproducible repr in PySub; "
                                                f"format its fields instead")
@@ -1092,6 +1127,7 @@ class TypeChecker:
 
 
 from . import builtins_ext as _bx  # noqa: E402  (math / bitwise / slice / extra methods; imports this module's types)
+from . import tuples as _tup  # noqa: E402  (tuples.py builds on Ty, defined above)
 
 
 def typecheck(mod: A.Module, filename: str = "<input>"):

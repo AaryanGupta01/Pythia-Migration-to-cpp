@@ -180,7 +180,7 @@ def parse_subscript(p, base: A.Node, t) -> A.Node:
         if cur is not None:
             p.error("expected ']' in subscript")
             raise _panic()
-        cur = p.parse_expr()
+        cur = p.parse_exprlist()                 # a[i] or a bare-tuple index a[i, j]
     p.expect("OP", "]")
     if colons == 0:
         return A.Subscript(t.line, t.col, value=base, index=cur)
