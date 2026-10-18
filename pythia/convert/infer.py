@@ -187,6 +187,10 @@ class Engine:
             f.generator = any(isinstance(n, (ast.Yield, ast.YieldFrom)) for n in self._own_nodes(f.node))
         for f in self.funcs.values():
             self.module_vars |= f.globals
+        self.module_vars -= set(self.classes) | set(self.top_funcs)
+        for s in ast.walk(self.tree):
+            if isinstance(s, (ast.Import, ast.ImportFrom)):
+                self.module_vars -= {(a.asname or a.name).split(".")[0] for a in s.names}
         for s in ast.walk(self.tree):
             if isinstance(s, ast.Import):
                 for a in s.names:
