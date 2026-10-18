@@ -161,6 +161,9 @@ class Lowerer:
         ext = _x.lower_expr(self, e)          # sets, None tests, isinstance, Optional branches
         if ext is not None:
             return ext
+        if isinstance(e, (A.ListComp, A.DictComp, A.GenExp, A.Lambda)):
+            from .comprehensions import lower_expr
+            return lower_expr(self, e)
         if isinstance(e, A.BinOp):
             e.left = self.expr(e.left)
             e.right = self.expr(e.right)

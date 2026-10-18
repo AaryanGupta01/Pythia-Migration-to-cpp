@@ -368,6 +368,9 @@ class TypeChecker:
 
     # ---- statements --------------------------------------------------------
     def check_stmt(self, s: A.Node) -> None:
+        if isinstance(s, A.ForEach) and _comp().is_special_foreach(self, s):   # enumerate/zip/reversed loops
+            _comp().check_foreach(self, s)
+            return
         if _x.check_stmt(self, s):            # narrowing-aware if/while/assign, global (types_ext)
             return
         if isinstance(s, A.Assign):
@@ -397,6 +400,8 @@ class TypeChecker:
             self.loop_depth += 1
             self.block(s.body)
             self.loop_depth -= 1
+        elif isinstance(s, A.ForEach) and _comp().is_special_foreach(self, s):
+            _comp().check_foreach(self, s)
         elif isinstance(s, A.ForEach):
             _bx.mark_view_ok(self, s.iter)
             _tup.mark_items(s.iter)
@@ -791,6 +796,8 @@ class TypeChecker:
         if isinstance(e, A.Call):
             return self.synth_call(e)
 
+        if _comp().is_comp_node(e):
+            return _comp().synth(self, e)
         return self.err(e, f"unsupported expression {type(e).__name__}")
 
     def binop_result(self, node: A.Node, op: str, lt: Ty, rt: Ty) -> Ty:
@@ -834,6 +841,9 @@ class TypeChecker:
     def synth_method(self, e: A.MethodCall) -> Ty:
         if _bx.is_fromkeys(self, e):
             return _bx.synth_fromkeys(self, e)
+        hooked = _comp().synth_method_hook(self, e)
+        if hooked is not None:
+            return hooked
         recv = self.synth(e.recv)
         ext = _x.synth_method(self, e, recv)  # set methods; keyword/default arguments of methods
         if ext is not None:
@@ -974,6 +984,11 @@ class TypeChecker:
 
     def synth_call(self, e: A.Call) -> Ty:
         name = e.func
+        if name in ("sorted", "list", "sum", "min", "max", "any", "all", "len") and e.args:
+            _bx.mark_view_ok(self, e.args[0])         # d.keys()/d.values() read once here: same as a list
+        hooked = _comp().synth_call_hook(self, e)     # generator / key= / enumerate-zip arguments: claim them first
+        if hooked is not None:
+            return hooked
         ext = _x.synth_call(self, e)          # isinstance, set(), defaults/keywords of user functions ...
         if ext is not None:
             return ext
@@ -1162,6 +1177,11 @@ class TypeChecker:
 from . import builtins_ext as _bx  # noqa: E402  (math / bitwise / slice / extra methods; imports this module's types)
 from . import tuples as _tup  # noqa: E402  (tuples.py builds on Ty, defined above)
 from . import types_ext as _x  # noqa: E402  (PySub 1.3 type-system extensions; imports this module)
+
+
+def _comp():
+    from . import comprehensions          # comprehensions, generators, key lambdas, enumerate/zip/reversed
+    return comprehensions
 
 
 def typecheck(mod: A.Module, filename: str = "<input>"):

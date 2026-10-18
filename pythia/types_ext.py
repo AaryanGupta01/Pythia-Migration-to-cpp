@@ -594,6 +594,16 @@ def synth(tc, e) -> Optional[Ty]:
     return None
 
 
+def _in_function_scopes(scope, name: str) -> bool:
+    """Bound in a scope between here and the module scope (function body, comprehension, key lambda)."""
+    s = scope
+    while s is not None and s.kind not in ("global", "globals"):   # "globals": a function's GlobalView
+        if name in s.names:
+            return True
+        s = s.parent
+    return False
+
+
 def _name(tc, e) -> Optional[Ty]:
     t = tc.scope.lookup(e.id)
     if t is None:
@@ -602,7 +612,7 @@ def _name(tc, e) -> Optional[Ty]:
                                f"it (CPython raises UnboundLocalError here); add `global {e.id}` to use the "
                                f"module-level variable")
         return None
-    if tc.cur_fn is not None and tc.scope.lookup_local(e.id) is None:
+    if tc.cur_fn is not None and not _in_function_scopes(tc.scope, e.id):
         e.global_ref = True
         tc._fn_globals.add(e.id)
     nt = tc._narrow.get(e.id)

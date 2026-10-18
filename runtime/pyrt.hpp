@@ -979,6 +979,53 @@ template <class D> auto *pyd_items(D *d) {                 // any dict -> list[t
     return r;
 }
 
+// ---- comprehensions / generator expressions / key functions (pythia/comprehensions.py) ----
+// range(start, stop, step) as an iteration source: element k is start + k*step, n elements, no overflow.
+struct PyRangeIter {
+    int64_t start, step; uint64_t n;
+    PyRangeIter(int64_t a, int64_t b, int64_t c) : start(a), step(c), n(0) {
+        if (c == 0) throw ValueError("range() arg 3 must not be zero");
+        if (c > 0 && a < b) n = (static_cast<uint64_t>(b) - static_cast<uint64_t>(a) - 1) / static_cast<uint64_t>(c) + 1;
+        if (c < 0 && a > b) n = (static_cast<uint64_t>(a) - static_cast<uint64_t>(b) - 1) / (0 - static_cast<uint64_t>(c)) + 1;
+    }
+    int64_t at(uint64_t k) const { return static_cast<int64_t>(static_cast<uint64_t>(start) + k * static_cast<uint64_t>(step)); }
+};
+// next() on a dict key iterator: CPython raises if the dict changed size since the iterator was made
+inline bool py_dict_iter_ok(int64_t cur, int64_t n0, int64_t i) {
+    if (cur != n0) throw PythonException("RuntimeError", "dictionary changed size during iteration");
+    return i < n0;
+}
+[[noreturn]] inline void py_minmax_empty(const char *fn) {
+    throw ValueError((std::string(fn) + (py_minor >= 12 ? "() iterable argument is empty" : "() arg is an empty sequence")).c_str());
+}
+inline void py_sum_f64_add(double &f, double &c, double x) {          // one step of py_sum_f64 (Neumaier)
+    double t = f + x;
+    if (std::fabs(f) >= std::fabs(x)) c += (f - t) + x; else c += (x - t) + f;
+    f = t;
+}
+inline double py_sum_f64_result(double f, double c) { return (c != 0.0 && std::isfinite(c)) ? f + c : f; }
+// list.sort(key=f, reverse=r) / sorted(): keys computed once in order, stable, reverse keeps ties in order.
+// Like CPython the list is empty while keys are computed and sorted: a key function that looks at it sees [],
+// one that grows it gets "list modified during sort" (the sorted items are kept), and an exception from the
+// key function restores the original order.
+template <class T, class F> PyList<T> *pyl_sort_key(PyList<T> *l, F key, bool rev) {
+    std::vector<T> items; items.swap(l->data);
+    std::vector<decltype(key(items[0]))> keys; keys.reserve(items.size());
+    try { for (size_t i = 0; i < items.size(); ++i) keys.push_back(key(items[i])); }
+    catch (...) { l->data.swap(items); throw; }
+    std::vector<size_t> ix(items.size());
+    for (size_t i = 0; i < ix.size(); ++i) ix[i] = i;
+    if (rev) std::reverse(ix.begin(), ix.end());
+    std::stable_sort(ix.begin(), ix.end(), [&](size_t a, size_t b) { return pyl_lt(keys[a], keys[b]); });
+    if (rev) std::reverse(ix.begin(), ix.end());
+    std::vector<T> out; out.reserve(ix.size());
+    for (size_t i : ix) out.push_back(items[i]);
+    bool modified = l->data.capacity() != 0;
+    l->data.swap(out);
+    if (modified) throw ValueError("list modified during sort");
+    return l;
+}
+
 
 // ---- PySub 1.3: None, nullable objects, module-level names, mutable defaults ---------------------------------
 inline void py_print_none() { py_print_str(pystr_lit("None")); }

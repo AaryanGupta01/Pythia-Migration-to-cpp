@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
 from . import ast_nodes as A
 from .typecheck import INT
+from . import comprehensions as _comp
 
 Interval = Optional[Tuple[int, int]]     # None = unknown
 
@@ -129,6 +130,8 @@ def _references(expr: Optional[A.Node], name: str) -> bool:
         return _references(expr.value, name)
     if isinstance(expr, A.SetLit):
         return any(_references(x, name) for x in expr.elts)
+    if _comp.is_comp_node(expr):
+        return _comp.mentions(expr, name)
     return False
 
 
@@ -216,6 +219,8 @@ class GuardElider:
             for x in e.elts:
                 self.eval(x, env)
             return None
+        if _comp.is_comp_node(e):
+            return _comp.eval_interval(self, e, env)
         return None
 
     # ---- statements ---------------------------------------------------
@@ -391,6 +396,8 @@ def _scan_literal_call_sites(mod: A.Module) -> Dict[str, Dict[str, Interval]]:
         if isinstance(e, A.Call):
             for a in e.args:
                 walk_expr(a)
+            for kw in e.kwargs:                 # key=lambda ...: calls inside are call sites too
+                walk_expr(kw.value)
             visit_call(e)
         elif isinstance(e, A.Coerce):
             walk_expr(e.value)
@@ -412,6 +419,8 @@ def _scan_literal_call_sites(mod: A.Module) -> Dict[str, Dict[str, Interval]]:
             walk_expr(e.recv)
             for a in e.args:
                 walk_expr(a)
+            for kw in e.kwargs:
+                walk_expr(kw.value)
         elif isinstance(e, A.Subscript):
             walk_expr(e.value); walk_expr(e.index)
         elif isinstance(e, A.ListLit):
@@ -425,6 +434,9 @@ def _scan_literal_call_sites(mod: A.Module) -> Dict[str, Dict[str, Interval]]:
         elif isinstance(e, A.SetLit):
             for x in e.elts:
                 walk_expr(x)
+        elif _comp.is_comp_node(e) or isinstance(e, A.CompFor):
+            for c in _comp.children(e):
+                walk_expr(c)
 
     def walk_stmts(stmts: List[A.Node]) -> None:
         for s in stmts:

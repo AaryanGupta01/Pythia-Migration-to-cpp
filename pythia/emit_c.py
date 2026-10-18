@@ -11,6 +11,7 @@ from . import ast_nodes as A
 from .typecheck import Ty, INT, FLOAT, BOOL, STR, NONE, ERR, TypeChecker
 from . import builtins_ext as _bx
 from . import tuples as _tup
+from . import comprehensions as _comp
 
 LIST_RT = {"int": "PyListI64", "float": "PyListF64",
            "bool": "PyListBool", "str": "PyListStr"}
@@ -410,6 +411,9 @@ class Emitter:
             self.w(d + 1, "}")
             self.w(d, "}")
 
+        elif isinstance(s, A.ForEach) and _comp.is_special_foreach(self.tc, s):
+            _comp.emit_foreach(self, s, d)
+
         elif isinstance(s, A.ForEach):
             it, idx = self.fresh(), self.fresh()
             t = s.iter.ty
@@ -800,6 +804,8 @@ class Emitter:
                 return f"{e.func}_new({args})"
             return self.call(e)
 
+        if _comp.is_comp_node(e):
+            return _comp.emit_expr(self, e)
         return "0"
 
     def list_method(self, e: A.MethodCall, recv: str, t: Ty) -> str:
@@ -826,6 +832,8 @@ class Emitter:
             return f"pyl_{m}({recv}, {val(e.args[0])})"
         if m == "remove":
             return f"(pyl_remove({recv}, {val(e.args[0])}), 0)"
+        if m == "sort" and self.kwarg(e, "key") is not None:
+            return _comp.emit_sort_key(self, e, recv)
         if m == "sort":
             rev = self.kwarg(e, "reverse")
             return f"(pyl_sort({recv}, {self.ex(rev) if rev is not None else 'false'}), 0)"
@@ -881,6 +889,9 @@ class Emitter:
         _r = _bx.emit_call(self, e)
         if _r is not None:
             return _r
+        hooked = _comp.emit_call_hook(self, e)
+        if hooked is not None:
+            return hooked
         if n == "len":
             a = e.args[0]
             return (f"pystr_len({self.ex(a)})" if a.ty == STR
