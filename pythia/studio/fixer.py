@@ -107,11 +107,11 @@ class Fixer:
         parts = ["Rewrite this function into PySub.", "",
                  f"Original Python function `{rec.name}` from {rec.file}:", "```python", base_src, "```", ""]
         info = rec.private.get("modinfo")
-        if ext.helpers and info is not None:
-            parts += ["It calls these same-module helpers (they must be valid PySub as well; include a rewritten "
+        if ext.helpers:
+            parts += ["It calls these helpers (they must be valid PySub as well; include a rewritten "
                       "copy in your block only if they need changes):"]
             for h in ext.helpers:
-                parts += ["```python", info.func_text(h), "```"]
+                parts += ["```python", ext.helper_src.get(h) or (info.func_text(h) if info and h in info.funcs else ""), "```"]
             parts.append("")
         if ext.uses and info is not None:
             parts.append("Module-level constants (already inlined below; write them as literals): "
