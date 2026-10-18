@@ -330,7 +330,9 @@ def _trait(t: Optional[Ty]) -> Optional[str]:
             return f"pyb::List2<{_trait(e)}>"
         if e.name == "tuple" and _trait(e) is not None:
             return f"pyb::List<{_trait(e)}, {list_rt_name(t)}>"
-    if t.name == "tuple" and t.elts is not None:
+    if t.name == "tuple" and t.elts is not None:     # immutable contents only: a Tuple never needs write-back
+        if any(x.name in ("list", "dict") for x in t.elts):
+            return None
         inner = [_trait(x) for x in t.elts]
         if all(inner):
             return "pyb::Tuple<" + ", ".join(inner) + ">"
