@@ -35,6 +35,7 @@ from .optimize import elide_guards
 from .parser import parse
 from .typecheck import Ty, typecheck
 from .emit_cpp import emit
+from . import lib_ext as _lx
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 from .paths import RUNTIME as _RUNTIME  # noqa: E402  (wheel or checkout)
@@ -189,7 +190,7 @@ def _walk(n: A.Node):
 
 
 def _is_container(t: Optional[Ty]) -> bool:
-    return t is not None and t.name in ("list", "dict")
+    return _lx.is_container(t)
 
 
 def _roots(e: Optional[A.Node]) -> Set[str]:
@@ -261,7 +262,7 @@ def _mutated_params(mod: A.Module) -> Dict[str, Set[int]]:
                     elif isinstance(n.target, A.Attribute):
                         hits |= hit(n.value)
                 elif isinstance(n, A.MethodCall):
-                    if n.method in ("append", "pop") and _is_container(n.recv.ty):
+                    if n.method in _lx.MUTATORS and _is_container(n.recv.ty):
                         hits |= hit(n.recv)
                         for a in n.args:
                             hits |= hit(a)
@@ -320,6 +321,9 @@ def _trait(t: Optional[Ty]) -> Optional[str]:
     """pyb:: marshalling trait for a PySub type, or None if not exposable."""
     if t is None:
         return None
+    ext = _lx.trait(t, _trait)            # Optional, set, dicts of lists/dicts
+    if ext is not None:
+        return ext
     if t.name in _SCALAR:
         return _SCALAR[t.name]
     if t.name == "list" and t.elem is not None:
@@ -382,8 +386,10 @@ def _gen_wrapper(modname: str, funcs: List[A.FuncDef], tc, mut: Dict[str, Set[in
     out.append('    m.attr("FallbackError") = py::reinterpret_borrow<py::object>(pyb::FallbackError);')
     out.append(f'    pyb::SemanticError = PyErr_NewException("{modname}.PythiaSemanticError", PyExc_RuntimeError, nullptr);')
     out.append('    m.attr("PythiaSemanticError") = py::reinterpret_borrow<py::object>(pyb::SemanticError);')
+    if getattr(tc, "_fn_globals", None):
+        out.append('    pythia_init_globals();')
     for f in funcs:
-        pa = "".join(f', py::arg("{p.name}")' for p in f.params)
+        pa = "".join(", " + _lx.arg_spec(p) for p in f.params)
         out.append(f'    m.def("{f.name}", &w_{f.name}{pa});')
     out.append("}")
     return "\n".join(out) + "\n"
@@ -429,6 +435,8 @@ def _front(src: str, filename: str, funcs: Sequence[str], res: LibResult):
                           "msg": f"function {name!r} is not defined at module level"})
             continue
         sig = tc.funcs[name]
+        _lx.check_exposed(f, lambda ln, col, msg: diags.append(
+            {"line": ln, "col": col, "kind": "LibraryError", "msg": msg}))
         for p, t in list(zip(f.params, sig.params)) + [(None, sig.ret)]:
             if t.name != "None" and _trait(t) is None:
                 what = f"parameter {p.name!r}" if p else "return value"
@@ -436,6 +444,8 @@ def _front(src: str, filename: str, funcs: Sequence[str], res: LibResult):
                        else "unsupported type for marshalling")
                 diags.append({"line": f.line, "col": f.col, "kind": "LibraryError",
                               "msg": f"{name}(): {why} ({what}: {t})"})
+    res.fidelity = _lx.check_globals(mod, tc, lambda ln, col, msg: diags.append(
+        {"line": ln, "col": col, "kind": "LibraryError", "msg": msg}))
     if diags:
         _fail(res, diags, _fmt_diag(diags[0]))
         return None
@@ -477,8 +487,8 @@ def _library_notes(mod: A.Module, notes: List[FidelityNote]) -> List[dict]:
             "none; keep recursion shallow or avoid compiling this function.", "divergent")
     if mod.main:
         add(mod.main[0].line, mod.main[0].col, "L3 module-level statements",
-            "Statements outside functions are not part of the compiled library; functions "
-            "cannot see module-level names in PySub.",
+            "Statements outside functions are not part of the compiled library, except the top-level "
+            "assignments of module-level variables that compiled functions read: those run once at import.",
             "the original module still executes them in Python.", "guarded")
     for n in _walk(mod):
         if isinstance(n, A.StrLit) and not n.value.isascii():
@@ -524,7 +534,7 @@ def build_library(src: str, funcs: Sequence[str], out_dir: str, modname: Optiona
     wrapper = wrapper_tpl.replace("@MOD@", modname)
 
     res.modname, res.cpp, res.wrapper_cpp, res.build_hash = modname, cpp, wrapper, bh
-    res.fidelity = _library_notes(mod, notes)
+    res.fidelity = _library_notes(mod, notes) + res.fidelity
     res.guard_elision = {"elided": stats.elided, "kept": stats.kept}
     res.exposed = [{"name": f.name,
                     "params": [str(t) for t in tc.funcs[f.name].params],

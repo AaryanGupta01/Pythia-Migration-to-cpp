@@ -45,6 +45,9 @@ struct Arena {
     else if (n == "ValueError") c = PyExc_ValueError;
     else if (n == "KeyError") c = PyExc_KeyError;
     else if (n == "EOFError") c = PyExc_EOFError;
+    else if (n == "TypeError") c = PyExc_TypeError;
+    else if (n == "AttributeError") c = PyExc_AttributeError;
+    else if (n == "NameError") c = PyExc_NameError;
     else if (n == "PythiaSemanticError" && SemanticError) c = SemanticError;
     fail(c, e.message().c_str());
 }
@@ -201,6 +204,41 @@ template <class K, class V, class D> struct Dict {
         PyDict_Clear(dst);
         fill(dst, d);
     }
+};
+
+// ---- PySub 1.3: Optional[T] (None <-> empty), set[T] -------------------------------------------
+template <class T> struct Opt {                       // Optional[int|float|bool]
+    using C = std::optional<typename T::C>;
+    static C in(PyObject *o) { if (o == Py_None) return std::nullopt; return T::in(o); }
+    static PyObject *out(const C &v) { if (!v) { Py_INCREF(Py_None); return Py_None; } return T::out(*v); }
+};
+template <class T> struct OptP {                      // Optional[str|list|dict|set]: None <-> nullptr
+    using C = typename T::C;
+    static C in(PyObject *o) { if (o == Py_None) return nullptr; return T::in(o); }
+    static PyObject *out(C v) { if (!v) { Py_INCREF(Py_None); return Py_None; } return T::out(v); }
+    static void back(PyObject *dst, C v) { if (v && dst != Py_None) T::back(dst, v); }
+};
+template <class E, class T> struct Set {
+    using C = pyrt::PySet<T> *;
+    static C in(PyObject *o) {
+        if (!PySet_Check(o) && !PyFrozenSet_Check(o)) fallback("expected set");
+        C s = pyrt::pyset_new<T>();
+        py::object it = steal(PyObject_GetIter(o));
+        while (PyObject *x = PyIter_Next(it.ptr())) {
+            py::object hold = steal(x);
+            s->s.insert(E::in(x));
+        }
+        if (PyErr_Occurred()) throw py::error_already_set();
+        return s;
+    }
+    static void fill(PyObject *dst, C s) {
+        for (const T &x : s->s) {
+            py::object v = steal(E::out(x));
+            if (PySet_Add(dst, v.ptr()) < 0) throw py::error_already_set();
+        }
+    }
+    static PyObject *out(C s) { py::object r = steal(PySet_New(nullptr)); fill(r.ptr(), s); return r.release().ptr(); }
+    static void back(PyObject *dst, C s) { if (PySet_Clear(dst) < 0) throw py::error_already_set(); fill(dst, s); }
 };
 
 }  // namespace pyb
