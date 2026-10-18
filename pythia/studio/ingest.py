@@ -25,6 +25,7 @@ SKIP_DIRS = {"venv", ".venv", "node_modules", ".git", "__pycache__", "build", "d
 SKIP_SUFFIX = (".pyc", ".pyo")
 MAX_FILE_BYTES = 5 * 1024 * 1024
 GIT_TIMEOUT_S = 300
+MAX_ZIP_BYTES = 200 * 2**20       # GitHub archive download cap
 REPO_ROOT = Path(__file__).resolve().parents[2]
 from ..paths import DEMO  # noqa: E402  (wheel or checkout)
 
@@ -118,16 +119,60 @@ class _Copier:
                                       "message": f"Copied {self.files} files"}, stage="ingest")
 
 
+_GITHUB = re.compile(r"^(?:https?://)?(?:www\.)?github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?(?:tree/([^?#]+))?/?$")
+
+
+def _github_zip(url: str, dest: Path, emit) -> bool:
+    """github.com/owner/repo[/tree/branch] -> download the zip archive and unpack it into dest. No git needed, and
+    members whose path is too long for Windows are skipped instead of failing the whole checkout. False: not GitHub."""
+    import io
+    import urllib.request
+    import zipfile
+    m = _GITHUB.match(url.strip())
+    if not m:
+        return False
+    owner, repo, ref = m.group(1), m.group(2), (m.group(3) or "HEAD").strip("/")
+    emit("ingest.progress", {"phase": "clone", "files": 0, "bytes": 0, "current": url,
+                             "message": f"Downloading {owner}/{repo} from GitHub"}, stage="ingest")
+    req = urllib.request.Request(f"https://codeload.github.com/{owner}/{repo}/zip/{ref}",
+                                 headers={"User-Agent": "pythia-studio"})
+    try:
+        with urllib.request.urlopen(req, timeout=GIT_TIMEOUT_S) as r:
+            data = r.read(MAX_ZIP_BYTES + 1)
+    except Exception as ex:
+        raise RuntimeError(f"could not download {owner}/{repo} from GitHub ({ex}); check the URL and that the "
+                           "repository is public")
+    if len(data) > MAX_ZIP_BYTES:
+        raise RuntimeError(f"{owner}/{repo} is larger than {MAX_ZIP_BYTES // 2**20} MB; clone it and open the folder")
+    dest.mkdir(parents=True, exist_ok=True)
+    root = dest.resolve()
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        for info in z.infolist():
+            parts = info.filename.split("/")[1:]          # drop the "repo-branch/" top folder
+            if not parts or not parts[-1] or info.is_dir():
+                continue
+            target = (root / Path(*parts)).resolve()
+            if root not in target.parents or len(str(target)) > 250:   # zip-slip guard; Windows MAX_PATH
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with z.open(info) as s, open(target, "wb") as d:
+                shutil.copyfileobj(s, d)
+    return True
+
+
 def _git_clone(url: str, dest: Path, emit) -> None:
+    if _github_zip(url, dest, emit):
+        return
     if not shutil.which("git"):
-        raise RuntimeError("git is not installed or not on PATH; install it to clone repositories")
+        raise RuntimeError("git is not installed or not on PATH; install it to clone repositories "
+                           "(GitHub URLs work without git)")
     src = url.strip()
     if Path(src).exists():                       # local bare repo / working repo: use file:// so --depth works
         src = Path(src).resolve().as_uri()
     emit("ingest.progress", {"phase": "clone", "files": 0, "bytes": 0, "current": url,
                              "message": f"Cloning {url} (depth 1)"}, stage="ingest")
     try:
-        r = subprocess.run(["git", "clone", "--depth", "1", "--quiet", src, str(dest)],
+        r = subprocess.run(["git", "-c", "core.longpaths=true", "clone", "--depth", "1", "--quiet", src, str(dest)],
                            capture_output=True, text=True, timeout=GIT_TIMEOUT_S,
                            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     except subprocess.TimeoutExpired:

@@ -12,6 +12,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--base", default="http://127.0.0.1:8765")
 ap.add_argument("--demo")
 ap.add_argument("--path")
+ap.add_argument("--url")
 ap.add_argument("--cmd", default="")
 ap.add_argument("--offline", action="store_true")
 ap.add_argument("--min-accelerated", type=int, default=1)
@@ -25,7 +26,8 @@ def call(method, path, body=None):
         return json.loads(r.read() or b"null")
 
 
-inp = {"kind": "demo", "name": a.demo} if a.demo else {"kind": "folder", "path": a.path}
+inp = ({"kind": "demo", "name": a.demo} if a.demo else {"kind": "git", "url": a.url} if a.url
+       else {"kind": "folder", "path": a.path})
 t0 = time.time()
 j = call("POST", "/api/jobs", {"input": inp, "options": {"offline": a.offline, "trace_cmd": a.cmd}})
 while True:
@@ -42,7 +44,7 @@ for f in fs:
     by[f["status"]] = by.get(f["status"], 0) + 1
 acc = by.get("verified", 0) + by.get("guarded", 0)
 s = st.get("summary") or {}
-print(f"{a.demo or a.path}: state={st['state']} in {time.time() - t0:.0f}s, {len(fs)} functions {by}")
+print(f"{a.demo or a.url or a.path}: state={st['state']} in {time.time() - t0:.0f}s, {len(fs)} functions {by}")
 print("  stages:", stages)
 print(f"  accelerated={acc} geomean={s.get('geomean_speedup')} e2e={s.get('e2e_speedup')}")
 for e in errors:
