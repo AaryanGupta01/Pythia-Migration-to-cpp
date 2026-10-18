@@ -191,12 +191,11 @@ export function Playground() {
           <Sparkles size={15} className="flex-none text-accent" />
           <div className="min-w-0 flex-1">
             <span className="font-medium text-fg">This is regular Python, not PySub yet.</span>{' '}
-            <span className="text-fg2">PySub needs types and a few rewrites (records become classes, shared state becomes parameters, enumerate and lambdas become loops). The AI does it; the type checker checks every answer.</span>
+            <span className="text-fg2">PySub needs type annotations and minor rewrites. PYTHIA infers types in-house{cstat?.llm_enabled ? ' with AI fallback' : ''}; the type checker verifies every answer.</span>
           </div>
-          {cstat?.enabled ? (
-            <Btn kind="primary" onClick={doConvert} className="flex-none"><Wand2 size={13} /> Convert to PySub with AI</Btn>
-          ) : (
-            <Btn onClick={() => openSpecial('settings')} className="flex-none" title={cstat?.hint ?? ''}><KeyRound size={13} /> Add a free API key to convert</Btn>
+          <Btn kind="primary" onClick={doConvert} className="flex-none"><Wand2 size={13} /> {cstat?.llm_enabled ? "Convert to PySub" : "Convert to PySub (In-house)"}</Btn>
+          {!cstat?.llm_enabled && (
+            <Btn onClick={() => openSpecial('settings')} className="flex-none text-xs" title={cstat?.hint ?? 'Add a free API key for AI fallback'}><KeyRound size={12} /> Add API key</Btn>
           )}
         </div>
       )}

@@ -427,7 +427,7 @@ class Emitter:
             self.w(d, "{")
             if t.name == "list":
                 rt = list_rt_name(t)
-                self.w(d + 1, f"{rt} *{it} = {self.ex(s.iter)};")
+                self.w(d + 1, f"auto *{it} = {self.ex(s.iter)};")
                 self.w(d + 1, f"for (int64_t {idx} = 0; {idx} < static_cast<int64_t>({it}->data.size()); {idx}++) {{")
                 if rt == "PyListList":
                     self.w(d + 2, f"p_{s.var} = ({ctype(t.elem)}){it}->data[{idx}];")

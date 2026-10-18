@@ -412,6 +412,8 @@ export interface ConvertStatus {
   provider: string | null
   model: string | null
   hint: string | null
+  llm_enabled?: boolean
+  in_house?: boolean
 }
 export interface PlaygroundRun {
   ok: boolean

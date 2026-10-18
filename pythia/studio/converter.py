@@ -80,7 +80,14 @@ def _out_diff(a: Dict[str, Any], b: Dict[str, Any]) -> str:
 
 def status(settings: Optional[dict]) -> Dict[str, Any]:
     st = llm.llm_status((settings or {}).get("model"), False, None, settings=settings or {})
-    return {"enabled": st["enabled"], "provider": st.get("provider"), "model": st.get("model"), "hint": st.get("hint")}
+    return {
+        "enabled": True,
+        "llm_enabled": bool(st.get("enabled")),
+        "in_house": True,
+        "provider": st.get("provider") if st.get("enabled") else "pythia",
+        "model": st.get("model") if st.get("enabled") else "in-house",
+        "hint": st.get("hint"),
+    }
 
 
 def _in_house(source: str, stdin: str, compile_fn, verify_fn):

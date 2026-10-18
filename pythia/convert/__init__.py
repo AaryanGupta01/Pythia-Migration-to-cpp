@@ -326,6 +326,7 @@ class _Plan:
             self._variables(f.qual, f, _func_own(f.node))
         self._class_fields()
         self._loop_else()
+        self._ifexp_mixed()
         self._num_sinks()
         self._header()
 
@@ -551,6 +552,32 @@ class _Plan:
             e = self.src.line_start(else_line) + len(indent)
             self.edit(e, e + 4, f"if {flag}")
             self.changes.append(f"line {loop.lineno}: the loop's else: block became `if {flag}:`")
+
+    def _ifexp_mixed(self):
+        """When an IfExp has one branch float and the other int (or int literal), harmonize to float."""
+        for n in ast.walk(self.tree):
+            if not isinstance(n, ast.IfExp):
+                continue
+            bt = self.eng.types.get(n.body)
+            ot = self.eng.types.get(n.orelse)
+            if (bt in ("float", "num") and ot == "int") or (bt == "int" and ot in ("float", "num")):
+                target = n.orelse if ot == "int" else n.body
+                if isinstance(target, ast.Constant) and isinstance(target.value, int) and not isinstance(target.value, bool):
+                    pos = self.src.start(target)
+                    end = self.src.end(target)
+                    self.edit(pos, end, f"{float(target.value)}")
+                    self.changes.append(f"line {target.lineno}: widened integer literal {target.value} in conditional expression to float")
+                elif isinstance(target, ast.UnaryOp) and isinstance(target.op, ast.USub) and isinstance(target.operand, ast.Constant) and isinstance(target.operand.value, int):
+                    pos = self.src.start(target)
+                    end = self.src.end(target)
+                    self.edit(pos, end, f"-{float(target.operand.value)}")
+                    self.changes.append(f"line {target.lineno}: widened integer literal -{target.operand.value} in conditional expression to float")
+                else:
+                    pos = self.src.start(target)
+                    end = self.src.end(target)
+                    self.edit(pos, pos, "float(")
+                    self.edit(end, end, ")")
+                    self.changes.append(f"line {target.lineno}: wrapped int branch of conditional expression with float()")
 
     def _init_attrs(self, k):
         init = k.methods.get("__init__")

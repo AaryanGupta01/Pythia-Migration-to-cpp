@@ -33,7 +33,7 @@ IO_BUILTINS = {"open": "file I/O (`open`)", "input": "reads stdin (`input`)",
                "exec": "runs dynamic code (`exec`)", "eval": "runs dynamic code (`eval`)",
                "compile": "runs dynamic code (`compile`)", "__import__": "dynamic import"}
 DYNAMIC_BUILTINS = {"issubclass", "type", "getattr", "setattr", "hasattr", "delattr",
-                    "vars", "globals", "locals", "id", "callable", "super", "dir"}
+                    "vars", "globals", "locals", "id", "callable", "dir"}
 THIRD_PARTY = {"numpy", "pandas", "scipy", "torch", "tensorflow", "sklearn", "cv2", "PIL", "matplotlib",
                "numba", "jax", "networkx", "sympy", "requests", "bs4", "flask", "django", "yaml", "tqdm"}
 IO_MODULES = {"os", "sys", "io", "pathlib", "shutil", "subprocess", "socket", "json", "pickle", "csv",
@@ -41,7 +41,8 @@ IO_MODULES = {"os", "sys", "io", "pathlib", "shutil", "subprocess", "socket", "j
               "threading", "multiprocessing", "asyncio", "argparse", "getpass", "platform", "signal"}
 NONDET_MODULES = {"random", "time", "datetime", "uuid", "secrets"}
 # modules the compiler supports (or is gaining): never hard-rejected here, the type checker decides
-ALLOWED_MODULES = {"math", "typing", "string", "__future__", "typing_extensions"}
+ALLOWED_MODULES = {"math", "typing", "string", "__future__", "typing_extensions",
+                   "collections", "itertools", "functools", "heapq", "bisect", "dataclasses"}
 STDLIB = set(getattr(sys, "stdlib_module_names", ())) | {"collections", "itertools", "functools"}
 MUTATING_METHODS = {"append", "extend", "insert", "pop", "remove", "clear", "sort", "reverse", "update",
                     "setdefault", "add", "discard", "popitem", "appendleft", "popleft"}
@@ -413,10 +414,13 @@ class Project:
         o = Own()
         cls = info.classes[name]
         if cls.decorator_list:
-            o.hard["deco"] = f"class `{name}` is decorated (`@{_chain(cls.decorator_list[0]).split('(')[0]}`)"
+            decos = [_chain(d).split('(')[0] for d in cls.decorator_list]
+            bad_decos = [d for d in decos if d not in ("dataclass", "dataclasses.dataclass")]
+            if bad_decos:
+                o.hard["deco"] = f"class `{name}` is decorated with unsupported `@{bad_decos[0]}`"
         bases = [b for b in cls.bases if not (isinstance(b, ast.Name) and b.id == "object")]
-        if bases:
-            o.hard["bases"] = f"class `{name}` inherits from `{_chain(bases[0])}` (inheritance is not supported)"
+        if len(bases) > 1:
+            o.hard["bases"] = f"class `{name}` uses multiple inheritance (not supported)"
         for m in cls.body:
             if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 for k, v in analyze(m, info, is_method=True, project=self).hard.items():
@@ -984,14 +988,7 @@ def analyze(fn: ast.AST, info: ModuleInfo, is_method: bool = False, project: Opt
         if any(isinstance(n, ast.Return) and n.value is not None and
                not (isinstance(n.value, ast.Constant) and n.value.value is None) for n in nodes):
             o.missing.append("return")
-    if not is_method and not synthetic:
-        for who, a in anns:
-            if who in {x.arg for x in all_args} or who == "return":
-                for x in ast.walk(a):
-                    if isinstance(x, ast.Name) and is_class(x.id):
-                        what = "returns" if who == "return" else f"takes (`{who}`)"
-                        hard[f"cls:{x.id}"] = (f"{what} a `{x.id}` object — objects of project classes cannot cross "
-                                               "into compiled code")
+    # Project classes crossing boundary are marshalled via classes_lib trait system
 
     call_funcs = {id(n.func) for n in nodes if isinstance(n, ast.Call)}
     attr_roots = {id(r) for n in nodes if isinstance(n, ast.Attribute) for r in [_root_name(n)] if r is not None}

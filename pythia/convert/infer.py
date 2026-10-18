@@ -568,6 +568,9 @@ class Engine:
                 self.lv_add(n.value, ("dict", kt, t))
             elif isinstance(bt, tuple) and bt[0] == "list":
                 self.lv_add(n.value, ("list", t))
+        elif isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "setdefault" and n.args:
+            kt = self.ty(n.args[0])
+            self.lv_add(n.func.value, ("dict", kt, t))
 
     # ------------------------------------------------------------------ expressions
     def ty(self, n):
