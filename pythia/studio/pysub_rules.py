@@ -84,7 +84,8 @@ def _call_names() -> Dict[str, List[str]]:
 
 
 METHODS: Dict[str, List[str]] = _methods()
-BUILTINS: Set[str] = set(_call_names()["builtins"]) | set(_tc.BUILTIN_SIGS) | {"range"}
+BUILTINS: Set[str] = set(_call_names()["builtins"]) | set(_tc.BUILTIN_SIGS) | {"range"} \
+    | {"any", "all", "enumerate", "zip", "reversed"}          # handled in pythia/comprehensions.py
 EXC_NAMES: Set[str] = set(_tc.EXC_NAMES)
 KEYWORDS: Set[str] = set(_lexer.KEYWORDS)
 ALL_METHOD_NAMES: Set[str] = {m for v in METHODS.values() for m in v}
@@ -135,10 +136,13 @@ def rules_text() -> str:
         "  * An empty list/dict needs an annotation: `xs: list[int] = []`.",
         "  * Functions are CLOSED: module-level variables are invisible inside a function body. Pass state",
         "    (e.g. the list of records) as a parameter, or write literal constants. No closures, no nested defs,",
-        "    no lambdas, no decorators, no default parameter values, no *args/**kwargs, no imports, no `global`.",
+        "    lambda only as a key= argument (see below), no decorators, no default parameter values,",
+        "    no *args/**kwargs, no imports, no `global`.",
         "  * Module-level statements run in order; `if __name__ == \"__main__\":` is accepted and runs its body.",
         "STATEMENTS: assignment (name / subscript / attribute target), augmented assignment (" + aug + "),",
         "  if/elif/else, while, `for v in range(a[, b[, step]])`, `for v in <list|str|dict>` (dict yields keys),",
+        "  `for i, x in enumerate(xs[, start])`, `for a, b in zip(xs, ys[, zs])` (stops at the shortest; nested",
+        "  targets like `for i, (a, b) in enumerate(zip(xs, ys))` work), `for x in reversed(<list|str|range(..)>)`.",
         "  break, continue, pass, return, try/except [Name] [as e] (no finally, no else), raise Name(\"message\").",
         "  Exception names allowed: " + ", ".join(sorted(EXC_NAMES)) + ". In `except E as e`, e is the message (a str).",
         "EXPRESSIONS: literals, names, [..] and {k: v} literals, subscripts a[i], calls, method calls,",
@@ -149,17 +153,26 @@ def rules_text() -> str:
         "    with types d f e g % s; no !r, no {x=}). Triple-quoted strings and docstrings are fine.",
         "  * Conditional expressions ARE supported: `x if c else y`, when both branches have the SAME type",
         "    (an int branch and a float branch is an error: write float(x) or use an if/else statement).",
-        "  * No comprehensions, generator expressions, slicing a[i:j],",
-        "    tuple unpacking, `is`/`is not`, walrus, star-expressions, `with`, `assert`, `del`, lambda.",
-        "  * Comprehension -> explicit loop with append. enumerate/zip -> index loop",
-        "    `for i in range(len(xs))`. sort(key=...)/max(key=...) -> an explicit loop over the records.",
+        "  * List and dict comprehensions ARE supported: [e for x in it if c], several for/if clauses, nesting,",
+        "    {k: v for ...}; `it` may be a list/str/dict, range(..), enumerate/zip/reversed(..). The loop variable",
+        "    is local to the comprehension. No set comprehensions.",
+        "  * Generator expressions ARE supported as the sole argument of sum, min, max, any, all, sorted, list and",
+        "    str.join: sum(x * x for x in xs), \", \".join(str(v) for v in vs). Nowhere else (no len() of one).",
+        "  * lambda ONLY as key=: sorted(xs, key=lambda r: r.age, reverse=True), min/max(xs, key=...),",
+        "    xs.sort(key=...). key= may also be len, abs, str, str.lower (any str method), or a def'd function.",
+        "    The key must return int, float, bool or str (no tuple keys). Other lambdas/closures are errors.",
+        "  * No slicing a[i:j], tuple unpacking outside enumerate/zip loop headers, `is`/`is not`, walrus,",
+        "    star-expressions, `with`, `assert`, `del`. A range()/enumerate()/zip() object can't be stored.",
         "BUILTIN FUNCTIONS (exactly these): " + ", ".join(sorted(BUILTINS)) + ".",
-        "  * input(prompt) -> str. print(..., sep=\" \", end=\"\\n\") (only print/sorted/list.sort take keyword arguments).",
-        "  * min/max: two or more numbers (or strs), or ONE list. sum(list of numbers). sorted(list, reverse=bool).",
+        "  * input(prompt) -> str. print(..., sep=\" \", end=\"\\n\") (keyword arguments: print sep/end, sorted/sort",
+        "    key/reverse, min/max key, enumerate start).",
+        "  * min/max: two or more numbers (or strs), or ONE list or generator (optionally key=). sum(list of numbers",
+        "    or a generator). sorted(list, key=..., reverse=bool). any(it)/all(it) of a list, str, dict or generator.",
+        "  * list(x)/sorted(x)/sum/min/max/any/all/str.join also take range(..) and reversed(..).",
         "  * list(x) and sorted(x) also take a str (its characters, list[str]) or a dict (its keys); list(xs) copies a list.",
         "  * round(x) -> int, round(x, n). format(value, \".2f\"). len works on list/str/dict.",
         "  * int()/float() parse a str (surrounding spaces allowed) and raise ValueError on bad input; str()/bool() convert.",
-        "  * There is NO enumerate, zip, divmod, pow, any, all, reversed, set, dict(), open, isinstance.",
+        "  * There is NO divmod, pow, set, dict(), open, isinstance; list(enumerate(..))/list(zip(..)) need tuples.",
         "METHODS (exactly these):",
         "  * str: lower upper strip lstrip rstrip (optional chars) title capitalize swapcase isdigit isalpha isalnum",
         "    isspace isupper islower startswith endswith find rfind index count replace(old, new) split() split(sep) join(list[str])",

@@ -269,7 +269,8 @@ def _mutated_params(mod: A.Module) -> Dict[str, Set[int]]:
                     elif isinstance(n.target, A.Attribute):
                         hits |= hit(n.value)
                 elif isinstance(n, A.MethodCall):
-                    if n.method in ("append", "pop") and _is_container(n.recv.ty):
+                    if n.method in ("append", "pop", "insert", "extend", "clear", "reverse", "remove", "sort") \
+                            and _is_container(n.recv.ty):
                         hits |= hit(n.recv)
                         for a in n.args:
                             hits |= hit(a)
