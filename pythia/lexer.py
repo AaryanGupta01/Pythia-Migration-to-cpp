@@ -12,7 +12,7 @@ from typing import List, Optional
 KEYWORDS = {
     "def", "return", "if", "elif", "else", "while", "for", "in", "range",
     "and", "or", "not", "True", "False", "None", "pass", "break", "continue",
-    "try", "except", "raise", "class",
+    "try", "except", "raise", "class", "assert",
 }
 
 # Multi-character operators must be tried longest-first.

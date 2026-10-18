@@ -26,7 +26,7 @@ from .typecheck import Ty, INT, FLOAT, BOOL, STR, NONE, ERR, PRIM, NUMERIC, list
 _tls = threading.local()
 
 BUILTIN_BASES = {"Exception", "BaseException", "ValueError", "TypeError", "KeyError", "IndexError", "RuntimeError",
-                 "ABC", "abc.ABC", "dict", "list", "int", "str", "float", "tuple", "set", "NamedTuple",
+                 "AssertionError", "ABC", "abc.ABC", "dict", "list", "int", "str", "float", "tuple", "set", "NamedTuple",
                  "typing.NamedTuple", "Enum", "enum.Enum", "Generic", "Protocol"}
 ARITH = {"+": "add", "-": "sub", "*": "mul", "/": "truediv", "//": "floordiv", "%": "mod", "**": "pow",
          "&": "and", "|": "or", "^": "xor", "<<": "lshift", ">>": "rshift"}

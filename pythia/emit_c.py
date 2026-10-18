@@ -833,6 +833,11 @@ class Emitter:
         m = e.method
         if m == "append":
             return f"(pyl_append({recv}, {val(e.args[0])}), 0)"
+        if m == "appendleft":
+            return f"(pyl_appendleft({recv}, {val(e.args[0])}), 0)"
+        if m == "popleft":
+            call = f"pyl_popleft({recv})"
+            return f"({ctype(t.elem)}){call}" if nested else call
         if m == "pop":
             call = f"pyl_pop_at({recv}, {self.ex(e.args[0])})" if e.args else f"pyl_pop({recv})"
             return f"({ctype(t.elem)}){call}" if nested else call

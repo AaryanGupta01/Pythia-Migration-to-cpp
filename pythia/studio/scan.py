@@ -42,7 +42,8 @@ IO_MODULES = {"os", "sys", "io", "pathlib", "shutil", "subprocess", "socket", "j
 NONDET_MODULES = {"random", "time", "datetime", "uuid", "secrets"}
 # modules the compiler supports (or is gaining): never hard-rejected here, the type checker decides
 ALLOWED_MODULES = {"math", "typing", "string", "__future__", "typing_extensions",
-                   "collections", "itertools", "functools", "heapq", "bisect", "dataclasses"}
+                   "collections", "itertools", "functools", "heapq", "bisect", "dataclasses",
+                   "copy", "sys", "doctest", "collections.abc"}
 STDLIB = set(getattr(sys, "stdlib_module_names", ())) | {"collections", "itertools", "functools"}
 MUTATING_METHODS = {"append", "extend", "insert", "pop", "remove", "clear", "sort", "reverse", "update",
                     "setdefault", "add", "discard", "popitem", "appendleft", "popleft"}

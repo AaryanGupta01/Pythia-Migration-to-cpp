@@ -123,7 +123,7 @@ class Parser:
                 return
             if self.i > start and self.at_kw(
                     "def", "if", "while", "for", "return", "pass",
-                    "class", "try", "raise"):
+                    "class", "try", "raise", "assert"):
                 return
             if self.at_op("(", "["):
                 depth += 1
@@ -283,6 +283,8 @@ class Parser:
             return self.parse_try()
         if self.at_kw("raise"):
             return self.parse_raise()
+        if self.at_kw("assert"):
+            return self.parse_assert()
         if self.at("NAME", "global") and self.toks[self.i + 1].kind == "NAME":
             return self._parse_global()
         if self.cur.kind == "NAME" and self.cur.value in ("import", "from") and self.toks[self.i + 1].kind == "NAME":
@@ -323,6 +325,20 @@ class Parser:
             self.expect("OP", ")")
         self.expect("NEWLINE")
         return A.Raise(line=t.line, col=t.col, exc_name=name, message=msg)
+
+    def parse_assert(self) -> A.Node:
+        t = self.expect("KEYWORD", "assert")
+        test = self.parse_expr()
+        msg = None
+        if self.at_op(","):
+            self.next()
+            msg = self.parse_expr()
+            if not isinstance(msg, A.StrLit):
+                msg = A.Call(msg.line, msg.col, func="str", args=[msg], kwargs=[])
+        self.expect("NEWLINE")
+        not_test = A.UnaryOp(line=t.line, col=t.col, op="not", operand=test)
+        raise_stmt = A.Raise(line=t.line, col=t.col, exc_name="AssertionError", message=msg)
+        return A.If(line=t.line, col=t.col, test=not_test, body=[raise_stmt], orelse=[])
 
     def parse_if(self) -> A.If:
         t = self.next()                       # 'if' or 'elif'

@@ -22,7 +22,8 @@ namespace pyrt {
 class PythonException : public std::exception {
 public:
     PythonException(const char *name, std::string message)
-        : name_(name), message_(std::move(message)), what_(name_ + ": " + message_) {}
+        : name_(name), message_(std::move(message)),
+          what_(message_.empty() ? std::string(name_) : name_ + ": " + message_) {}
     const char *what() const noexcept override { return what_.c_str(); }
     const std::string &name() const noexcept { return name_; }
     const std::string &message() const noexcept { return message_; }
@@ -37,6 +38,7 @@ class ZeroDivisionError : public PythonException { public: explicit ZeroDivision
 class OverflowError : public PythonException { public: explicit OverflowError(const char *m) : PythonException("OverflowError", m) {} explicit OverflowError(const std::string &m) : PythonException("OverflowError", m) {} };
 class ValueError : public PythonException { public: explicit ValueError(const char *m) : PythonException("ValueError", m) {} explicit ValueError(const std::string &m) : PythonException("ValueError", m) {} };
 class KeyError : public PythonException { public: explicit KeyError(const char *m) : PythonException("KeyError", m) {} explicit KeyError(const std::string &m) : PythonException("KeyError", m) {} };
+class AssertionError : public PythonException { public: explicit AssertionError(const char *m) : PythonException("AssertionError", m) {} explicit AssertionError(const std::string &m) : PythonException("AssertionError", m) {} };
 class PythiaSemanticError : public PythonException { public: explicit PythiaSemanticError(const char *m) : PythonException("PythiaSemanticError", m) {} };
 
 // Optional per-call arena (used only by library/extension-module wrappers).
@@ -249,6 +251,126 @@ template <class T> PyList<T> *pyl_repeat(PyList<T> *l, int64_t n) {   // [x] * n
     return r;
 }
 template <class T> PyList<T> *pyl_sorted(PyList<T> *l, bool rev) { auto *r = pyl_copy(l); pyl_sort(r, rev); return r; }
+
+// ---- collections.deque methods ----
+template <class T, class U> void pyl_appendleft(PyList<T> *l, const U &v) {
+    l->data.insert(l->data.begin(), static_cast<T>(v));
+}
+template <class T> T pyl_popleft(PyList<T> *l) {
+    if (l->data.empty()) throw IndexError("pop from an empty deque");
+    T v = l->data.front();
+    l->data.erase(l->data.begin());
+    return v;
+}
+
+// ---- bisect module ----
+template <class T, class U>
+int64_t py_bisect_right(PyList<T> *a, const U &x, int64_t lo = 0, int64_t hi = -1) {
+    if (lo < 0) throw ValueError("lo must be non-negative");
+    int64_t n = a->size();
+    if (hi < 0 || hi > n) hi = n;
+    T val = static_cast<T>(x);
+    while (lo < hi) {
+        int64_t mid = lo + (hi - lo) / 2;
+        if (pyl_lt(val, a->data[static_cast<size_t>(mid)]))
+            hi = mid;
+        else
+            lo = mid + 1;
+    }
+    return lo;
+}
+
+template <class T, class U>
+int64_t py_bisect_left(PyList<T> *a, const U &x, int64_t lo = 0, int64_t hi = -1) {
+    if (lo < 0) throw ValueError("lo must be non-negative");
+    int64_t n = a->size();
+    if (hi < 0 || hi > n) hi = n;
+    T val = static_cast<T>(x);
+    while (lo < hi) {
+        int64_t mid = lo + (hi - lo) / 2;
+        if (pyl_lt(a->data[static_cast<size_t>(mid)], val))
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    return lo;
+}
+
+template <class T, class U>
+void py_insort_right(PyList<T> *a, const U &x, int64_t lo = 0, int64_t hi = -1) {
+    int64_t idx = py_bisect_right(a, x, lo, hi);
+    pyl_insert(a, idx, x);
+}
+
+template <class T, class U>
+void py_insort_left(PyList<T> *a, const U &x, int64_t lo = 0, int64_t hi = -1) {
+    int64_t idx = py_bisect_left(a, x, lo, hi);
+    pyl_insert(a, idx, x);
+}
+
+// ---- heapq module (CPython-exact min-heap siftup/siftdown) ----
+template <class T>
+void py_siftdown(PyList<T> *heap, int64_t startpos, int64_t pos) {
+    T newitem = heap->data[static_cast<size_t>(pos)];
+    while (pos > startpos) {
+        int64_t parentpos = (pos - 1) >> 1;
+        T parent = heap->data[static_cast<size_t>(parentpos)];
+        if (pyl_lt(newitem, parent)) {
+            heap->data[static_cast<size_t>(pos)] = parent;
+            pos = parentpos;
+            continue;
+        }
+        break;
+    }
+    heap->data[static_cast<size_t>(pos)] = newitem;
+}
+
+template <class T>
+void py_siftup(PyList<T> *heap, int64_t pos) {
+    int64_t endpos = heap->size();
+    int64_t startpos = pos;
+    T newitem = heap->data[static_cast<size_t>(pos)];
+    int64_t childpos = 2 * pos + 1;
+    while (childpos < endpos) {
+        int64_t rightpos = childpos + 1;
+        if (rightpos < endpos && !pyl_lt(heap->data[static_cast<size_t>(childpos)], heap->data[static_cast<size_t>(rightpos)])) {
+            childpos = rightpos;
+        }
+        heap->data[static_cast<size_t>(pos)] = heap->data[static_cast<size_t>(childpos)];
+        pos = childpos;
+        childpos = 2 * pos + 1;
+    }
+    heap->data[static_cast<size_t>(pos)] = newitem;
+    py_siftdown(heap, startpos, pos);
+}
+
+template <class T, class U>
+void py_heappush(PyList<T> *heap, const U &item) {
+    heap->data.push_back(static_cast<T>(item));
+    py_siftdown(heap, 0, heap->size() - 1);
+}
+
+template <class T>
+T py_heappop(PyList<T> *heap) {
+    if (heap->data.empty()) throw IndexError("index out of range");
+    T lastelt = heap->data.back();
+    heap->data.pop_back();
+    if (!heap->data.empty()) {
+        T returnitem = heap->data[0];
+        heap->data[0] = lastelt;
+        py_siftup(heap, 0);
+        return returnitem;
+    }
+    return lastelt;
+}
+
+template <class T>
+void py_heapify(PyList<T> *heap) {
+    int64_t n = heap->size();
+    for (int64_t i = n / 2 - 1; i >= 0; --i) {
+        py_siftup(heap, i);
+    }
+}
 // list(s) / sorted(s): one-character strings; list(d) / sorted(d): the keys in insertion order
 inline PyListStr *pyl_chars(PyStr *s) {
     auto *r = pyl_new<PyStr *>();

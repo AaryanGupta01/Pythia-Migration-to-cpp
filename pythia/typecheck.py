@@ -119,7 +119,7 @@ class ClassInfo:
 
 
 EXC_NAMES = {"IndexError", "ZeroDivisionError", "OverflowError",
-            "ValueError", "KeyError", "OverflowError", "PythiaSemanticError", "EOFError", "TypeError"}
+            "ValueError", "KeyError", "PythiaSemanticError", "EOFError", "TypeError", "AssertionError"}
 EXC_NAMES |= {"AttributeError", "NameError"}
 
 PRIM = ("int", "float", "bool", "str")
@@ -616,12 +616,37 @@ class TypeChecker:
         """Checking mode: pushes `expected` inward where it helps inference."""
         if isinstance(e, A.TupleLit) and e.ty is None:
             return _tup.check_lit(self, e, expected)
-        if isinstance(e, A.ListLit) and not e.elts and expected.name == "list":
-            e.ty = expected
-            return expected
-        if isinstance(e, A.DictLit) and not e.keys and expected.name == "dict":
-            e.ty = expected
-            return expected
+        if isinstance(e, A.ListLit) and expected.name == "list":
+            if not e.elts:
+                e.ty = expected
+                return expected
+            elem_ty = expected.elem
+            if elem_ty is not None:
+                ts = [self.check_expr(x, elem_ty) for x in e.elts]
+                acc = ts[0]
+                for it in ts[1:]:
+                    acc = join(acc, it)
+                if acc is not ERR and widens_to(acc, elem_ty):
+                    e.ty = expected
+                    return expected
+        if isinstance(e, A.DictLit) and expected.name == "dict":
+            if not e.keys:
+                e.ty = expected
+                return expected
+            val_ty = expected.elem
+            key_ty = expected.key
+            if val_ty is not None and key_ty is not None:
+                kts = [self.check_expr(k, key_ty) for k in e.keys]
+                vts = [self.check_expr(v, val_ty) for v in e.values]
+                kacc = kts[0]
+                for kt in kts[1:]:
+                    kacc = join(kacc, kt)
+                vacc = vts[0]
+                for vt in vts[1:]:
+                    vacc = join(vacc, vt)
+                if kacc is not ERR and vacc is not ERR and widens_to(kacc, key_ty) and widens_to(vacc, val_ty):
+                    e.ty = expected
+                    return expected
         t = self.synth(e)
         if t.name == "list" and t.elem is None and expected.name == "list":
             e.ty = expected
@@ -955,14 +980,18 @@ class TypeChecker:
                 return STR
             return self.err(e, f"str has no method {m!r} in PySub")
         if recv.name == "list":
-            if e.method == "append":
+            if e.method in ("append", "appendleft"):
                 if len(e.args) != 1:
-                    return self.err(e, "append() takes exactly one argument")
+                    return self.err(e, f"{e.method}() takes exactly one argument")
                 at = self.check_expr(e.args[0], recv.elem)
                 if not widens_to(at, recv.elem):
                     return self.err(e.args[0],
-                                    f"cannot append {at} to {recv}")
+                                    f"cannot {e.method} {at} to {recv}")
                 return NONE
+            if e.method == "popleft":
+                if len(e.args) != 0:
+                    return self.err(e, "popleft() takes no arguments")
+                return recv.elem
             return self.err(e, f"list has no method {e.method!r} in PySub")
         if recv == STR:
             if e.method == "upper" or e.method == "lower":

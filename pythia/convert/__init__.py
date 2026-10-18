@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from . import observe as _observe
-from .infer import MODULE, Engine, infer, is_rec, parents, sinks
+from .infer import MODULE, Engine, infer, is_rec, parents, sinks, parse_annotation
 from .types import complete, contains, is_bad, render, show
 
 OPTIONAL = "Optional[{}]"
@@ -396,24 +396,32 @@ class _Plan:
             defaults.update({p.arg: d for p, d in zip(fn.args.kwonlyargs, fn.args.kw_defaults) if d is not None})
             pretty = f.qual.replace(".<locals>.", ".") + "()"
             for p in (pos + fn.args.kwonlyargs)[skip:]:
-                if p.annotation is not None:
+                ann_type = parse_annotation(p.annotation, self.eng.classes) if p.annotation is not None else None
+                if p.annotation is not None and ann_type is not None and complete(ann_type):
                     continue
                 t = self.eng.slots.get(("var", f.qual, p.arg))
                 s = self.r(t, fn.lineno)
                 if s is None or not complete(t) and s is None:
+                    if p.annotation is not None:
+                        continue
                     why = "it is never called" if t is None else f"it receives {show(t)}"
                     self.problem(p.lineno, f"couldn't work out the type of parameter '{p.arg}' of {pretty}: {why}")
                     continue
-                if p.arg in defaults:
+                if p.annotation is not None:
+                    self.edit(self.src.start(p.annotation), self.src.end(p.annotation), s)
+                    self.changes.append(f"refined parameter {p.arg}: {s} in {pretty}")
+                elif p.arg in defaults:
                     d = defaults[p.arg]
                     self.edit(self.src.end(p), self.src.start(d), f": {s} = ")
+                    self.changes.append(f"parameter {p.arg}: {s} in {pretty}")
                 else:
                     self.edit(self.src.end(p), self.src.end(p), f": {s}")
-                self.changes.append(f"parameter {p.arg}: {s} in {pretty}")
+                    self.changes.append(f"parameter {p.arg}: {s} in {pretty}")
             for extra in (fn.args.vararg, fn.args.kwarg):
                 if extra is not None and extra.annotation is None:
                     self.problem(fn.lineno, f"*{extra.arg} parameters of {pretty} are not converted")
-            if fn.returns is not None:
+            ret_type = parse_annotation(fn.returns, self.eng.classes) if fn.returns is not None else None
+            if fn.returns is not None and ret_type is not None and complete(ret_type):
                 continue
             if f.generator:
                 self.problem(fn.lineno, f"{pretty} is a generator function (yield); it is left as it is")
@@ -424,15 +432,21 @@ class _Plan:
             else:
                 s = self.r(rt, fn.lineno)
                 if s is None:
-                    self.problem(fn.lineno, f"couldn't work out what {pretty} returns ({show(rt)})")
+                    if fn.returns is None:
+                        self.problem(fn.lineno, f"couldn't work out what {pretty} returns ({show(rt)})")
                     continue
             if s is None:
                 continue
-            at = _close_paren(self.src, fn)
-            if at is not None:
-                self.edit(at, at, f" -> {s}")
+            if fn.returns is not None:
+                self.edit(self.src.start(fn.returns), self.src.end(fn.returns), s)
                 if s != "None":
                     self.changes.append(f"{pretty} returns {s}")
+            else:
+                at = _close_paren(self.src, fn)
+                if at is not None:
+                    self.edit(at, at, f" -> {s}")
+                    if s != "None":
+                        self.changes.append(f"{pretty} returns {s}")
 
     def _variables(self, scope, f, own):
         own = list(own)

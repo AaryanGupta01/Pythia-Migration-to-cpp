@@ -47,14 +47,24 @@ STRING_CONSTS = {
     "printable": _string.printable,
 }
 
+SYS_CONSTS = {"maxsize": 9223372036854775807}
+
 MODULES = {
     "math": set(MATH_FUNCS) | set(MATH_FLOAT_CONSTS) | MATH_CALL_CONSTS,
     "string": set(STRING_CONSTS),
+    "sys": set(SYS_CONSTS),
+    "copy": {"copy", "deepcopy"},
+    "heapq": {"heappush", "heappop", "heapify", "heappushpop", "heapreplace", "nlargest", "nsmallest"},
+    "bisect": {"bisect", "bisect_left", "bisect_right", "insort", "insort_left", "insort_right"},
+    "doctest": {"testmod"},
 }
 MODULES.update({                       # annotations and containers (resolved in types_ext.py)
-    "typing": {"List", "Dict", "Set", "Tuple", "Optional", "Union", "Sequence", "Iterable", "DefaultDict"},
+    "typing": {"List", "Dict", "Set", "Tuple", "Optional", "Union", "Sequence", "Iterable", "DefaultDict",
+               "Any", "Callable", "NamedTuple", "TypedDict", "cast", "final", "Literal", "TypeVar", "Generic",
+               "Iterator", "Generator", "Mapping", "Deque", "Counter"},
     "__future__": {"annotations"},
-    "collections": {"defaultdict", "Counter"},
+    "collections": {"defaultdict", "Counter", "deque", "OrderedDict", "namedtuple"},
+    "collections.abc": {"Iterable", "Iterator", "Generator", "Callable", "Sequence", "Hashable", "Mapping"},
 })
 MODULES["dataclasses"] = {"dataclass"}  # @dataclass on user classes (classes_ext.py)
 
@@ -75,8 +85,27 @@ def _const_or_call(p, mod: str, attr: str, tok, allow_call_args: bool = True) ->
     line, col = tok.line, tok.col
     if mod == "string":
         return A.StrLit(line, col, value=STRING_CONSTS[attr])
+    if mod == "sys" and attr in SYS_CONSTS:
+        return A.IntLit(line, col, value=SYS_CONSTS[attr])
     if attr in MATH_FLOAT_CONSTS:
         return A.FloatLit(line, col, value=MATH_FLOAT_CONSTS[attr])
+    if mod == "doctest" and attr == "testmod":
+        if p.at_op("("):
+            p.next()
+            p._call_args()
+            return A.IntLit(line, col, value=0)
+    if mod == "typing" and attr == "cast":
+        if p.at_op("("):
+            p.next()
+            args, _ = p._call_args()
+            return args[1] if len(args) > 1 else (args[0] if args else A.NoneLit(line, col))
+    if mod == "collections" and attr == "deque":
+        if p.at_op("("):
+            p.next()
+            args, kwargs = p._call_args()
+            return A.ListLit(line, col, elts=[]) if not args else A.Call(line, col, func="list", args=args, kwargs=kwargs)
+        p.error("collections.deque must be instantiated: collections.deque(...)")
+        raise _panic()
     if p.at_op("("):
         p.next()
         args, kwargs = p._call_args()
@@ -111,14 +140,17 @@ def parse_import(p) -> A.Node:
     pas = A.Pass(first.line, first.col)
 
     def mod_name():
-        nm = p.expect("NAME")
         if p.at_op("."):
-            p.error(f"submodule imports are outside the PySub subset (supported modules: {', '.join(sorted(MODULES))})")
+            p.error("relative imports are outside the PySub subset")
             raise _panic()
-        if nm.value not in MODULES:
-            p.error(f"module {nm.value!r} is not supported in PySub (supported modules: {', '.join(sorted(MODULES))})")
+        nm = p.expect("NAME").value
+        while p.at_op("."):
+            p.next()
+            nm = nm + "." + p.expect("NAME").value
+        if nm not in MODULES:
+            p.error(f"module {nm!r} is not supported in PySub (supported modules: {', '.join(sorted(MODULES))})")
             raise _panic()
-        return nm.value
+        return nm
 
     def alias(default: str) -> str:
         if p.cur.kind == "NAME" and p.cur.value == "as":

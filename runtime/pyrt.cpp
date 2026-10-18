@@ -20,6 +20,7 @@ namespace pyrt {
     if (std::string(exc) == "ValueError") throw ValueError(m.c_str());
     if (std::string(exc) == "KeyError") throw KeyError(m.c_str());
     if (std::string(exc) == "EOFError") throw EOFError(m.c_str());
+    if (std::string(exc) == "AssertionError") throw AssertionError(m.c_str());
     if (std::string(exc) == "PythiaSemanticError") throw PythiaSemanticError(m.c_str());
     throw PythonException(exc, m);
 }

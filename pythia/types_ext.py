@@ -26,8 +26,9 @@ BUILTIN_TYS = {"int", "float", "bool", "str", "list", "dict", "set", "None", "op
 SCALARS = ("int", "float", "bool")
 
 TYPING_ALIAS = {"List": "list", "Dict": "dict", "Set": "set", "Tuple": "tuple", "Optional": "Optional",
-                "Union": "Union", "Sequence": "list", "Iterable": "list",
-                "DefaultDict": "dict"}
+                "Union": "Union", "Sequence": "list", "Iterable": "list", "Iterator": "list", "Generator": "list",
+                "DefaultDict": "dict", "Mapping": "dict", "Deque": "list", "Counter": "dict",
+                "deque": "list", "OrderedDict": "dict", "namedtuple": "tuple", "Hashable": "int"}
 
 
 def is_class(t: Optional[Ty]) -> bool:
@@ -98,12 +99,15 @@ def check_imports(tc) -> None:
         elif mod == "collections":
             tc.collections_modules.add(alias)
     for local, (mod, attr) in table.names.items():
-        if mod == "typing":
+        if mod in ("typing", "collections.abc"):
             tc.typing_names[local] = attr
         elif mod == "__future__":
             tc.future_annotations = True
         elif mod == "collections":
-            tc.collections_names[local] = attr
+            if attr in ("defaultdict", "Counter"):
+                tc.collections_names[local] = attr
+            elif attr in ("deque", "OrderedDict", "namedtuple"):
+                tc.typing_names[local] = attr
 
 
 def _te(src: A.TypeExpr, name: str, args) -> A.TypeExpr:
@@ -152,6 +156,8 @@ def resolve_type(tc, te: A.TypeExpr) -> Optional[Ty]:
         return _coll_annotation(tc, te, coll_name(tc, name), args)
     elif name in getattr(tc, "typing_names", {}):
         name, via_typing = tc.typing_names[name], True
+    elif name in tc.classes:
+        return None
     elif name in TYPING_ALIAS:
         return _err(tc, te, f"{name!r} is not imported; add `from typing import {name}`")
     if via_typing:

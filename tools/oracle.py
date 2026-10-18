@@ -35,7 +35,7 @@ NEG = os.path.join(ROOT, "tests", "negative")
 BUILD = os.path.join(ROOT, "build", "oracle")
 RUNTIME = os.path.join(ROOT, "runtime")
 
-EXC_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*(?:Error|Exception)):", re.M)
+EXC_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*(?:Error|Exception))(?::|$)", re.M)
 
 GREEN, RED, YELLOW, DIM, RESET = (
     "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[0m")

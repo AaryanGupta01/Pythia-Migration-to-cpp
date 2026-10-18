@@ -936,6 +936,9 @@ class Engine:
                 return elem(args[0]) if args else None
             return None
         if mod == "collections":
+            if attr == "deque":
+                args = self._args(n)
+                return args[0] if args and args[0] is not None else ("list", None)
             if attr == "defaultdict":
                 self._args(n)
                 fa = n.args[0] if n.args else None
@@ -950,6 +953,29 @@ class Engine:
             if attr == "OrderedDict":
                 args = self._args(n)
                 return args[0] if args else ("dict", None, None)
+        if mod == "heapq":
+            args = self._args(n)
+            if attr == "heappush":
+                if len(n.args) >= 2 and args[1] is not None:
+                    self.lv_add(n.args[0], ("list", args[1]))
+                return "None"
+            if attr in ("heappop", "heappushpop", "heapreplace"):
+                if len(n.args) >= 2 and attr in ("heappushpop", "heapreplace") and args[1] is not None:
+                    self.lv_add(n.args[0], ("list", args[1]))
+                return elem(args[0]) if args else None
+            if attr == "heapify":
+                return "None"
+        if mod == "bisect":
+            args = self._args(n)
+            if attr.startswith("bisect"):
+                return "int"
+            if attr.startswith("insort"):
+                if len(n.args) >= 2 and args[1] is not None:
+                    self.lv_add(n.args[0], ("list", args[1]))
+                return "None"
+        if mod == "copy":
+            args = self._args(n)
+            return args[0] if args else None
         self._args(n)
         return None
 
@@ -1068,7 +1094,7 @@ class Engine:
                 self.lv_add(recv, "str")
             return STR_RET.get(m)
         if kind == "list":
-            if m == "append":
+            if m in ("append", "appendleft"):
                 self.lv_add(recv, ("list", A(0)))
                 return "None"
             if m == "extend":
@@ -1077,7 +1103,7 @@ class Engine:
             if m == "insert":
                 self.lv_add(recv, ("list", A(1)))
                 return "None"
-            if m == "pop":
+            if m in ("pop", "popleft"):
                 return elem(bt)
             if m in ("index", "count"):
                 return "int"

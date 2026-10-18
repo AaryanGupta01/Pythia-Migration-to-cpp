@@ -180,3 +180,41 @@ class Account:
 acc = Account("Ann", 100)
 acc.deposit(50)
 print(acc.owner, acc.balance)
+#@@ bfs_queue
+from collections import deque
+def bfs_shortest(graph, start, target):
+    q = deque([start])
+    dist = {start: 0}
+    while q:
+        u = q.popleft()
+        if u == target:
+            return dist[u]
+        for v in graph.get(u, []):
+            if v not in dist:
+                dist[v] = dist[u] + 1
+                q.append(v)
+    return -1
+
+adj = {1: [2, 3], 2: [4], 3: [4], 4: [5]}
+print(bfs_shortest(adj, 1, 5))
+print(bfs_shortest(adj, 1, 99))
+#@@ k_largest_heap
+import heapq
+def k_largest(nums, k):
+    h = []
+    for x in nums:
+        heapq.heappush(h, x)
+        if len(h) > k:
+            heapq.heappop(h)
+    return heapq.heappop(h)
+
+print(k_largest([3, 2, 1, 5, 6, 4], 2))
+#@@ bisect_search
+import bisect
+def count_in_range(nums, low, high):
+    i = bisect.bisect_left(nums, low)
+    j = bisect.bisect_right(nums, high)
+    return j - i
+
+data = [1, 3, 5, 7, 9, 11, 13]
+print(count_in_range(data, 4, 10))

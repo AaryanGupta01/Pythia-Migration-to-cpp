@@ -23,7 +23,8 @@ METHOD_TABLE = {
             # the core set (typecheck.py handles these; listed because the studio's extractor misses `m in (...)` forms)
             "upper", "lower", "strip", "lstrip", "rstrip", "title", "capitalize", "swapcase", "isdigit", "isalpha",
             "isalnum", "isspace", "isupper", "islower", "replace", "join"],
-    "list": ["index", "append", "pop", "insert", "extend", "clear", "reverse", "copy", "count", "remove", "sort"],
+    "list": ["index", "append", "pop", "insert", "extend", "clear", "reverse", "copy", "count", "remove", "sort",
+             "appendleft", "popleft"],
     "dict": ["keys", "values", "pop", "setdefault", "update", "copy", "clear", "fromkeys"],
 }
 BUILTIN_NAMES = {"pow", "bin", "hex", "oct", "repr", "divmod"}
@@ -82,6 +83,66 @@ def synth_call(tc, e: A.Call) -> Optional[Ty]:
         return _slice(tc, e)
     if f.startswith("math."):
         return _math(tc, e)
+    if f.startswith("copy."):
+        if not _count(tc, e, 1, 1, f):
+            return ERR
+        return tc.synth(e.args[0])
+    if f.startswith("heapq."):
+        op = f[6:]
+        if op == "heappush":
+            if not _count(tc, e, 2, 2, f): return ERR
+            ht = tc.synth(e.args[0])
+            if ht.name != "list":
+                return tc.err(e.args[0], f"heapq.heappush expects a list, found {ht}")
+            at = tc.check_expr(e.args[1], ht.elem)
+            if not widens_to(at, ht.elem):
+                return tc.err(e.args[1], f"cannot push {at} to heap of {ht.elem}")
+            return NONE
+        if op == "heappop":
+            if not _count(tc, e, 1, 1, f): return ERR
+            ht = tc.synth(e.args[0])
+            if ht.name != "list":
+                return tc.err(e.args[0], f"heapq.heappop expects a list, found {ht}")
+            return ht.elem
+        if op == "heapify":
+            if not _count(tc, e, 1, 1, f): return ERR
+            ht = tc.synth(e.args[0])
+            if ht.name != "list":
+                return tc.err(e.args[0], f"heapq.heapify expects a list, found {ht}")
+            return NONE
+        if op in ("heappushpop", "heapreplace"):
+            if not _count(tc, e, 2, 2, f): return ERR
+            ht = tc.synth(e.args[0])
+            if ht.name != "list":
+                return tc.err(e.args[0], f"{f} expects a list, found {ht}")
+            at = tc.check_expr(e.args[1], ht.elem)
+            if not widens_to(at, ht.elem):
+                return tc.err(e.args[1], f"cannot push {at} to heap of {ht.elem}")
+            return ht.elem
+    if f.startswith("bisect."):
+        op = f[7:]
+        if op in ("bisect", "bisect_right", "bisect_left"):
+            if not _count(tc, e, 2, 4, f): return ERR
+            at = tc.synth(e.args[0])
+            if at.name != "list":
+                return tc.err(e.args[0], f"{f} expects a list, found {at}")
+            xt = tc.check_expr(e.args[1], at.elem)
+            if not widens_to(xt, at.elem):
+                return tc.err(e.args[1], f"{f} value {xt} does not match list element {at.elem}")
+            for a in e.args[2:]:
+                _need(tc, a, _intlike, f"{f} bounds must be integers")
+            return INT
+        if op in ("insort", "insort_right", "insort_left"):
+            if not _count(tc, e, 2, 4, f): return ERR
+            at = tc.synth(e.args[0])
+            if at.name != "list":
+                return tc.err(e.args[0], f"{f} expects a list, found {at}")
+            xt = tc.check_expr(e.args[1], at.elem)
+            if not widens_to(xt, at.elem):
+                return tc.err(e.args[1], f"{f} value {xt} does not match list element {at.elem}")
+            for a in e.args[2:]:
+                _need(tc, a, _intlike, f"{f} bounds must be integers")
+            return NONE
     if f == "int" and len(e.args) == 2:
         if not _nokw(tc, e):
             return ERR
@@ -353,6 +414,36 @@ def emit_call(em, e: A.Call) -> Optional[str]:
         return f"{fn}({em.ex(base)}, {_slice_args(em, e)})"
     if n.startswith("math."):
         return _emit_math(em, e)
+    if n.startswith("copy."):
+        if a[0].ty.name == "list":
+            return f"pyl_copy({em.ex(a[0])})"
+        if a[0].ty.name == "dict":
+            return f"px_dcopy({em.ex(a[0])})"
+        return em.ex(a[0])
+    if n.startswith("heapq."):
+        op = n[6:]
+        if op == "heappush":
+            return f"(py_heappush({em.ex(a[0])}, {em.ex(a[1])}), 0)"
+        if op == "heappop":
+            return f"py_heappop({em.ex(a[0])})"
+        if op == "heapify":
+            return f"(py_heapify({em.ex(a[0])}), 0)"
+        if op == "heappushpop":
+            h, it = em.fresh(), em.fresh()
+            return f"[&]() {{ auto *{h} = {em.ex(a[0])}; auto {it} = {em.ex(a[1])}; if ({h}->data.empty() || pyl_lt({it}, {h}->data[0])) return {it}; py_heappush({h}, {it}); return py_heappop({h}); }}()"
+        if op == "heapreplace":
+            h, it = em.fresh(), em.fresh()
+            return f"[&]() {{ auto *{h} = {em.ex(a[0])}; auto {it} = {em.ex(a[1])}; auto r = py_heappop({h}); py_heappush({h}, {it}); return r; }}()"
+    if n.startswith("bisect."):
+        op = n[7:]
+        fn = "py_bisect_left" if op == "bisect_left" else \
+             "py_insort_left" if op == "insort_left" else \
+             "py_insort_right" if op in ("insort", "insort_right") else "py_bisect_right"
+        args_str = f"{em.ex(a[0])}, {em.ex(a[1])}"
+        if len(a) > 2: args_str += f", {_i(em, a[2])}"
+        if len(a) > 3: args_str += f", {_i(em, a[3])}"
+        ret = f"{fn}({args_str})"
+        return f"({ret}, 0)" if op.startswith("insort") else ret
     if n == "int":
         t = a[0].ty
         if len(a) == 2:
