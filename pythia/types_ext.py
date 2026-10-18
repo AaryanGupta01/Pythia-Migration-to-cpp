@@ -25,13 +25,6 @@ from .typecheck import (Ty, INT, FLOAT, BOOL, STR, NONE, ERR, PRIM, NUMERIC, Sco
 BUILTIN_TYS = {"int", "float", "bool", "str", "list", "dict", "set", "None", "optional", "tuple", "<error>"}
 SCALARS = ("int", "float", "bool")
 
-# Modules a PySub program may import, and the names it may import from each (None = any name; the
-# names are then checked where they are used).  Other workstreams add rows here (e.g. "math").
-ALLOWED_IMPORTS: Dict[str, Optional[Set[str]]] = {
-    "typing": {"List", "Dict", "Set", "Tuple", "Optional", "Union", "Sequence", "Iterable", "DefaultDict"},
-    "__future__": {"annotations"},
-    "collections": {"defaultdict", "Counter"},
-}
 TYPING_ALIAS = {"List": "list", "Dict": "dict", "Set": "set", "Tuple": "tuple", "Optional": "Optional",
                 "Union": "Union", "Sequence": "list", "Iterable": "list",
                 "DefaultDict": "dict"}
@@ -90,36 +83,27 @@ def _err(tc, node, msg: str) -> Ty:
 
 # ------------------------------------------------------------------ imports & annotations
 def check_imports(tc) -> None:
+    """Read the parser's import table (parse_ext.parse_import validated the modules and names)."""
     tc.typing_names = {}             # local name -> typing name
     tc.typing_modules = set()        # local names bound to the typing module
+    tc.collections_modules = set()
     tc.future_annotations = False
     tc.collections_names = {}        # local name -> 'defaultdict' | 'Counter'
-    for imp in tc.mod.imports:
-        if imp.module not in ALLOWED_IMPORTS:
-            _err(tc, imp, f"import of {imp.module!r} is outside the PySub subset "
-                          f"(allowed: {', '.join(sorted(ALLOWED_IMPORTS))})")
-            continue
-        allowed = ALLOWED_IMPORTS[imp.module]
-        if not imp.names:
-            if imp.module == "__future__":
-                _err(tc, imp, "write `from __future__ import annotations`")
-            if imp.module == "typing":
-                tc.typing_modules.add(imp.alias or "typing")
-            if imp.module == "collections":
-                _err(tc, imp, "write `from collections import defaultdict, Counter` (collections.X is not "
-                              "supported in PySub)")
-            continue
-        for n, alias in zip(imp.names, imp.asnames):
-            if allowed is not None and n not in allowed:
-                _err(tc, imp, f"{imp.module}.{n} is outside the PySub subset"
-                              + (f" (supported: {', '.join(sorted(allowed))})" if allowed else ""))
-                continue
-            if imp.module == "typing":
-                tc.typing_names[alias or n] = n
-            elif imp.module == "__future__":
-                tc.future_annotations = True
-            elif imp.module == "collections":
-                tc.collections_names[alias or n] = n
+    table = getattr(tc.mod, "import_table", None)
+    if table is None:
+        return
+    for alias, mod in table.modules.items():
+        if mod == "typing":
+            tc.typing_modules.add(alias)
+        elif mod == "collections":
+            tc.collections_modules.add(alias)
+    for local, (mod, attr) in table.names.items():
+        if mod == "typing":
+            tc.typing_names[local] = attr
+        elif mod == "__future__":
+            tc.future_annotations = True
+        elif mod == "collections":
+            tc.collections_names[local] = attr
 
 
 def _te(src: A.TypeExpr, name: str, args) -> A.TypeExpr:
@@ -158,17 +142,14 @@ def resolve_type(tc, te: A.TypeExpr) -> Optional[Ty]:
     via_typing = False
     if "." in name:
         mod, attr = name.rsplit(".", 1)
+        if mod in getattr(tc, "collections_modules", ()) and attr in ("defaultdict", "Counter"):
+            return resolve_type(tc, _te(te, attr, args)) if attr in tc.collections_names.values() \
+                else _coll_annotation(tc, te, attr, args)
         if mod not in getattr(tc, "typing_modules", ()):
             return _err(tc, te, f"unknown type {name!r}")
         name, via_typing = attr, True
-    elif coll_name(tc, name) == "defaultdict":
-        name = "dict"                              # defaultdict[K, V] annotates a dict[K, V]
-    elif coll_name(tc, name) == "Counter":
-        if args is None or len(args) != 1:
-            return _err(tc, te, "Counter takes exactly 1 type argument, e.g. Counter[str]")
-        k = tc.resolve_type(args[0])
-        return ERR if k is ERR else dict_of(k, INT) if k.name in ("int", "str") else \
-            _err(tc, te, f"Counter keys must be int or str in PySub; found {k}")
+    elif coll_name(tc, name):
+        return _coll_annotation(tc, te, coll_name(tc, name), args)
     elif name in getattr(tc, "typing_names", {}):
         name, via_typing = tc.typing_names[name], True
     elif name in TYPING_ALIAS:
@@ -537,6 +518,7 @@ def check_stmt(tc, s) -> bool:
     if isinstance(s, A.ForEach):
         from . import tuples
         tuples.mark_items(s.iter)             # `for k, v in d.items()` is allowed (tuples.py)
+        _views(tc, [s.iter])
         t = tc.synth(s.iter)
         if t.name in ("set", "optional"):
             for k in assigned_names([s]):
@@ -759,6 +741,8 @@ def _compare(tc, e) -> Optional[Ty]:
             return ERR
         e.static = _negate(st) if op in ("!=", "is not") else st
         return BOOL
+    if op in ("in", "not in"):
+        _views(tc, [e.right])
     lt, rt = tc.synth(e.left), tc.synth(e.right)
     if ERR in (lt, rt):
         return BOOL
@@ -879,8 +863,17 @@ def _repr_ok(t: Ty, top: bool = True) -> bool:
     return False
 
 
+def _views(tc, nodes) -> None:
+    """Contexts where builtins_ext accepts d.keys() / d.values() (marked before they are synthesised)."""
+    from . import builtins_ext
+    for n in nodes:
+        builtins_ext.mark_view_ok(tc, n)
+
+
 def synth_call(tc, e) -> Optional[Ty]:
     name = e.func
+    if name in ("len", "sorted", "list", "sum", "min", "max"):
+        _views(tc, e.args)
     if name in tc.funcs and name not in tc.classes:
         if not bind_args(tc, e, tc.funcs[name], name):
             return ERR
@@ -892,8 +885,8 @@ def synth_call(tc, e) -> Optional[Ty]:
         return None
     if name == "isinstance":
         return _isinstance(tc, e)
-    if coll_name(tc, name):
-        return synth_collections(tc, e, coll_name(tc, name))
+    if name in ("collections.defaultdict", "collections.Counter"):
+        return synth_collections(tc, e, name.split(".")[1])
     if name == "type":
         return _err(tc, e, "type() is supported only in comparisons such as `type(x) == int`")
     if name == "set":
@@ -1065,6 +1058,16 @@ FACTORIES = {"int": "int", "float": "float", "str": "str", "bool": "bool", "list
 def coll_name(tc, name: str) -> Optional[str]:
     """'defaultdict' / 'Counter' if `name` is bound to collections.defaultdict / collections.Counter."""
     return getattr(tc, "collections_names", {}).get(name)
+
+
+def _coll_annotation(tc, te, kind: str, args) -> Ty:
+    if kind == "defaultdict":                    # defaultdict[K, V] annotates a dict[K, V]
+        return tc.resolve_type(_te(te, "dict", args))
+    if args is None or len(args) != 1:
+        return _err(tc, te, "Counter takes exactly 1 type argument, e.g. Counter[str]")
+    k = tc.resolve_type(args[0])
+    return ERR if k is ERR else dict_of(k, INT) if k.name in ("int", "str") else \
+        _err(tc, te, f"Counter keys must be int or str in PySub; found {k}")
 
 
 def _factory_ok(f: str, v: Ty) -> bool:

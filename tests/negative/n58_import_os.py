@@ -1,3 +1,3 @@
-# expect: outside the PySub subset
+# expect: is not supported in PySub
 import os
 print(1)

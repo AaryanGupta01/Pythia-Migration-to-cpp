@@ -9,6 +9,7 @@ import sys
 from typing import List, Optional
 from . import ast_nodes as A
 from .typecheck import Ty, INT, FLOAT, BOOL, STR, NONE, ERR, TypeChecker
+from . import builtins_ext as _bx
 from . import tuples as _tup
 
 LIST_RT = {"int": "PyListI64", "float": "PyListF64",
@@ -703,6 +704,8 @@ class Emitter:
                 return f"(!{self.truthy(self.ex(e.operand), e.operand.ty)})"
             if e.op == "+":
                 return self.ex(e.operand)
+            if e.op == "~":
+                return f"(~((int64_t)({self.ex(e.operand)})))"
             if e.ty == INT:
                 return f"py_neg_i64({self.ex(e.operand)})"
             return f"(-({self.ex(e.operand)}))"
@@ -752,6 +755,9 @@ class Emitter:
             return f"{self.ex(e.value)}->{e.attr}"
 
         if isinstance(e, A.MethodCall):
+            _r = _bx.emit_method(self, e)
+            if _r is not None:
+                return _r
             recv, rt_ = self.ex(e.recv), e.recv.ty
             if rt_.name == "list" and (is_obj_list(rt_) or e.method not in ("append", "pop") or e.args):
                 return self.list_method(e, recv, rt_)
@@ -837,6 +843,8 @@ class Emitter:
             return f"[&]() {{ auto _a = {self.ex(e.left)}; auto _b = {self.ex(e.right)}; return std::tuple_cat(_a, _b); }}()"
         l, r = self.ex(e.left), self.ex(e.right)
         lt = e.left.ty
+        if op in _bx.BITOPS:
+            return _bx.emit_bitop(self, e, l, r)
         if op == "+" and t == STR:
             return f"pystr_concat({l}, {r})"
         if op == "+" and is_obj_list(t):
@@ -852,7 +860,7 @@ class Emitter:
         if t == FLOAT or op == "/":
             fn = {"+": None, "-": None, "*": None,
                   "/": "py_truediv", "//": "py_floordiv_f64",
-                  "%": "py_mod_f64", "**": "py_pow_f64"}.get(op)
+                  "%": "py_mod_f64", "**": "px_pow_f64"}.get(op)
             if op == "/" and all(self._int_operand(x) for x in (e.left, e.right)):
                 fn = "py_truediv_ii"                       # CPython words int/int and float division differently
             if fn:
@@ -870,6 +878,9 @@ class Emitter:
         tup = _tup.emit_call(self, e)
         if tup is not None:
             return tup
+        _r = _bx.emit_call(self, e)
+        if _r is not None:
+            return _r
         if n == "len":
             a = e.args[0]
             return (f"pystr_len({self.ex(a)})" if a.ty == STR
