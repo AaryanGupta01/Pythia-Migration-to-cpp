@@ -218,3 +218,19 @@ def count_in_range(nums, low, high):
 
 data = [1, 3, 5, 7, 9, 11, 13]
 print(count_in_range(data, 4, 10))
+#@@ prefix_sum_accumulate
+import itertools
+def running_sum(nums):
+    return list(itertools.accumulate(nums))
+
+print(running_sum([1, 2, 3, 4]))
+#@@ climb_stairs_memo
+from functools import lru_cache
+@lru_cache(None)
+def climb_stairs(n):
+    if n <= 2:
+        return n
+    return climb_stairs(n - 1) + climb_stairs(n - 2)
+
+print(climb_stairs(10))
+

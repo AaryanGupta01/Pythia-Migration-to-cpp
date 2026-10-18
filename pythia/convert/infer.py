@@ -976,6 +976,23 @@ class Engine:
         if mod == "copy":
             args = self._args(n)
             return args[0] if args else None
+        if mod == "itertools":
+            args = self._args(n)
+            if attr == "accumulate":
+                return args[0] if args else None
+            if attr == "chain":
+                return args[0] if args else None
+        if mod == "functools":
+            args = self._args(n)
+            if attr == "reduce":
+                if len(args) >= 3 and args[2] is not None:
+                    return args[2]
+                return elem(args[1]) if len(args) >= 2 else None
+            if attr in ("lru_cache", "cache", "wraps", "total_ordering"):
+                return "None"
+        if mod == "enum":
+            self._args(n)
+            return "int" if attr == "auto" else None
         self._args(n)
         return None
 

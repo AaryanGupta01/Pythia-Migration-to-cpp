@@ -52,11 +52,14 @@ SYS_CONSTS = {"maxsize": 9223372036854775807}
 MODULES = {
     "math": set(MATH_FUNCS) | set(MATH_FLOAT_CONSTS) | MATH_CALL_CONSTS,
     "string": set(STRING_CONSTS),
-    "sys": set(SYS_CONSTS),
+    "sys": set(SYS_CONSTS) | {"setrecursionlimit"},
     "copy": {"copy", "deepcopy"},
     "heapq": {"heappush", "heappop", "heapify", "heappushpop", "heapreplace", "nlargest", "nsmallest"},
     "bisect": {"bisect", "bisect_left", "bisect_right", "insort", "insort_left", "insort_right"},
     "doctest": {"testmod"},
+    "enum": {"Enum", "IntEnum", "auto"},
+    "itertools": {"accumulate", "chain", "product", "permutations", "combinations", "count", "cycle", "repeat", "islice"},
+    "functools": {"reduce", "lru_cache", "cache", "wraps", "total_ordering", "cmp_to_key"},
 }
 MODULES.update({                       # annotations and containers (resolved in types_ext.py)
     "typing": {"List", "Dict", "Set", "Tuple", "Optional", "Union", "Sequence", "Iterable", "DefaultDict",
@@ -94,6 +97,24 @@ def _const_or_call(p, mod: str, attr: str, tok, allow_call_args: bool = True) ->
             p.next()
             p._call_args()
             return A.IntLit(line, col, value=0)
+    if mod == "sys" and attr == "setrecursionlimit":
+        if p.at_op("("):
+            p.next()
+            p._call_args()
+            return A.NoneLit(line, col)
+        return A.NoneLit(line, col)
+    if mod == "enum" and attr == "auto":
+        if p.at_op("("):
+            p.next()
+            p._call_args()
+            return A.IntLit(line, col, value=1)
+        return A.IntLit(line, col, value=1)
+    if mod == "functools" and attr in ("lru_cache", "cache", "wraps", "total_ordering"):
+        if p.at_op("("):
+            p.next()
+            p._call_args()
+            return A.NoneLit(line, col)
+        return A.NoneLit(line, col)
     if mod == "typing" and attr == "cast":
         if p.at_op("("):
             p.next()

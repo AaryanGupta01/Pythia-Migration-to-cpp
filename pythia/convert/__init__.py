@@ -328,6 +328,10 @@ class _Plan:
         self._loop_else()
         self._ifexp_mixed()
         self._num_sinks()
+        self._set_comp()
+        self._decorators()
+        self._const_defaults()
+        self._enum_classes()
         self._header()
 
     def _records(self):
@@ -612,6 +616,73 @@ class _Plan:
                 seen.add(n.lineno)
                 self.problem(n.lineno, f"`{ast.unparse(n)}` is an int on some runs and a float on others; PySub must "
                                        f"pick one type, and an int prints as 83 where a float prints 83.0")
+
+    def _set_comp(self):
+        """Rewrite set comprehensions {x for x in it} -> set([x for x in it])."""
+        for n in ast.walk(self.tree):
+            if not isinstance(n, ast.SetComp):
+                continue
+            pos = self.src.start(n)
+            end = self.src.end(n)
+            self.edit(pos, pos + 1, "set([")
+            self.edit(end - 1, end, "])")
+            self.changes.append(f"line {n.lineno}: set comprehension became `set([...])`")
+
+    def _decorators(self):
+        """Strip memoization/wrapper decorators (@lru_cache, @cache) that C++ executes natively."""
+        STRIP_DECOS = {"lru_cache", "cache", "functools.lru_cache", "functools.cache", "wraps", "total_ordering"}
+        for f in list(self.eng.funcs.values()):
+            fn = f.node
+            for d in getattr(fn, "decorator_list", []):
+                name = None
+                if isinstance(d, ast.Name):
+                    name = d.id
+                elif isinstance(d, ast.Attribute) and isinstance(d.value, ast.Name):
+                    name = f"{d.value.id}.{d.attr}"
+                elif isinstance(d, ast.Call):
+                    if isinstance(d.func, ast.Name):
+                        name = d.func.id
+                    elif isinstance(d.func, ast.Attribute) and isinstance(d.func.value, ast.Name):
+                        name = f"{d.func.value.id}.{d.func.attr}"
+                if name in STRIP_DECOS:
+                    line_start = self.src.line_start(d.lineno)
+                    line_end = self.src.line_start(d.end_lineno + 1) if d.end_lineno < len(self.src.lines) else len(self.src.text)
+                    self.edit(line_start, line_end, "")
+                    self.changes.append(f"line {d.lineno}: stripped @{name} decorator (C++ runs natively at full speed)")
+
+    def _const_defaults(self):
+        """Inline module-level literal constants used as parameter defaults."""
+        mod_consts = {}
+        for s in self.tree.body:
+            if isinstance(s, ast.Assign) and len(s.targets) == 1 and isinstance(s.targets[0], ast.Name):
+                if isinstance(s.value, ast.Constant):
+                    mod_consts[s.targets[0].id] = repr(s.value.value)
+        if not mod_consts:
+            return
+        for f in self.eng.funcs.values():
+            fn = f.node
+            pos = fn.args.posonlyargs + fn.args.args
+            defaults = dict(zip([p.arg for p in pos[len(pos) - len(fn.args.defaults):]], fn.args.defaults))
+            defaults.update({p.arg: d for p, d in zip(fn.args.kwonlyargs, fn.args.kw_defaults) if d is not None})
+            for param_name, d in defaults.items():
+                if isinstance(d, ast.Name) and d.id in mod_consts:
+                    self.edit(self.src.start(d), self.src.end(d), mod_consts[d.id])
+                    self.changes.append(f"line {d.lineno}: inlined constant default {d.id} = {mod_consts[d.id]}")
+
+    def _enum_classes(self):
+        """Rewrite enum classes `class Color(Enum):` -> `class Color:` with class attributes."""
+        for c in self.tree.body:
+            if isinstance(c, ast.ClassDef):
+                for b in list(c.bases):
+                    bname = b.id if isinstance(b, ast.Name) else b.attr if isinstance(b, ast.Attribute) else None
+                    if bname in ("Enum", "IntEnum"):
+                        line = self.src.lines[c.lineno - 1]
+                        m = re.search(rf"\(\s*{bname}\s*\)", line)
+                        if m:
+                            at = self.src.line_start(c.lineno) + m.start()
+                            en = self.src.line_start(c.lineno) + m.end()
+                            self.edit(at, en, "")
+                            self.changes.append(f"line {c.lineno}: stripped ({bname}) base (converted to class attributes)")
 
     def _header(self):
         head = []

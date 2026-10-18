@@ -150,7 +150,24 @@ In our test set of 17 everyday programs (menus, ciphers, a bank account class, w
 
 **Speed.** Interactive, I/O-bound programs (menus, prompts) are dominated by process start-up, so the compiled version is not faster there, and the Playground says so. Compute-heavy code (loops over numbers, strings and lists) is where the C++ wins; try the *Prime sieve* or *Edit distance* examples.
 
-**What PySub is** (the subset that compiles): `int`, `float`, `bool`, `str`, `list[T]` (two levels deep; lists of your own classes too), `dict[int|str, int|float|bool|str]`, classes with typed fields, `if/elif/else`, `while`, `for` over `range`, lists, strings and dicts, `x if c else y`, chained comparisons (`0 <= i < n`), `try/except`, f-strings with format specs (`f"{x:.2f}"`, `{name:<10}`, `{n:,}`), `input()`, `print(..., sep=, end=)`, common `str` methods (`strip`, `split`, `join`, `replace`, `find`, `startswith`, `title`, …), common `list` methods (`append`, `pop(i)`, `insert`, `remove`, `index`, `count`, `sort(reverse=)`, …), and `len abs min max sum sorted list round format int float str bool ord chr` (`sorted`/`list` also take a string or a dict; `ord`/`chr` work on ASCII characters). Every variable keeps one type, and functions see only their parameters (module-level variables are passed in). There are no comprehensions, lambdas, closures, generators, imports or tuples; the AI conversion rewrites those for you, and the Studio shows the precise reason whenever something falls outside.
+**What PySub is** (the subset that compiles to C++17):
+- **Types**: `int`, `float`, `bool`, `str`, `None`, Optional types (`T | None`, `Optional[T]`), `tuple` (full indexing, iteration, and return), `list[T]` (nested lists, lists of classes), `dict[K, V]` (arbitrary types, dict views), `set[T]`.
+- **Standard Library Modules**:
+  - `heapq`: `heappush`, `heappop`, `heapify`, `nlargest`, `nsmallest`, `heappushpop`
+  - `bisect`: `bisect_left`, `bisect_right`, `bisect`, `insort_left`, `insort_right`, `insort`
+  - `collections`: `deque` (O(1) `appendleft`/`popleft`, `rotate`, `reverse`, indexing), `defaultdict`, `Counter`
+  - `copy`: `copy`, `deepcopy`
+  - `itertools`: `accumulate`, `chain`, `product`, `permutations`, `combinations`, `count`, `cycle`, `repeat`, `islice`
+  - `functools`: `reduce`, `@lru_cache`, `@cache`, `@wraps`, `@total_ordering`, `cmp_to_key`
+  - `enum`: `Enum`, `IntEnum`, `auto`
+  - `math`: all standard math functions (`sqrt`, `log`, `sin`, `gcd`, etc.)
+  - `sys`: `sys.maxsize`, `sys.setrecursionlimit`
+- **Control Flow & Syntax**: `if/elif/else`, `while`, `for` over ranges, lists, strings, dicts, tuples; `x if c else y`; chained comparisons (`0 <= i < n`); chained assignment (`a = b = 0`); `try/except`; `assert [cond] [, msg]` (`AssertionError`); list repetition (`[x] * n`); comprehensions (list, dict, set); generators in `sum`, `min`, `max`, `any`, `all`, `sorted`, `list`, `join`; `key=` lambdas; `enumerate`, `zip`, `reversed`; slicing; bitwise operations.
+- **Strings & Formatting**: f-strings with format specs (`f"{x:.2f}"`, `{name:<10}`, `{n:,}`, `{x=}`, `!r`), `%` formatting, `.format()`, common `str` methods (`strip`, `split`, `join`, `replace`, `find`, `startswith`, `endswith`, `title`, etc.).
+- **Object-Oriented**: Classes with typed fields, methods, inheritance, nested constructor inference, property access.
+- **Builtins**: `len`, `abs`, `min`, `max`, `sum`, `sorted`, `list`, `round`, `format`, `int`, `float`, `str`, `bool`, `ord`, `chr`, `isinstance`.
+
+The in-house converter (`to_pysub`) automatically infers types, inlines literal defaults, strips memoization wrappers, and rewrites non-PySub syntax so competitive programming, DSA, and open-source algorithm code compile deterministically without needing an external LLM.
 
 ---
 

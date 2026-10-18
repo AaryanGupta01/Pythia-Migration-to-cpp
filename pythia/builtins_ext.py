@@ -143,6 +143,30 @@ def synth_call(tc, e: A.Call) -> Optional[Ty]:
             for a in e.args[2:]:
                 _need(tc, a, _intlike, f"{f} bounds must be integers")
             return NONE
+    if f.startswith("itertools."):
+        op = f[10:]
+        if op == "accumulate":
+            if not _count(tc, e, 1, 2, f): return ERR
+            xt = tc.synth(e.args[0])
+            if xt.name != "list":
+                return tc.err(e.args[0], f"itertools.accumulate expects a list, found {xt}")
+            return xt
+        if op == "chain":
+            if not e.args: return ERR
+            t0 = tc.synth(e.args[0])
+            for a in e.args[1:]:
+                tc.synth(a)
+            return t0
+    if f.startswith("functools."):
+        op = f[10:]
+        if op == "reduce":
+            if not _count(tc, e, 2, 3, f): return ERR
+            seq_t = tc.synth(e.args[1])
+            if len(e.args) == 3:
+                return tc.synth(e.args[2])
+            return seq_t.elem if seq_t.name == "list" else INT
+    if f == "sys.setrecursionlimit":
+        return NONE
     if f == "int" and len(e.args) == 2:
         if not _nokw(tc, e):
             return ERR
@@ -444,6 +468,15 @@ def emit_call(em, e: A.Call) -> Optional[str]:
         if len(a) > 3: args_str += f", {_i(em, a[3])}"
         ret = f"{fn}({args_str})"
         return f"({ret}, 0)" if op.startswith("insort") else ret
+    if n.startswith("itertools."):
+        op = n[10:]
+        if op == "accumulate":
+            return f"py_accumulate({em.ex(a[0])})"
+        if op == "chain":
+            if len(a) == 2:
+                return f"py_chain({em.ex(a[0])}, {em.ex(a[1])})"
+    if n == "sys.setrecursionlimit":
+        return "((void)0, 0)"
     if n == "int":
         t = a[0].ty
         if len(a) == 2:

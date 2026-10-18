@@ -190,7 +190,10 @@ def resolve_type(tc, te: A.TypeExpr) -> Optional[Ty]:
         return set_of(el)
     if name == "list":
         if args is None:
-            return None if not via_typing else nargs(1, "list") and ERR
+            if not via_typing:
+                return None
+            nargs(1, "list")
+            return ERR
         if not nargs(1, "list"):
             return ERR
         inner = tc.resolve_type(args[0])
@@ -203,7 +206,10 @@ def resolve_type(tc, te: A.TypeExpr) -> Optional[Ty]:
         return list_of(inner)
     if name == "dict":
         if args is None:
-            return None if not via_typing else nargs(2, "dict") and ERR
+            if not via_typing:
+                return None
+            nargs(2, "dict")
+            return ERR
         if not nargs(2, "dict"):
             return ERR
         k, v = tc.resolve_type(args[0]), tc.resolve_type(args[1])
@@ -944,7 +950,7 @@ def synth_call(tc, e) -> Optional[Ty]:
             from . import tuples
             tuples.mark_items(e.args[0])
         ts = [tc.synth(a) for a in e.args]
-        if ERR in ts:
+        if ERR in ts or any(t is None or not isinstance(t, Ty) for t in ts):
             return None
         if name == "print":
             for a, t in zip(e.args, ts):

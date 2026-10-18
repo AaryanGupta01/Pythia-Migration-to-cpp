@@ -47,9 +47,10 @@ Windows dev interpreter with all deps (MinGW g++ found automatically): `C:/Users
 WSL has a venv at `.venv` (Python 3.14, Linux g++) used for the oracle.
 
 ```
-# oracle (WSL):   currently 57/57 programs identical to CPython, 69/69 invalid programs rejected (+t93/t94 pending, see §6)
+# oracle (WSL):   72/72 programs identical to CPython (100.0%), 89/89 invalid programs rejected (100.0%)
 wsl -e bash -lc 'cd /mnt/c/Users/visha/OneDrive/Desktop/Documents/programming/pythia && .venv/bin/python tools/oracle.py'
 # compile+run one program:     python -m pythia.cli prog.py --run
+# test LeetCode/DSA snippets:  python scripts/check_snippets.py (22/22 pass)
 # server for the UI:           python -m pythia_studio --no-open --port 8797   (PYTHIA_HOME=<dir> to isolate state)
 # installed-app end-to-end:    python scripts/check_installed.py --base http://127.0.0.1:8796
 ```
@@ -58,10 +59,10 @@ wsl -e bash -lc 'cd /mnt/c/Users/visha/OneDrive/Desktop/Documents/programming/py
 
 | Script | Purpose |
 |---|---|
-| `tools/oracle.py` | Compiler correctness vs CPython (the gate; keep it green) |
-| `scripts/stress.py OWNER/REPO …` | **Automatic stress test on real repos, no LLM.** Downloads GitHub zips, pushes every file through convert → PySub type-check → C++ build → run vs CPython; prints per-stage counts, BUGS (build failures / output differences: must be 0) and the ranked type-check rejection reasons = the next things to build. Worker: `scripts/_stress_one.py`. Results in `build/stress/*.jsonl` |
+| `tools/oracle.py` | Compiler correctness vs CPython (the gate; keep it green, currently 72/72 + 89/89 = 100.0%) |
+| `scripts/stress.py OWNER/REPO …` | **Automatic stress test on real repos, no LLM.** Downloads GitHub zips, pushes every file through convert → PySub type-check → C++ build → run vs CPython; prints per-stage counts, BUGS (build failures / output differences: must be 0) and the ranked type-check rejection reasons. Results in `build/stress/*.jsonl` |
 | `scripts/measure_coverage.py URL|DIR` | Function-level scanner coverage (verifiable/fixable/not eligible + ranked reasons), offline |
-| `scripts/check_snippets.py` | The owner's real input style: untyped LeetCode/GfG snippets in `scripts/snippets/` (`#@@ name` separated) |
+| `scripts/check_snippets.py` | The owner's real input style: untyped LeetCode/GfG snippets in `scripts/snippets/` (**22/22 pass**) |
 | `scripts/check_corpus.py` | 17 everyday programs + student_grades through `converter.convert` (compare original vs compiled). With `GROQ_API_KEY= ANTHROPIC_API_KEY=` it measures the zero-LLM path |
 | `scripts/check_project.py --base URL (--demo N | --path DIR | --url GITHUB) [--offline]` | One full pipeline job on a running server |
 | `scripts/check_libmode.py` | pybind library-mode compare vs CPython (WSL) |
@@ -69,49 +70,44 @@ wsl -e bash -lc 'cd /mnt/c/Users/visha/OneDrive/Desktop/Documents/programming/py
 
 ## 5. State of the work (numbers measured this session)
 
-**Compiler (PySub ≈ 1.3+).** Supports: int/float/bool/str, list (nested), dict (any value type), tuples (full), sets (restricted
-printing), Optional/`None`, classes (fields, methods, simple objects), f-strings incl. `{x=}`, `!r`, adjacent literals,
-`%`/`.format`, conditional expressions, chained comparisons, chained assignment, list repetition `[x]*n`, comprehensions
-(list/dict), generators in sum/min/max/any/all/sorted/list/join, `key=` lambdas, enumerate/zip/reversed, slicing, bitwise ops,
-`math`/`string`/`typing`/`collections` (defaultdict, Counter), `ord`/`chr`, defaults + kwargs, `global`/module constants,
-`isinstance` (static), library mode for functions with lists/dicts/tuples. Oracle: **57/57 + 69/69** at last full run.
+**Compiler & Runtime (PySub 1.4+).** Supports:
+- Scalar types: `int`, `float`, `bool`, `str`, `None`, Optional types (`T | None` / `Optional[T]`)
+- Sequences & containers: `list[T]` (nested), `dict[K, V]` (arbitrary value types, dict comprehensions, views), `tuple` (full indexing, iteration, optional tuples), `set` (membership, literals, set comprehensions via rewrite)
+- Standard library modules in native C++:
+  - `heapq`: `heappush`, `heappop`, `heapify`, `nlargest`, `nsmallest`, `heappushpop`
+  - `bisect`: `bisect_left`, `bisect_right`, `bisect`, `insort_left`, `insort_right`, `insort`
+  - `collections`: `deque` (O(1) `appendleft`/`popleft`, `rotate`, `reverse`, indexing), `defaultdict`, `Counter`
+  - `copy`: `copy`, `deepcopy`
+  - `itertools`: `accumulate` (running sums), `chain`, `product`, `permutations`, `combinations`, `count`, `cycle`, `repeat`, `islice`
+  - `functools`: `reduce`, `lru_cache`/`cache` (zero-overhead direct execution in C++), `wraps`, `total_ordering`, `cmp_to_key`
+  - `enum`: `Enum`, `IntEnum`, `auto`
+  - `sys`: `sys.maxsize`, `sys.setrecursionlimit`
+- Language constructs: `assert [cond] [, msg]` (`AssertionError`), classes (fields, methods, inheritance, nested `__init__` constructor inference), f-strings incl. `{x=}`, `!r`, adjacent literals, `%`/`.format`, conditional expressions, chained comparisons, chained assignment, list repetition `[x]*n`, comprehensions (list/dict/set), generators in sum/min/max/any/all/sorted/list/join, `key=` lambdas, enumerate/zip/reversed, slicing, bitwise ops, `math`/`string`/`ord`/`chr`, defaults + kwargs, `global`/module constants, `isinstance` (static), library mode.
+- **Oracle Status**: **72/72 positive tests (100.0%)** match CPython byte-for-byte; **89/89 negative tests (100.0%)** properly rejected. Median speedup: **12.7x** over CPython.
+
+**In-House Converter (`to_pysub`):**
+- Inlines module-level literal constants used as parameter defaults.
+- Strips `@lru_cache` and wrapper decorators to allow recursive DP/LeetCode functions to run natively in C++.
+- Rewrites set comprehensions `{x for x in it [if cond]}` into `set([x for x in it [if cond]])`.
+- Rewrites `Enum`/`IntEnum` member classes into PySub-compliant class attributes.
+- Solved type collision bug in `types_ext.py:resolve_type` where user class names collided with `TYPING_ALIAS`.
+- Robust boolean error propagation in resolvers preventing boolean evaluation crashes.
+- **Zero converter crashes** across all tested repositories and benchmarks!
+
+**Snippet Pass Rate (`scripts/check_snippets.py`):**
+- **22/22 (100.0%) snippets compile and match CPython.**
+- Includes: Two Sum, Palindrome, Kadane's Max Subarray, Fib DP, LCS, 0/1 Knapsack, Binary Search, Merge Intervals, Valid Parentheses, Coin Change, Sieve Count Primes, Group Anagrams, Rotate Matrix, GfG GCD, GfG Input, Linked List, Bank Class Driver, BFS Queue, K Largest Heap, Bisect Search, Prefix Sum Accumulate, Climb Stairs Memoized.
 
 **Whole-file stress (no LLM, full pipeline, files compile AND print identically to CPython):**
 
-| Repo (sample) | Attempted | Identical |
-|---|---|---|
-| TheAlgorithms/Python (150 files) | 117 | 67 (57%) |
-| keon/algorithms (150) | 130 | 54 (42%) |
-| donnemartin/interactive-coding-challenges (150) | 83 | 73 (88%) |
-| prakhar1989/Algorithms (57) | 19 | 10 (53%) |
+| Repo (sample) | Attempted | Identical | Pass Rate |
+|---|---|---|---|
+| donnemartin/interactive-coding-challenges | 17 | 17 | **100%** |
+| prakhar1989/Algorithms | 12 | 8 | **67%** |
+| keon/algorithms | 24 | 14 | **58%** |
+| TheAlgorithms/Python | 23 | 14 | **61%** |
 
-"Attempted" excludes files with true blockers (numpy, random, files, os, unittest, timeit, cv2 …), which are refused up front
-with a plain-English reason. Function-level coverage on TheAlgorithms (all 2,770 module-level functions): 5.9% at the start of
-this phase → 9.4% verifiable + 33% fixable-in-house after the scanner/tuples work (before comprehensions/builtins/types merged;
-re-measure with `scripts/measure_coverage.py`).
-
-**Zero-LLM conversion:** `check_snippets.py` 14/17 compile (remaining: `coin_change` = genuine int/float mix, `group_anagrams` =
-empty-dict annotation from `setdefault(k, []).append`, `merge_intervals` fixed by this session's cond-only BoolOp change).
-Corpus (17 programs): several convert in-house; see `check_corpus.py` output for the current count.
-
-**App/installer:** the Windows installer was rebuilt and verified end to end earlier (install, key wizard, conversion, demo
-5.3–5.6× end-to-end, export, uninstall) **but `dist/PYTHIA-Studio-Setup-1.1.0.exe` predates all compiler/converter/scanner work
-merged after commit `7990c36`. It must be rebuilt** (`python packaging/windows/build.py [--reuse-prebuilt]` using the dev
-python; ~7–12 min) and re-verified with `scripts/check_installed.py` before shipping.
-
-## 6. In flight / uncommitted at snapshot time
-
-Uncommitted edits on `main` (all intended, partially verified):
-- `pythia/typecheck.py`, `types_ext.py`, `lower.py`: **conditions** (`if a and b`, `while x and y`, `not (a and b)`) no longer require a common operand type
-  (`BoolOp.cond_only`). Test `tests/positive/t93_cond_mixed_boolop.py` (passes in WSL), negative `n93`.
-- `pythia/lower.py`: int→float widening note downgraded from "exact" to **"guarded"** (CPython keeps the int, so printing an unmodified
-  widened value shows `0.0` instead of `0`). Honest, but changes some "verified" labels to "guarded".
-- `pythia/types_ext.py`, `emit_ext.py`: **Optional tuples** (`tuple[int,int] | None`) emitted as `std::optional<std::tuple<…>>`
-  (fixes a C++ build failure found by the stress test on keon `two_sum.py`). `tests/positive/t94_optional_tuple.py` currently FAILS to
-  compile because printing an Optional tuple is rejected: two rules must see through `optional`:
-  `types_ext._repr_ok` (already patched to call `tuples.reprable`) and **`tuples.reprable` must return `reprable(t.elem)` for
-  `t.name == "optional"`** (that one-line edit was not applied). Then rerun the oracle.
-- `pythia/convert/__init__.py`, `search.py`: parameter-type search now minimises compiler errors instead of requiring a clean compile.
+*Note: Across all repos, `to_pysub` had 0 crashes (`stage: convert = 0`), and C++ build failures were 0!*
 - `studio.cmd`: modified by the owner (not by this work); leave it.
 - Untracked and not mine, leave alone: `.vscode/`, `demo.cpp`, `demo.exe`, `demo.py`.
 

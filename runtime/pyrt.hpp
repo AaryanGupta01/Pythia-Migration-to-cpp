@@ -308,6 +308,36 @@ void py_insort_left(PyList<T> *a, const U &x, int64_t lo = 0, int64_t hi = -1) {
     pyl_insert(a, idx, x);
 }
 
+// ---- itertools helpers ----
+template <class T>
+inline PyList<T> *py_accumulate(PyList<T> *xs) {
+    auto *res = pyl_new<T>();
+    if (!xs || xs->data.empty()) return res;
+    res->data.reserve(xs->data.size());
+    T cur = xs->data[0];
+    res->data.push_back(cur);
+    for (size_t i = 1; i < xs->data.size(); ++i) {
+        cur += xs->data[i];
+        res->data.push_back(cur);
+    }
+    return res;
+}
+
+template <class T>
+inline PyList<T> *py_chain(PyList<T> *a, PyList<T> *b) {
+    auto *res = pyl_new<T>();
+    if (a) {
+        res->data.reserve(a->data.size() + (b ? b->data.size() : 0));
+        res->data.insert(res->data.end(), a->data.begin(), a->data.end());
+    }
+    if (b) {
+        res->data.insert(res->data.end(), b->data.begin(), b->data.end());
+    }
+    return res;
+}
+
+inline void py_setrecursionlimit(int64_t) {}
+
 // ---- heapq module (CPython-exact min-heap siftup/siftdown) ----
 template <class T>
 void py_siftdown(PyList<T> *heap, int64_t startpos, int64_t pos) {
