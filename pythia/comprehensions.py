@@ -27,7 +27,7 @@ CONSUMERS = ("sum", "min", "max", "any", "all", "sorted", "list")
 COMP_NODES = (A.ListComp, A.DictComp, A.GenExp, A.Lambda)
 ITER = Ty("<iter>")                       # type of an enumerate/zip/reversed/range call (iteration-only)
 _IT = "_it"                               # name of the variable of a synthesised (v for v in src)
-_KEY_FUNCS = ("len", "abs", "str", "int", "float", "bool", "ord", "chr", "round")
+_KEY_FUNCS = ("len", "abs", "str", "int", "float", "bool", "ord", "chr", "round", "sum", "min", "max")
 _GEN_WHERE = ("generator expressions are supported only as the sole argument of sum(), min(), max(), any(), "
               "all(), sorted(), list() and str.join(); use a list comprehension [...] elsewhere")
 

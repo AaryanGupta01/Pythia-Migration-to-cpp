@@ -28,6 +28,7 @@ from functools import lru_cache
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from . import ast_nodes as A
+from . import comprehensions as _comp
 from .emit_c import LIST_RT, dict_rt_name
 from .lexer import LexError
 from .lower import FidelityNote, lower
@@ -212,6 +213,8 @@ def _roots(e: Optional[A.Node]) -> Set[str]:
         return _roots(e.recv)
     if isinstance(e, A.Call) and _is_container(e.ty) and e.args:
         return set().union(*[_roots(a) for a in e.args])
+    if isinstance(e, (A.ListComp, A.DictComp, A.GenExp)) or (isinstance(e, A.Call) and e.func in _comp.HELPERS):
+        return set().union(set(), *[_roots(a) for a in _comp.alias_sources(e)])
     return set()
 
 
@@ -233,6 +236,11 @@ def _mutated_params(mod: A.Module) -> Dict[str, Set[int]]:
             while grew:
                 grew = False
                 for n in _walk_body(f):
+                    for t2, s2 in _comp.alias_edges(n):       # comprehension / tuple-loop / key-lambda variables
+                        new2 = set().union(set(), *[alias.get(r, set()) for r in _roots(s2)])
+                        if new2 - alias.get(t2, set()):
+                            alias.setdefault(t2, set()).update(new2)
+                            grew = True
                     tgt = None
                     if isinstance(n, A.Assign) and isinstance(n.target, A.Name) and _is_container(n.value.ty if n.value else None):
                         tgt, src = n.target.id, n.value
