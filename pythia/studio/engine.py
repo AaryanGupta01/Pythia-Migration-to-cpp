@@ -66,7 +66,7 @@ class Engine:
 
     def update_settings(self, patch: Dict[str, Any]) -> Dict[str, Any]:
         s = self._settings_full()
-        for k in ("offline", "model", "api_key", "provider"):
+        for k in ("offline", "model", "api_key", "provider", "setup_done"):
             if k in patch:
                 s[k] = patch[k] if patch[k] != "" else None
         atomic_write(self.home / "settings.json", json.dumps(s, indent=1))

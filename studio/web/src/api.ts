@@ -30,6 +30,8 @@ export interface Api {
   demos?(): Promise<DemoInfo[]>
   getSettings(): Promise<Settings>
   putSettings(patch: Partial<Settings>): Promise<Settings>
+  testKey(provider: string, api_key: string): Promise<{ ok: boolean; provider: string; model?: string; error?: string }>
+  doctor(): Promise<{ ready: boolean; checks: { id: string; label: string; ok: boolean; required: boolean; detail: string; hint: string | null }[] }>
   startJob(input: JobInput, options: Partial<JobOptions>): Promise<{ job_id: string; workspace_id: string }>
   jobs(): Promise<JobInfo[]>
   job(id: string): Promise<JobInfo>
@@ -106,6 +108,8 @@ export const realApi: Api = {
   demos: () => http('/demos'),
   getSettings: () => http('/settings'),
   putSettings: (p) => http('/settings', { ...json(p), method: 'PUT' }),
+  testKey: (provider, api_key) => http('/settings/test-key', json({ provider, api_key })),
+  doctor: () => http('/doctor'),
   startJob: (input, options) => http('/jobs', json({ input, options })),
   jobs: () => http('/jobs'),
   job: (id) => http(`/jobs/${id}`),

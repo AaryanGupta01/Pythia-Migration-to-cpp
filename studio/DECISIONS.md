@@ -43,3 +43,12 @@
 - (I) `pythia-studio` = `pythia/studio/launcher.py` (doctor banner, single-instance probe via GET /api/doctor, `--app` chromeless window with its own profile dir, closing the window stops the server). `python -m pythia.studio.server` is unchanged.
 - (I) PWA manifest, icons and the `<link rel=manifest>` injection are served by the backend (`pythia/studio/branding.py`), so `studio/web` is untouched. Host guard accepts localhost plus `PYTHIA_ALLOWED_HOSTS`.
 - (I) Docker image installs the wheel into python:3.12-slim + g++; compose publishes on 127.0.0.1 only. Windows support is via WSL2 (`scripts/install.ps1`), not native.
+- Windows is native now: the app bundles a relocatable CPython 3.13 (NuGet) and WinLibs MinGW-w64 GCC 16 (UCRT); extension modules link `-static` against python3X.dll, so a .pyd needs nothing else. WSL stays as a fallback.
+- GCC's `%:if-exists(default-manifest.o%s)` spec breaks on install paths with spaces: the bundled toolchain renames the object and PYTHIA passes it explicitly for executables (`toolchain.exe_link_args`).
+- The replay worker's per-call timeout uses SIGALRM on POSIX and a timer thread + `_thread.interrupt_main` on Windows.
+- PySub 1.1 adds f-strings, `input()`, str/list methods, `format/round/sum/sorted`, n-ary/list `min`/`max`, lists of class instances, `print(sep=, end=)`; the oracle went to 19/19 (t18, t19 added).
+- Runtime error texts follow the CPython minor version that runs the comparison (3.11-3.14 word ZeroDivisionError differently); CLI programs get it from the compiling interpreter, extension modules from `PY_MINOR_VERSION`.
+- `print(a, f(b))` now evaluates every argument before printing when a later argument contains a call (CPython order); found while writing t18.
+- Whole-program AI conversion lives in the Playground (`converter.py`): the type checker judges each answer (<=3 rounds) and Run compares the ORIGINAL under CPython with the compiled conversion on the same stdin.
+- First-run setup wizard: doctor checks, live key test (`/api/settings/test-key`, list-models call), `setup_done` in settings.
+- Prebuilt modules in demo_data/offline_cache/so are used online as well (keys hash exact source + toolchain, so reuse is sound); the Windows bundle ships Windows builds instead of the Linux ones.

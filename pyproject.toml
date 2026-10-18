@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pythia-studio"
-version = "1.0.0"
+version = "1.1.0"
 description = "PYTHIA Studio: find Python hotspots, verify C++ replacements against CPython, splice them in."
 readme = "README.md"
 license = { text = "MIT" }
@@ -16,6 +16,7 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: POSIX :: Linux",
   "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
   "Topic :: Software Development :: Compilers",
 ]
 dependencies = [

@@ -397,7 +397,8 @@ class Pipeline:
             self.err("compile", ex)
             return
         js, ws = self.js, self.ws
-        extra = [str(OFFLINE_DIR / "so")] if self.offline and (OFFLINE_DIR / "so").is_dir() else []
+        # prebuilt modules shipped with the app: keys hash the exact source + toolchain, so reuse is always sound
+        extra = [str(OFFLINE_DIR / "so")] if (OFFLINE_DIR / "so").is_dir() else []
         self.stage("compile", "running", caption="Transpiling PySub to C++17 and building pybind11 extensions")
         ok_n = 0
         for i, r in enumerate(cands):

@@ -92,6 +92,8 @@ export const mockApi: Api = {
   },
   pgCompile: (source) => wait(compileForPlayground(source), 120),
   pgConvert: () => wait({ ok: false, attempts: [], error: 'AI conversion needs the real PYTHIA server (it is not part of the offline mock).' }, 400),
+  testKey: (provider) => wait({ ok: false, provider, error: 'The mock UI cannot test keys' }, 300),
+  doctor: () => wait({ ready: true, checks: [] }, 50),
   pgConvertStatus: () => wait({ enabled: false, provider: null, model: null, hint: 'Not available in the mock UI' }, 20),
   pgRun: (source) => {
     const r = interpret(source)

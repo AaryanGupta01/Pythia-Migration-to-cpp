@@ -182,7 +182,23 @@ def _delegate_to_wsl(a) -> Optional[int]:
         return 0
 
 
+def _windowless_logging() -> None:
+    """Under pythonw.exe (the Windows app) there is no console: keep every message in a log file instead."""
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    home = Path(os.environ.get("PYTHIA_HOME") or Path.home() / ".pythia-studio")
+    try:
+        (home / "logs").mkdir(parents=True, exist_ok=True)
+        f = open(home / "logs" / "studio.log", "a", encoding="utf-8", buffering=1)
+        f.write(f"\n==== PYTHIA Studio {time.strftime('%Y-%m-%d %H:%M:%S')} ====\n")
+        sys.stdout = sys.stdout or f
+        sys.stderr = sys.stderr or f
+    except OSError:
+        pass
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    _windowless_logging()
     from .envfile import load_env
     load_env()
     ap = argparse.ArgumentParser(prog="pythia-studio", description="PYTHIA Studio: find Python hotspots, verify C++ replacements, splice them in.")
@@ -196,6 +212,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--engine", choices=["mock", "real"], help="override PYTHIA_ENGINE")
     ap.add_argument("--doctor", action="store_true", help="print the environment check and exit")
     ap.add_argument("--version", action="store_true")
+    ap.add_argument("--auto-port", action="store_true", help="if the port belongs to another program, use the next free one")
     ap.add_argument("--export-icon", metavar="FILE", help="write the app icon (.ico or .png by extension) and exit; used by the installers")
     a = ap.parse_args(argv)
 
@@ -232,6 +249,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         if not a.no_open:
             open_ui(url, a.app, home)
         return 0
+    if seen is False and a.auto_port:
+        for p in range(a.port + 1, a.port + 40):
+            s2 = _probe(p)
+            if s2 is True:                                  # our own server on a later port: reuse it
+                url = f"http://{shown}:{p}/"
+                if not a.no_open:
+                    open_ui(url, a.app, home)
+                return 0
+            if s2 is None:
+                a.port, seen = p, None
+                url = f"http://{shown}:{p}/"
+                break
     if seen is False:
         _say(f"port {a.port} is taken by another program. Pick another: pythia-studio --port {a.port + 1}")
         return 1

@@ -101,8 +101,20 @@ def python_link_args() -> List[str]:
 
 
 def exe_link_args() -> List[str]:
-    """Static C++ runtime for stand-alone programs on Windows, so the .exe runs without MinGW on PATH."""
-    return ["-static"] if IS_WIN else []
+    """Static C++ runtime for stand-alone programs on Windows, so the .exe runs without MinGW on PATH.
+
+    GCC's spec adds default-manifest.o through `%:if-exists(...)`, which splits the path at a space; the app is
+    installed under folders that may contain spaces (user names), so the bundled toolchain renames the object and
+    we pass it here as an ordinary argument instead."""
+    if not IS_WIN:
+        return []
+    args = ["-static"]
+    cc = find_cxx()[0]
+    if cc:
+        m = Path(cc).resolve().parent.parent / "x86_64-w64-mingw32" / "lib" / "pythia-default-manifest.o"
+        if m.is_file():
+            args.append(str(m))
+    return args
 
 
 def ext_suffix() -> str:

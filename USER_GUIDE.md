@@ -8,19 +8,22 @@ PYTHIA Studio finds the slow, compilable parts of a Python project, compiles the
 
 ## 1. Install and start (2 minutes)
 
-Pick one path (details and troubleshooting in [INSTALL.md](INSTALL.md)):
-
 | You have | Do this |
 |---|---|
+| **Windows 10 / 11** | Run **`PYTHIA-Studio-Setup-1.1.0.exe`** and click through it (no admin rights needed), then start **PYTHIA Studio** from the Start menu. Python, the C++ compiler and everything else are inside; nothing else to install. |
 | Linux, macOS or WSL | `curl -fsSL https://raw.githubusercontent.com/Vishalvivek2007/Pythia/main/scripts/install.sh \| bash` then `pythia-studio --app` |
-| Windows | `powershell -ExecutionPolicy Bypass -File scripts\install.ps1` (sets up WSL2 + Ubuntu for you), then use the **PYTHIA Studio** Start-Menu shortcut |
 | Docker | `docker build -t pythia-studio . && docker run --rm -p 127.0.0.1:8765:8765 -v pythia-data:/data pythia-studio`, then open <http://127.0.0.1:8765> |
-| This repository checkout (Linux/macOS/WSL) | `./studio.sh` (creates a virtualenv on first run, installs dependencies, opens the browser; `--offline` for the cached demo, `--app` for a chromeless window) |
-| This repository checkout (Windows) | double-click **`studio.cmd`** (or run it from a terminal). It starts PYTHIA inside WSL2, which provides the Linux C++ toolchain, and opens your browser. Running `python -m pythia_studio` on Windows does the same hand-off automatically. |
+| This repository checkout | Linux/macOS/WSL: `./studio.sh`. Windows: `python -m pythia_studio` (native when a MinGW-w64 GCC is available) or double-click `studio.cmd` (runs in WSL). |
 
-You need a **C++ compiler** (g++/clang) and Python 3.10+ (3.12+ recommended). `pythia-studio --doctor` checks everything and prints the exact fix for anything missing.
+Details, building the Windows installer yourself, and troubleshooting are in [INSTALL.md](INSTALL.md). `pythia-studio --doctor` checks everything and prints the exact fix for anything missing.
 
-**Optional — turn on the LLM fixer for free.** Create a free key at <https://console.groq.com>, then either put `GROQ_API_KEY=your_key` in a file named `.env` next to where you launch PYTHIA (or in `~/.pythia-studio/.env`), or paste it in **Settings → LLM key** inside the app. PYTHIA uses the free `openai/gpt-oss-120b` model on Groq. An `ANTHROPIC_API_KEY` works too. Without any key everything still works; the LLM fixer is simply off (functions that need a rewrite stay "Fixable").
+### First start: the setup screen
+
+The first time the app opens, a three-step setup appears:
+
+1. **Checking your computer.** It confirms Python, the C++ compiler, the Python headers and the data folder (all green on Windows, because they ship with the app).
+2. **Connect an AI model (optional, free).** PYTHIA uses an AI model to rewrite Python that isn't PySub yet, for example dictionaries into classes. To get a free key, open [console.groq.com/keys](https://console.groq.com/keys), sign in, and click **Create API Key**. Paste the key and press **Test & save**. The key is checked live against Groq (or Anthropic, if you pick it) and stored only on this computer (`~/.pythia-studio/settings.json`). Skip this step and everything else still works; only AI conversion stays off. You can add or change the key later in **Settings**, or put `GROQ_API_KEY=...` in `~/.pythia-studio/.env`.
+3. **Start.** Replay the bundled sample run (instant), analyse the demo project for real, or open the Playground.
 
 ---
 
@@ -122,15 +125,26 @@ The **Report** page (activity bar) is a printable summary you can save as PDF.
 
 Functions that nearly qualify — missing annotations, list comprehensions, `enumerate`, conditional expressions — are marked *Fixable*. With a key configured, PYTHIA asks the model for a PySub rewrite, feeding back the **exact type-checker errors** for up to three attempts. A rewrite is only used if it type-checks, compiles and then passes replay against your original function. You can read each attempt (diffed against the original, with the error that rejected it) in the function's **Journey** and in the **Fix** inspector.
 
-Choose the provider in **Settings** (Auto / Groq / Anthropic / Offline). Your key is stored locally (`~/.pythia-studio/settings.json`, mode 600), is write-only in the UI and is only ever sent to the provider you selected.
+The same model powers the Playground's **Convert to PySub with AI** (§7). Choose the provider in **Settings** (Auto / Groq / Anthropic / Offline); Groq's free tier with `openai/gpt-oss-120b` is the default when its key is present. Your key is stored locally (`~/.pythia-studio/settings.json`, mode 600), is write-only in the UI and is only ever sent to the provider you selected.
 
 ---
 
-## 7. Playground
+## 7. Playground: any Python program, compiled and checked
 
-Open the **Playground** (activity bar). Type PySub/Python on the left; the generated C++ appears on the right, debounced as you type, with the fidelity gutter on both sides and type errors as inline squiggles. **Run** (`Ctrl/⌘+Enter`) executes the program under CPython and as compiled C++ side by side, with an output diff and timings. It is the fastest way to learn what PYTHIA accepts.
+Open the **Playground** (`{ }` in the activity bar). Type or paste a program on the left. The generated C++ appears on the right as you type, with the fidelity gutter on both sides and type errors as inline squiggles. **Examples…** (top right) loads ready-made programs.
 
-**What PySub is:** a typed subset of Python — `int`, `float`, `bool`, `str`, `list[T]` (two levels deep), `dict[int|str, int|float|bool|str]`, classes with typed fields, `if/while/for-in-range/for-in-list`, `try/except` for the five common exceptions, and a handful of builtins (`len`, `abs`, `min`/`max` of two, `int/float/str/bool`). Every variable keeps one type. No comprehensions, closures, generators, imports or `print` formatting beyond plain values. The Studio shows the precise reason whenever something falls outside it.
+**Plain Python is fine.** If the program isn't PySub yet, for example a list of dictionaries, a global list changed inside functions, `enumerate`, or `sort(key=lambda ...)`, a banner offers **Convert to PySub with AI**:
+
+1. The AI model receives your program, the PySub rules and the exact type-checker errors, and returns a complete converted program.
+2. The **type checker judges every answer**. If it rejects one, the errors go back to the model, up to three rounds. You see each attempt, how long it took, and the errors it fixed.
+3. You review the conversion as a diff (*Your Python → PySub*) and press **Use the PySub version**.
+4. Press **Run**. From then on Run executes **your original program under CPython** and **the converted program compiled to C++**, on the same input, and tells you whether the output is identical ("Identical: the conversion behaves exactly like your original program"). Clear the green pill to compare the program with itself again.
+
+**Programs that read input.** If the program calls `input()`, an **Input (stdin)** box appears next to the output. Write the lines the program should read, one per `input()` call. For a menu program that is the menu choices and the values it asks for. Both versions read exactly the same input; running out of input raises `EOFError` in both, as in Python.
+
+**Speed.** Interactive, I/O-bound programs (menus, prompts) are dominated by process start-up, so the compiled version is not faster there, and the Playground says so. Compute-heavy code (loops over numbers, strings and lists) is where the C++ wins; try the *Prime sieve* or *Edit distance* examples.
+
+**What PySub is** (the subset that compiles): `int`, `float`, `bool`, `str`, `list[T]` (two levels deep; lists of your own classes too), `dict[int|str, int|float|bool|str]`, classes with typed fields, `if/elif/else`, `while`, `for` over `range`, lists, strings and dicts, `try/except`, f-strings with format specs (`f"{x:.2f}"`, `{name:<10}`, `{n:,}`), `input()`, `print(..., sep=, end=)`, common `str` methods (`strip`, `split`, `join`, `replace`, `find`, `startswith`, `title`, …), common `list` methods (`append`, `pop(i)`, `insert`, `remove`, `index`, `count`, `sort(reverse=)`, …), and `len abs min max sum sorted round format int float str bool`. Every variable keeps one type, and functions see only their parameters (module-level variables are passed in). There are no comprehensions, lambdas, closures, generators, imports or tuples; the AI conversion rewrites those for you, and the Studio shows the precise reason whenever something falls outside.
 
 ---
 
@@ -178,7 +192,10 @@ Launch options: `pythia-studio [--app] [--port N] [--host H] [--no-open] [--offl
 | A function is "Not eligible" but should work | Open its Journey → Eligibility for the exact reason; common fixes: add type annotations, move a nested helper to module level, replace a comprehension with a loop (or enable the LLM fixer). |
 | Speedup is < 1× or "Declined" | The function is cheap relative to the data copied across the boundary on each call. Compile the *caller* (the loop) instead, or pass less data. |
 | Whole-program speedup is small | Amdahl: only the compiled share of runtime gets faster. Look at the trace chart — the rest is glue, I/O or code PySub can't express. |
-| "LLM: off" | No key found. Add `GROQ_API_KEY` (free) in `.env` or Settings. |
+| "LLM: off" / no **Convert** button | No key found. Settings → paste a free Groq key → Test & save (or `GROQ_API_KEY=...` in `~/.pythia-studio/.env`). |
+| AI conversion fails after 3 attempts | Free-tier models sometimes miss; press **Try again**, simplify the part the errors point at, or edit the last attempt by hand. Nothing unchecked is ever used. |
+| Converted program's output differs | The run caught a behaviour change (that is the point of running both). Look at the highlighted lines, fix the PySub version, or convert again. |
+| Windows: nothing happens on start | Look at `%USERPROFILE%\.pythia-studio\logs\studio.log`. A second start just opens another window on the running app. |
 | First run is slow (minutes) | The first builds compile the C++ runtime and a precompiled header (~10 s) and each new function takes ~5 s; later runs reuse the cache in `~/.pythia-studio/build-cache`. |
 | Port already in use | `pythia-studio --port 8800`. A second launch on the same port just opens a window to the running instance. |
 | Browser can't reach WSL app | Open <http://localhost:8765> from Windows; or use `pythia-studio --app`. |

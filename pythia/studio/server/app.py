@@ -178,6 +178,12 @@ def create_app(engine=None, home: Optional[str] = None) -> FastAPI:
     async def put_settings(request: Request):
         return engine.update_settings(await body(request))
 
+    @app.post("/api/settings/test-key")
+    async def test_key(request: Request):
+        from pythia.studio import llm as llm_mod
+        b = await body(request)
+        return await asyncio.to_thread(llm_mod.test_key, b.get("provider"), b.get("api_key"))
+
     @app.get("/api/doctor")
     def doctor():
         from pythia.studio import doctor as doctor_mod

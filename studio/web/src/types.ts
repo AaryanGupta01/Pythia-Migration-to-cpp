@@ -364,6 +364,7 @@ export interface Settings {
   provider?: 'auto' | 'groq' | 'anthropic' | 'offline'
   api_key_set?: boolean
   api_key?: string
+  setup_done?: boolean
   [k: string]: unknown
 }
 

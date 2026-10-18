@@ -16,7 +16,7 @@ VIT Vellore, Fall 2026
 | [DEMO.md](DEMO.md) | 3-minute and 30-second demo scripts, viva Q&A |
 | [studio/README.md](studio/README.md) | architecture and limits |
 
-Quickest start: Linux/macOS/WSL `./studio.sh`; Windows double-click `studio.cmd`; then click **Open the demo project** or **Replay sample run**. A free LLM key (Groq) in `.env` turns on the rewrite fixer.
+Quickest start: **Windows: run `PYTHIA-Studio-Setup-1.1.0.exe`** (everything included, no admin rights), then start PYTHIA Studio from the Start menu. Linux/macOS/WSL: `./studio.sh`. The first start asks for an optional free AI key (Groq), then offers **Replay sample run**, **Open the demo project** or the **Playground**, where any Python program can be converted to PySub with AI and checked against the original.
 
 The rest of this README documents the compiler underneath it.
 

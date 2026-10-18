@@ -210,3 +210,36 @@ def llm_status(model: Optional[str] = None, offline: bool = False, offline_cache
     if provider:
         return {"enabled": True, "model": pick_model(provider, model), "provider": provider, "hint": ""}
     return {"enabled": False, "model": model or GROQ_MODEL, "provider": None, "hint": NO_KEY_HINT}
+
+
+def test_key(provider: Optional[str], api_key: Optional[str]) -> dict:
+    """Check a key with a free, read-only call (list models). Never logs or returns the key."""
+    import urllib.error
+    import urllib.request
+    key = (api_key or "").strip()
+    prov = (provider or "auto").lower()
+    if prov == "auto":
+        prov = "groq" if key.startswith("gsk_") else "anthropic" if key.startswith("sk-ant-") else "groq"
+    if not key:
+        return {"ok": False, "provider": prov, "error": "paste a key first"}
+    if prov == "groq":
+        req = urllib.request.Request("https://api.groq.com/openai/v1/models",
+                                     headers={"Authorization": f"Bearer {key}", "User-Agent": "pythia-studio/1.0"})
+    elif prov == "anthropic":
+        req = urllib.request.Request("https://api.anthropic.com/v1/models",
+                                     headers={"x-api-key": key, "anthropic-version": "2023-06-01",
+                                              "User-Agent": "pythia-studio/1.0"})
+    else:
+        return {"ok": False, "provider": prov, "error": f"unknown provider {prov!r}"}
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            data = json.loads(r.read() or b"{}")
+        ids = [m.get("id") for m in data.get("data", []) if isinstance(m, dict)]
+        model = pick_model(prov, None)
+        return {"ok": True, "provider": prov, "model": model, "model_available": (model in ids) if ids else None}
+    except urllib.error.HTTPError as e:
+        why = {401: "the key was rejected (401): check you copied all of it",
+               403: "the key is not allowed to use this API (403)"}.get(e.code, f"the provider answered HTTP {e.code}")
+        return {"ok": False, "provider": prov, "error": why}
+    except Exception as e:
+        return {"ok": False, "provider": prov, "error": f"could not reach {prov}: {e.__class__.__name__}. Check the internet connection."}

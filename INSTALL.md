@@ -1,13 +1,35 @@
 # Installing PYTHIA Studio
 
-PYTHIA Studio is a local app: a Python server plus a web UI that opens in its own window. It compiles your Python hotspots to C++ on your machine, so it needs a **C++17 compiler, Python 3.10+ and the Python headers**. The installers below take care of that, and `pythia-studio --doctor` tells you exactly what is missing and how to fix it.
+PYTHIA Studio is a local app: a Python server plus a web UI that opens in its own window. It compiles your Python hotspots to C++ on your machine, so it needs a **C++17 compiler, Python 3.10+ and the Python headers**. On Windows the installer brings all of that with it; elsewhere the installers below set it up, and `pythia-studio --doctor` tells you exactly what is missing and how to fix it.
 
 | You have | Use |
 |---|---|
+| **Windows 10 / 11** | [Path 0: the installer](#0-windows-installer-recommended), nothing else to install |
 | Linux, macOS or WSL | [Path 1: one-liner](#1-one-liner-linux-macos-wsl) |
-| Windows | [Path 1b: install.ps1](#1b-windows-through-wsl2) (sets up WSL2 for you) |
 | Python and pip already | [Path 2: pip / pipx](#2-pip-or-pipx) |
 | Docker | [Path 3: Docker](#3-docker) |
+
+## 0. Windows installer (recommended)
+
+Run **`PYTHIA-Studio-Setup-1.1.0.exe`** (from the GitHub release, or `dist\` after building it yourself, see below). It installs for your user only, so no administrator rights are needed. It goes to `%LOCALAPPDATA%\Programs\PYTHIA Studio`, and you get a Start-menu entry and, if you tick the box, a desktop shortcut.
+
+Everything is inside: a private Python 3.13, the PYTHIA compiler and server, the web UI, and a MinGW-w64 GCC 16 C++ compiler. Nothing touches your system Python or PATH. Start **PYTHIA Studio** from the Start menu. It opens in its own window (Edge app mode), and closing the window stops it.
+
+On first start a short **setup** runs:
+1. **Checking your computer.** Python, compiler, headers and the data folder are verified.
+2. **Connect an AI model.** This step is optional. Paste a free Groq key from [console.groq.com/keys](https://console.groq.com/keys), or an Anthropic key, and press **Test & save**: the key is checked live and stored only on your computer.
+3. **Start.** Replay the bundled sample run instantly, analyse the demo project for real, or open the Playground.
+
+Uninstall from *Settings → Apps*. Your data stays in `%USERPROFILE%\.pythia-studio`, so delete that folder too if you want everything gone. The command-line tools are in the install folder (`pythia.cmd`, `pythia-studio.cmd`), and the Start-menu entry "PYTHIA Studio (command line)" opens a prompt with them on PATH.
+
+**Build the installer yourself** (Windows, any Python 3.10+ on PATH, internet for the first run):
+
+```powershell
+python packaging\windows\build.py               # stages the app, prebuilds the demo, writes dist\PYTHIA-Studio-Setup-1.1.0.exe
+python packaging\windows\build.py --no-prebuild  # faster: skip shipping the demo's prebuilt modules
+```
+
+It downloads the Python NuGet package, WinLibs MinGW-w64 (checksum-verified) and Inno Setup into `%LOCALAPPDATA%\pythia-dev`. It then stages and smoke-tests the app with a clean PATH and only the bundled compiler, and compiles the installer. A checkout also runs natively with your own Python: `python -m pythia_studio` uses a usable MinGW-w64 GCC 8+ if it finds one, and otherwise falls back to WSL (`studio.cmd`).
 
 ## 1. One-liner (Linux, macOS, WSL)
 
@@ -25,9 +47,9 @@ pythia-studio --app --offline  # bundled demo with cached LLM answers, no API ke
 ~/.pythia-studio/uninstall.sh  # remove it (add --purge to delete your data too)
 ```
 
-### 1b. Windows (through WSL2)
+### 1b. Windows through WSL2 (alternative to the installer)
 
-PYTHIA needs a Linux toolchain, so on Windows the server runs in WSL2 and the window opens in your normal Edge or Chrome.
+If you prefer a Linux toolchain, the server can run in WSL2 and the window opens in your normal Edge or Chrome.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1            # downloads install.sh from GitHub

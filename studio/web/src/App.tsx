@@ -9,6 +9,7 @@ import { ShortcutsSheet } from './sheets'
 import { ContextMenu, SidePanel } from './sidepanel'
 import { AgentPanel } from './agent'
 import { BottomPanel } from './bottom'
+import { SetupWizard } from './setup'
 import { Welcome } from './welcome'
 import { FunctionView } from './fnview'
 import { StageInspector } from './stages'
@@ -288,6 +289,7 @@ export default function App() {
       <StatusBar />
       {(s.paletteOpen || s.quickOpen) && <Palette mode={s.paletteOpen ? 'commands' : 'files'} onClose={() => s.set({ paletteOpen: false, quickOpen: false })} />}
       <Toasts />
+      <SetupWizard />
       <ContextMenu />
       <ShortcutsSheet />
       {s.dragging && (

@@ -96,6 +96,15 @@ about **26 s -> 5.7 s, 4.4 to 5.0x** across three runs (25.0 -> 5.6, 27.4 -> 5.7
 
 If you are ahead of time, run `python main.py --small` and `python -m unittest` in the exported folder.
 
+## 2b. Bonus minute: any Python program in the Playground
+
+Use this when someone asks "does it work on *my* code?". It shows the whole thesis in one screen.
+
+1. **Playground** (`{ }` in the activity bar) → **Examples…** → *Student grade manager*. It is ordinary beginner Python: a global list of dicts, `enumerate`, `max(key=lambda ...)`, `sort(key=..., reverse=True)`, f-strings and `input()`. The header shows typechecker errors, and the banner says "This is regular Python, not PySub yet."
+2. **Convert to PySub with AI.** "The model gets the program, the PySub rules and the exact errors. Our type checker judges every answer." The answer typically comes back in 3 to 6 s on Groq's free tier: dicts became a `Student` class, the global list became a parameter, and `sort(key=...)` became a stable insertion sort. Show the diff.
+3. **Use the PySub version**, then **Run**. The stdin box already holds a scripted session (add students, a bad number, out-of-range marks, search, topper, sort). "Left: the ORIGINAL program under CPython. Right: the conversion compiled to C++. Same input." The green line reads "Identical: the conversion behaves exactly like your original program."
+4. The honest punchline: "It is not faster. This program waits on input, so the native binary's start-up dominates. Compiling pays off on compute, which is what the Studio's ranking finds." Then switch to the *Prime sieve* example to show a real speedup.
+
 ## 3. The 30-second version
 
 1. (0:00) **Open demo project**, Presenter mode on, **Run**. "A 3,800-line Python project in, we trace it to find the hot functions."
@@ -155,7 +164,30 @@ def f(n: int) -> int:
 
 **What is the memory model (D7)?** The original runtime never frees. In library mode every wrapper opens an arena after marshalling the arguments and frees everything allocated during the call once the result has been copied back, so long-running Python processes do not leak.
 
-**What are the limits of PySub?** Types `int float bool str`, `list[T]` up to two levels, `dict[int|str, scalar]`, classes with typed fields and an `__init__`. Statements: `if/while/for-range/for-each`, `try/except` with six named exceptions, `raise`. No tuples, sets, comprehensions, generators, lambdas or closures, no slices, no `sum/zip/enumerate/sorted/ord`, `min`/`max` take exactly two arguments, only `.append`/`.pop()`, `.get(k, d)`, `.upper/.lower`; no default arguments or `*args`; no imports; strings are ASCII; module globals invisible except literal scalar constants. Classes and methods can be used inside compiled code but cannot cross the boundary. Everything outside the subset is the LLM's job to rewrite, or stays Python.
+**What are the limits of PySub (1.1)?**
+- **Types:** `int float bool str`, `list[T]` up to two levels (including lists of your own classes), `dict[int|str, scalar]`, and classes with typed fields and an `__init__`.
+- **Statements:** `if/while/for-range/for-each`, `try/except` with seven named exceptions (including `EOFError`), and `raise`.
+- **Supported since 1.1:**
+  - f-strings with format specs, `input()` and `print(sep=, end=)`
+  - the common `str` methods (`strip`, `split`, `join`, `replace`, `find`, …) and `list` methods (`pop(i)`, `insert`, `remove`, `index`, `count`, `sort(reverse=)`, …)
+  - `sum`, `sorted`, `round`, `format`, and `min`/`max` of many values or of a list
+  - `if __name__ == "__main__":`
+- **Still out:**
+  - tuples, sets, comprehensions, generators, lambdas, closures and slices
+  - `zip/enumerate/ord`, `key=` arguments, default arguments, `*args` and imports
+  - strings are ASCII
+- **Scoping:** module variables are invisible inside functions, so state is passed as parameters.
+- **Classes and methods** can be used inside compiled code but cannot cross the Python/C++ boundary.
+- **Everything else** is the LLM's job to rewrite (per function in the Studio, whole programs in the Playground), or it stays Python.
+
+**Can it handle an ordinary program, not just numeric kernels?** Show the Playground's *Student grade manager*. The AI rewrites dicts into a class and the global list into a parameter. The type checker accepts it, and the compiled program's output is byte-identical to the original under CPython on a scripted session that includes invalid input. Point out that the run compares against the *original* source: if the model had changed behaviour (say, an unstable sort reordering tied marks), the diff would show it in red. We found exactly that case while building it, and the prompt now asks for a stable insertion sort.
+
+**Why do exception messages match CPython exactly?** Three things make them match:
+- **CPython wording changes by version.** 3.12 says `integer division or modulo by zero`, 3.13 says `integer modulo by zero` for `%`, and 3.14 says `division by zero`.
+- **The runtime follows the comparing interpreter.** It uses the wording of the CPython minor version that runs the comparison: CLI programs get it from the compiling interpreter, and extension modules from `PY_MINOR_VERSION`.
+- **Reprs match too.** `KeyError` carries `repr(key)`, and `ValueError` carries `repr` of the bad string.
+
+`tests/positive/t19_error_messages.py` checks all of it, so the oracle is 19/19 on Python 3.13 (Windows) and 3.14 (Linux).
 
 **Why does `levenshtein` take `list[int]` and not `str`?** Because strings are the slow path in the runtime (single-character indexing allocates). A str-based version measured 1.0 to 1.6x, the code-list version 14 to 16x. The caller encodes once with `[ord(c) for c in word]` (in a method, which is glue). It is a real design lesson the tool surfaces.
 
@@ -167,7 +199,8 @@ def f(n: int) -> int:
 
 | Symptom | Fix |
 |---|---|
-| Fixer shows "disabled" | You are not in offline mode and have no key. Restart with `./studio.sh --offline`, or set `GROQ_API_KEY` / `ANTHROPIC_API_KEY` (a `.env` file in the repo root works). |
+| Fixer shows "disabled" | You are not in offline mode and have no key. Settings → paste a free Groq key → Test & save, or restart with `./studio.sh --offline`, or set `GROQ_API_KEY` / `ANTHROPIC_API_KEY` (a `.env` file in the repo root works). |
+| Playground conversion is slow or fails | Groq's free tier is rate-limited; press **Try again** after a few seconds. For a guaranteed demo, rehearse once: the converted program stays in the editor (it is saved in the browser). |
 | Offline run says "no cached reply" for a rewrite | The cache key hashes the function source, so editing a Quanta kernel invalidates its entry. Re-record: `./scripts/record_offline_cache.sh` (needs a key, about 12 minutes, free Groq tier is enough). |
 | Builds take about 4 s each | First run without `demo/offline_cache/so/` (or after a compiler upgrade; the snapshot is for g++ 15 on x86-64 Linux/WSL, others rebuild locally from source). |
 | Trace times out | The Quanta budget is 240 s (the run dialog value is raised to it). For a slow machine use `--small` and a bigger **Timeout**. |
