@@ -237,6 +237,7 @@ class _Plan:
         for f in self.eng.funcs.values():
             self._variables(f.qual, f, _func_own(f.node))
         self._class_fields()
+        self._loop_else()
         self._num_sinks()
         self._header()
 
@@ -356,7 +357,7 @@ class _Plan:
             if any(kind == "ann" for _, kind, _ in lst):
                 continue
             pos, kind, node = lst[0]
-            line = node.lineno
+            line = pos[0]
             if is_bad(t):
                 self.problem(line, f"'{name}' holds values of different types ({t[1]}); PySub variables keep one type")
                 continue
@@ -428,7 +429,40 @@ class _Plan:
                 self.changes.append(f"field {k.name}.{a}: {s}")
             if lines:
                 pos = self.src.line_start(at_line)
-                self.edit(pos, pos, "".join(lines) + "\n")
+                blank_next = at_line <= len(self.src.lines) and not self.src.lines[at_line - 1].strip()
+                self.edit(pos, pos, "".join(lines) + ("" if blank_next else "\n"))
+
+    def _loop_else(self):
+        """for/while ... else -> a flag set before the loop, cleared at each break, tested by `if flag:`."""
+        from .infer import _walk_loop
+        used = {n.id for n in ast.walk(self.tree) if isinstance(n, ast.Name)}
+        k = 1
+        for loop in ast.walk(self.tree):
+            if not isinstance(loop, (ast.For, ast.While)) or not loop.orelse:
+                continue
+            indent = self.src.indent_of(loop.lineno)
+            breaks = [n for s in loop.body for n in _walk_loop(s) if isinstance(n, ast.Break)]
+            lone = all(self.src.lines[b.lineno - 1].strip() == "break" for b in breaks)
+            else_line = next((ln for ln in range(loop.orelse[0].lineno, loop.lineno, -1)
+                              if self.src.lines[ln - 1].startswith(indent + "else")
+                              and self.src.lines[ln - 1][len(indent) + 4:].lstrip().startswith(":")), None)
+            if not lone or else_line is None or self.src.lines[loop.lineno - 1][:len(indent)] != indent:
+                self.problem(loop.lineno, "a loop with an else: block whose break shares a line with other code; "
+                                          "put each break on its own line")
+                continue
+            flag = "no_break"
+            while flag in used:
+                k += 1
+                flag = f"no_break{k}"
+            used.add(flag)
+            at = self.src.line_start(loop.lineno)
+            self.edit(at, at, f"{indent}{flag} = True\n")
+            for b in breaks:
+                bl = self.src.line_start(b.lineno)
+                self.edit(bl, bl, f"{self.src.indent_of(b.lineno)}{flag} = False\n")
+            e = self.src.line_start(else_line) + len(indent)
+            self.edit(e, e + 4, f"if {flag}")
+            self.changes.append(f"line {loop.lineno}: the loop's else: block became `if {flag}:`")
 
     def _init_attrs(self, k):
         init = k.methods.get("__init__")
