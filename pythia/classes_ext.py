@@ -386,6 +386,8 @@ def prepare(tc) -> None:
             cx.subs[b].append(c.name)
         seen.add(c.name)
     for name in cx.order:
+        _mangle(cx.defs[name])
+    for name in cx.order:
         _class_decorators(tc, cx, cx.defs[name])
     for name in cx.order:
         _method_decorators(tc, cx, cx.defs[name])
@@ -399,6 +401,106 @@ def prepare(tc) -> None:
     _none_locals(tc, cx, inf)
     for name in cx.order:
         _object_params(tc, cx, cx.defs[name])
+    _check_def_order(tc, cx)
+
+
+def _te_names(te, quoted: bool = False):
+    """(name, node) for every class name an annotation mentions outside quotes."""
+    if te is None:
+        return
+    q = quoted or getattr(te, "quoted", False)
+    if not q:
+        yield te.name, te
+    kids = getattr(te, "args", None)
+    if kids is None:
+        kids = [x for x in (te.param, te.param2) if x is not None] + list(te.params or [])
+    for k in kids or []:
+        yield from _te_names(k, q)
+
+
+def _check_def_order(tc, cx: Ctx) -> None:
+    """CPython runs the module top to bottom: a class used by module-level code (or, before 3.14, named in an
+    unquoted annotation) above its `class` statement raises NameError there."""
+    import sys
+    line = {n: cx.defs[n].line for n in cx.order}
+    lazy = getattr(tc, "future_annotations", False) or sys.version_info >= (3, 14)
+
+    def bad_ann(te, at_line, what):
+        if lazy or te is None or getattr(te, "pre", None) is not None:
+            return
+        for nm, node in _te_names(te):
+            if nm in line and line[nm] >= at_line:
+                _diag(tc, node, f"class {nm!r} is not defined yet where {what} is evaluated (CPython raises "
+                                f"NameError); quote it, \"{nm}\", or add `from __future__ import annotations`")
+                return
+    for f in tc.mod.funcs:
+        if getattr(f, "static_of", None):
+            continue
+        for p in f.params:
+            bad_ann(p.ann, f.line, f"the annotation of {f.name}()")
+        bad_ann(f.ret, f.line, f"the annotation of {f.name}()")
+    for n in cx.order:
+        c = cx.defs[n]
+        for m in c.methods + [g for g in tc.mod.funcs if getattr(g, "static_of", (None,))[0] == n]:
+            if getattr(m, "dc_init", False):
+                continue
+            for p in m.params:
+                bad_ann(p.ann, c.line, f"the annotation of {n}.{m.name}()")
+            bad_ann(m.ret, c.line, f"the annotation of {n}.{m.name}()")
+        for fld in c.fields:
+            if fld.ann is not None and fld.ann.name != "<inferred>":
+                bad_ann(fld.ann, c.line, f"the annotation of {n}.{fld.name}")
+    for s in tc.mod.main:
+        if isinstance(s, A.Assign):
+            bad_ann(s.ann, s.line + 1, "this annotation")
+        for x in walk(s):
+            nm = x.id if isinstance(x, A.Name) else x.func if isinstance(x, A.Call) else None
+            if isinstance(nm, str) and nm in line and line[nm] > s.line:
+                _diag(tc, x, f"class {nm!r} is used before its class statement (CPython raises NameError here)")
+                break
+
+
+# ---- private names -----------------------------------------------------------------------------------------
+def _mangle(c: A.ClassDef) -> None:
+    """CPython rewrites `__x` (not `__x__`) inside a class body to `_C__x`: self.__x, def __helper, __CONST."""
+    pre = "_" + c.name.lstrip("_")
+
+    def m(name: str) -> str:
+        if name.startswith("__") and not name.endswith("__") and pre != "_" and not name.startswith("__pythia") \
+                and not name.startswith(("__slice", "__pct_")):          # compiler-internal names stay as they are
+            return pre + name
+        return name
+
+    def fn(n):
+        if isinstance(n, A.Attribute):
+            n.attr = m(n.attr)
+        elif isinstance(n, A.MethodCall):
+            n.method = m(n.method)
+        elif isinstance(n, A.Name):
+            n.id = m(n.id)
+        elif isinstance(n, (A.ForEach, A.ForRange)):
+            n.var = m(n.var)
+        elif isinstance(n, A.ExceptHandler) and n.bind:
+            n.bind = m(n.bind)
+        elif isinstance(n, A.CompFor):
+            n.target = deep(n.target)
+        elif isinstance(n, A.Lambda):
+            n.params = [m(p) for p in n.params]
+        return None
+
+    def deep(t):
+        return m(t) if isinstance(t, str) else [deep(x) for x in t] if isinstance(t, list) else t
+    for meth in c.methods:
+        meth.name = m(meth.name)
+        for p in meth.params:
+            p.name = m(p.name)
+        for s in meth.body:
+            _transform(s, fn)
+            fn(s)
+    for fld in c.fields:
+        fld.name = m(fld.name)
+    for s in getattr(c, "attrs", []):
+        s.target.id = m(s.target.id)
 
 
 # ---- decorators --------------------------------------------------------------------------------------------
@@ -1664,6 +1766,12 @@ def check_stmt(tc, s) -> bool:
     cx = ctx(tc)
     if cx is None or not cx.defs:
         return False
+    if isinstance(s, A.AugAssign) and not isinstance(s.target, A.Name) and s.op in ARITH:
+        tt = tc.synth(s.target)
+        if is_cls(tc, tt) and resolve(tc, tt.name, "__i" + ARITH[s.op] + "__") is not None:
+            _diag(tc, s, f"{tt.name} defines __i{ARITH[s.op]}__: `{s.op}=` on an attribute or item of that type is "
+                         f"outside the PySub subset (use a local variable)")
+            return True
     if isinstance(s, A.Assign) and isinstance(s.target, A.Attribute):
         return _assign_attr(tc, cx, s, s.target, s.value, None)
     if isinstance(s, A.AugAssign) and isinstance(s.target, A.Attribute):
@@ -2154,6 +2262,15 @@ def stmt(em, s, d: int) -> bool:
             em.w(d + 1, f"pyl_set(_l, _i, {_emit_binary(em, s.dunder, 'pyl_get(_l, _i)', em.ex(s.value))});")
             em.w(d, "}")
             return True
+        if isinstance(tgt, A.Subscript) and tgt.value.ty is not None and tgt.value.ty.name == "dict":
+            from .emit_c import dict_rt_name
+            rt = dict_rt_name(tgt.value.ty)
+            em.w(d, "{")
+            em.w(d + 1, f"auto _m = {em.ex(tgt.value)};")
+            em.w(d + 1, f"auto _k = {em.ex(tgt.index)};")
+            em.w(d + 1, f"{rt}_set(_m, _k, {_emit_binary(em, s.dunder, f'{rt}_get(_m, _k)', em.ex(s.value))});")
+            em.w(d, "}")
+            return True
     if isinstance(s, A.AugAssign) and getattr(s, "iop", None):
         cls, name = s.iop
         em.w(d, f"p_{s.target.id} = {call_name(tc, cls, name)}(pyc_nn_type({em.ex(s.target)}, "
@@ -2209,6 +2326,18 @@ def emit_static(em, st) -> Optional[str]:
 
 
 # ---- module layout -----------------------------------------------------------------------------------------
+def lower_notes(lw, mod) -> None:
+    """Fidelity notes for constructs whose C++ image calls user code in a different pattern than CPython."""
+    from .lower import FidelityNote
+    for n in walk([f.body for f in mod.funcs] + [m.body for c in mod.classes for m in c.methods] + [mod.main]):
+        if getattr(n, "cls_sort", None) or getattr(n, "cls_order", None):
+            lw.note(n, "D14 user-defined ordering",
+                    "sort()/sorted()/min()/max() of objects call the class's __lt__ / __gt__; the compiled stable merge "
+                    "sort compares different pairs (and a different number of them) than CPython's timsort.",
+                    "identical results for a consistent ordering; a comparison method with side effects (printing, "
+                    "counting) would observe a different call sequence.", "guarded")
+
+
 def emit_struct(em, c: A.ClassDef) -> bool:
     tc = em.tc
     cx = ctx(tc)
