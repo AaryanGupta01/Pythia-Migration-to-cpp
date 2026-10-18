@@ -24,6 +24,7 @@ class TypeExpr(Node):
     name: str = ""                    # 'int' | 'float' | 'bool' | 'str' | 'list' | 'dict' | 'None'
     param: Optional["TypeExpr"] = None    # list[T] ; dict[K, V] key
     param2: Optional["TypeExpr"] = None   # dict[K, V] value
+    params: List["TypeExpr"] = field(default_factory=list)   # tuple[T1, T2, ...] elements
 
 
 # ------------------------------------------------------------ expressions
@@ -66,6 +67,12 @@ class Name(Node):
 
 @dataclass
 class ListLit(Node):
+    elts: List[Node] = field(default_factory=list)
+
+
+@dataclass
+class TupleLit(Node):
+    """(a, b), a, b, (a,), () -- also the target of an unpacking assignment before the parser desugars it."""
     elts: List[Node] = field(default_factory=list)
 
 
@@ -250,7 +257,6 @@ class ForEach(Node):
     var: str = ""
     iter: Optional[Node] = None
     body: List[Node] = field(default_factory=list)
-    targets: Any = None       # `for i, x in ...`: nested list of names (var is then the first one)
 
 
 @dataclass

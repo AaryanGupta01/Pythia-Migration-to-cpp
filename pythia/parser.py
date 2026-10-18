@@ -145,7 +145,7 @@ class Parser:
                     if self._is_main_guard(st):            # if __name__ == "__main__": runs as the program body
                         mod.main.extend(st.body)
                     else:
-                        mod.main.append(st)
+                        mod.main.extend(st if isinstance(st, list) else [st])   # unpacking desugars to several
             except _Panic:
                 self.synchronize()
             if self.i == guard:      # safety net: never spin with zero progress
@@ -217,6 +217,8 @@ class Parser:
             return A.TypeExpr(line=t.line, col=t.col, name="None")
         n = self.expect("NAME")
         te = A.TypeExpr(line=n.line, col=n.col, name=n.value)
+        if n.value == "tuple" and self.at_op("["):
+            return self._tuple_type(te)
         if self.at_op("["):
             self.next()
             te.param = self.parse_type()
@@ -236,7 +238,8 @@ class Parser:
                 self.next()
                 continue
             try:
-                stmts.append(self.parse_statement())
+                st = self.parse_statement()
+                stmts.extend(st if isinstance(st, list) else [st])   # unpacking desugars to several
             except _Panic:
                 self.synchronize()
             if self.i == guard:      # safety net: never spin with zero progress
@@ -260,7 +263,7 @@ class Parser:
             self.next()
             val = None
             if not self.at("NEWLINE"):
-                val = self.parse_expr()
+                val = self.parse_exprlist()
             self.expect("NEWLINE")
             return A.Return(line=t.line, col=t.col, value=val)
         if self.at_kw("pass"):
@@ -338,11 +341,11 @@ class Parser:
 
     def parse_for(self) -> A.Node:
         t = self.expect("KEYWORD", "for")
-        targets = _targets(self)
-        var = targets if isinstance(targets, str) else _first_name(targets)
-        targets = None if isinstance(targets, str) else targets
+        var = self._for_target()
         self.expect("KEYWORD", "in")
-        if self.at_kw("range") and targets is None:
+        if not isinstance(var, str):                   # for a, b in xs: -> for tmp in xs: a, b = tmp
+            return self._for_unpack(t, var)
+        if self.at_kw("range"):
             self.next()
             self.expect("OP", "(")
             args = [self.parse_expr()]
@@ -366,7 +369,7 @@ class Parser:
         it = self.parse_expr()
         self.expect("OP", ":")
         return A.ForEach(line=t.line, col=t.col, var=var, iter=it,
-                         body=self.parse_block(), targets=targets)
+                         body=self.parse_block())
 
     def parse_simple(self) -> A.Node:
         t = self.cur
@@ -377,18 +380,20 @@ class Parser:
             self.next()                       # ':'
             ann = self.parse_type()
             self.expect("OP", "=")
-            val = self.parse_expr()
+            val = self.parse_exprlist()
             self.expect("NEWLINE")
             return A.Assign(line=nm.line, col=nm.col,
                             target=A.Name(nm.line, nm.col, id=nm.value),
                             ann=ann, value=val)
 
-        first = self.parse_expr()
+        first = self.parse_exprlist()
 
         if self.at_op("="):
             self.next()
-            val = self.parse_expr()
+            val = self.parse_exprlist()
             self.expect("NEWLINE")
+            if isinstance(first, A.TupleLit):          # a, b = ...  ->  tmp = ...; a = tmp[0]; b = tmp[1]
+                return self._unpack_stmts(first, val, t.line, t.col)
             if not isinstance(first, (A.Name, A.Subscript, A.Attribute)):
                 self.error("invalid assignment target")
                 raise _Panic()
@@ -473,7 +478,7 @@ class Parser:
         while True:
             if self.at_op("["):
                 t = self.next()
-                idx = self.parse_expr()
+                idx = self.parse_exprlist()
                 self.expect("OP", "]")
                 node = A.Subscript(t.line, t.col, value=node, index=idx)
             elif self.at_op("."):
@@ -514,13 +519,7 @@ class Parser:
                 return A.Call(t.line, t.col, func=t.value, args=args, kwargs=kwargs)
             return A.Name(t.line, t.col, id=t.value)
         if self.at_op("("):
-            self.next()
-            e = self.parse_expr()
-            if self.at_kw("for"):
-                return _comp_tail(self, t, e, ")")
-            self.expect("OP", ")")
-            e.paren = True                             # (a < b) < c is NOT a chain
-            return e
+            return self._paren(t)
         if self.at_op("["):
             self.next()
             elts = []
@@ -599,7 +598,7 @@ def _call_args(self):
     return args, kwargs
 
 
-# ---- comprehensions, generator expressions, lambdas, tuple loop targets ----------------------------------
+# ---- comprehensions, generator expressions, lambdas; comprehension targets ------------------------------------
 def _target1(self):
     if self.at_op("(", "["):
         close = ")" if self.next().value == "(" else "]"
@@ -619,10 +618,6 @@ def _targets(self):
             break
         items.append(_target1(self))
     return items[0] if len(items) == 1 and not trailing else items
-
-
-def _first_name(t):
-    return t if isinstance(t, str) else _first_name(t[0])
 
 
 def _comp_tail(self, open_tok, elt, close):
@@ -773,6 +768,148 @@ def _fstring(self, tok):
     return node
 
 
+# ---- tuples: literals, tuple[...] types, unpacking (desugared into plain assignments) ---------------------
+_LIST_END = ("=", ")", "]", "}", ":") + tuple(AUG_OPS)
+
+
+def _paren(self, t):
+    """( ) -> empty tuple, (a,) / (a, b) -> TupleLit, (a) -> a (marked parenthesised)."""
+    self.next()
+    if self.at_op(")"):
+        self.next()
+        return A.TupleLit(t.line, t.col, elts=[])
+    e = self.parse_expr()
+    if self.at_kw("for"):                      # (x for x in xs): a generator expression
+        return _comp_tail(self, t, e, ")")
+    if self.at_op(","):
+        elts = [e]
+        while self.at_op(","):
+            self.next()
+            if self.at_op(")"):
+                break
+            elts.append(self.parse_expr())
+        e = A.TupleLit(t.line, t.col, elts=elts)
+    self.expect("OP", ")")
+    e.paren = True                             # (a < b) < c is NOT a chain
+    return e
+
+
+def parse_exprlist(self) -> A.Node:
+    """expr or a bare tuple `a, b` / `a,` (return values, assignment sides, subscripts)."""
+    first = self.parse_expr()
+    if not self.at_op(","):
+        return first
+    elts = [first]
+    while self.at_op(","):
+        self.next()
+        if self.at("NEWLINE") or (self.cur.kind == "OP" and self.cur.value in _LIST_END):
+            break
+        elts.append(self.parse_expr())
+    return A.TupleLit(first.line, first.col, elts=elts)
+
+
+def _tuple_type(self, te):
+    """tuple[T1, T2, ...]; `tuple[T, ...]` is parsed (as a '...' element) so the checker can reject it clearly."""
+    self.next()                                # '['
+    while not self.at_op("]"):
+        if self.at_op("."):
+            d = self.cur
+            for _ in range(3):
+                self.expect("OP", ".")
+            te.params.append(A.TypeExpr(line=d.line, col=d.col, name="..."))
+        else:
+            te.params.append(self.parse_type())
+        if self.at_op(","):
+            self.next()
+        else:
+            break
+    self.expect("OP", "]")
+    return te
+
+
+def _target_atom(self):
+    t = self.cur
+    if self.at_op("("):
+        self.next()
+        elts, comma = [], False
+        while not self.at_op(")"):
+            elts.append(self._target_atom())
+            if self.at_op(","):
+                self.next()
+                comma = True
+            else:
+                break
+        self.expect("OP", ")")
+        return elts[0] if len(elts) == 1 and not comma else A.TupleLit(t.line, t.col, elts=elts)
+    n = self.expect("NAME")
+    return A.Name(n.line, n.col, id=n.value)
+
+
+def _for_target(self):
+    """The loop variable name (str), or a TupleLit of Names for `for a, (b, c) in ...`."""
+    t = self.cur
+    nxt = self.toks[self.i + 1] if self.i + 1 < len(self.toks) else None
+    if self.at("NAME") and nxt is not None and nxt.kind == "KEYWORD" and nxt.value == "in":
+        return self.next().value
+    elts = [self._target_atom()]
+    comma = False
+    while self.at_op(","):
+        self.next()
+        comma = True
+        if self.at_kw("in"):
+            break
+        elts.append(self._target_atom())
+    if not comma and isinstance(elts[0], A.Name):
+        return elts[0].id                       # for (x) in xs
+    return elts[0] if not comma else A.TupleLit(t.line, t.col, elts=elts)
+
+
+def _fresh_unpack(self) -> str:
+    self._unpack_n = getattr(self, "_unpack_n", 0) + 1
+    return f"__pythia_u{self._unpack_n}"        # not a name PySub programs use; emitted as a hidden local
+
+
+def _unpack_stmts(self, target, value, line, col):
+    """a, (b, c) = v  ->  u1 = __pythia_unpack(v, 2); a = u1[0]; u2 = __pythia_unpack(u1[1], 2); b = u2[0]; c = u2[1]
+    The right-hand side is evaluated (and its length checked) before any target is assigned, as in CPython."""
+    tmp = self._fresh_unpack()
+    call = A.Call(line, col, func="__pythia_unpack", args=[value, A.IntLit(line, col, value=len(target.elts))])
+    out = [A.Assign(line, col, target=A.Name(line, col, id=tmp), value=call)]
+    for i, tg in enumerate(target.elts):
+        item = A.Subscript(tg.line, tg.col, value=A.Name(tg.line, tg.col, id=tmp),
+                           index=A.IntLit(tg.line, tg.col, value=i))
+        if isinstance(tg, A.TupleLit):
+            out += self._unpack_stmts(tg, item, tg.line, tg.col)
+        elif isinstance(tg, (A.Name, A.Subscript, A.Attribute)):
+            out.append(A.Assign(tg.line, tg.col, target=tg, value=item))
+        else:
+            self.errors.append(Diagnostic("invalid unpacking target (names, subscripts, fields or nested "
+                                          "(a, b) only; starred targets are outside the PySub subset)",
+                                          tg.line, tg.col))
+            raise _Panic()
+    return out
+
+
+def _for_unpack(self, t, target):
+    if self.at_kw("range"):
+        self.error("range() yields ints, which cannot be unpacked into several names")
+        raise _Panic()
+    it = self.parse_expr()
+    self.expect("OP", ":")
+    body = self.parse_block()
+    tmp = self._fresh_unpack()
+    body = self._unpack_stmts(target, A.Name(t.line, t.col, id=tmp), t.line, t.col) + body
+    return A.ForEach(line=t.line, col=t.col, var=tmp, iter=it, body=body)
+
+
+Parser._paren = _paren
+Parser.parse_exprlist = parse_exprlist
+Parser._tuple_type = _tuple_type
+Parser._target_atom = _target_atom
+Parser._for_target = _for_target
+Parser._fresh_unpack = _fresh_unpack
+Parser._unpack_stmts = _unpack_stmts
+Parser._for_unpack = _for_unpack
 Parser._call_args = _call_args
 Parser._is_main_guard = _is_main_guard
 Parser._fstring = _fstring

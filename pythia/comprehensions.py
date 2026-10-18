@@ -41,7 +41,8 @@ def is_helper(tc, e) -> bool:
 
 
 def is_special_foreach(tc, s) -> bool:
-    return s.targets is not None or is_helper(tc, s.iter)
+    """`for v in enumerate/zip/reversed(...)` (`for a, b in ...` arrives here as `for tmp in ...` + unpacking)."""
+    return is_helper(tc, s.iter)
 
 
 def names_of(target) -> List[str]:
@@ -50,10 +51,10 @@ def names_of(target) -> List[str]:
     return [n for t in target for n in names_of(t)]
 
 
-def loop_names(s) -> List[str]:
-    """Every name a for statement binds (ForRange / ForEach, tuple targets included)."""
-    t = getattr(s, "targets", None)
-    return names_of(t) if t is not None else [s.var]
+def _as_ty(item) -> Ty:
+    """An item as one value: enumerate/zip items are tuples."""
+    from .tuples import tuple_of
+    return tuple_of([_as_ty(x) for x in item]) if isinstance(item, list) else item
 
 
 def _kw(e, name):
@@ -75,6 +76,8 @@ def _wrap(src: A.Node) -> A.GenExp:
 def item_of(tc, it):
     """Type of what iterating `it` yields: a Ty, or a list of items for an enumerate/zip tuple."""
     if not is_helper(tc, it):
+        from .tuples import mark_items
+        mark_items(it)                                 # [k for k, v in d.items()] is fine: it is consumed at once
         t = tc.synth(it)
         if t is ERR:
             return ERR
@@ -130,17 +133,15 @@ def item_of(tc, it):
 
 def _bind(tc, node, target, item, declare) -> None:
     if isinstance(target, str):
-        if isinstance(item, list):
-            tc.err(node, "an enumerate()/zip() item is a tuple, which PySub does not have: unpack it in the "
-                         "loop header, e.g. `for i, x in enumerate(xs)`")
-            item = ERR
-        declare(target, item)
+        declare(target, _as_ty(item))
         return
+    if isinstance(item, Ty) and item.name == "tuple":
+        item = list(item.elts)
     if not isinstance(item, list) or len(item) != len(target):
         if item is not ERR:
             what = f"{len(item)} values" if isinstance(item, list) else f"a {item}"
-            tc.err(node, f"cannot unpack {what} into {len(target)} names (PySub unpacks only enumerate() and "
-                         f"zip() items, with exactly one name per value)")
+            tc.err(node, f"cannot unpack {what} into {len(target)} names (a comprehension target unpacks tuples "
+                         f"only, with exactly one name per value)")
         for t in target:
             _bind(tc, node, t, ERR, declare)
         return
@@ -155,10 +156,8 @@ def _check_target(tc, node, target) -> None:
 
 
 def check_foreach(tc, s) -> None:
-    """`for <target> in <enumerate|zip|reversed|...>:` -- target names are function locals, like any loop."""
-    target = s.targets if s.targets is not None else s.var
-    _check_target(tc, s, target)
-    _bind(tc, s, target, item_of(tc, s.iter), lambda n, t: tc.bind(s, n, t))
+    """`for v in <enumerate|zip|reversed|...>:` -- v is a function local, like any loop variable."""
+    _bind(tc, s, s.var, item_of(tc, s.iter), lambda n, t: tc.bind(s, n, t))
     tc.loop_depth += 1
     tc.block(s.body)
     tc.loop_depth -= 1
@@ -242,9 +241,10 @@ def check_key(tc, kw: A.Keyword, elem: Ty) -> Ty:
     finally:
         tc.scope = saved
     lam.ty = kt
-    if kt is not ERR and kt.name not in PRIM:
-        return tc.err(lam, f"a key function must return int, float, bool or str in PySub (tuple keys need "
-                           f"tuples), found {kt}")
+    from .tuples import orderable
+    if kt is not ERR and not orderable(kt):
+        return tc.err(lam, f"a key function must return int, float, bool, str or a tuple of those in PySub, "
+                           f"found {kt}")
     return kt
 
 
@@ -289,9 +289,6 @@ def synth_call_hook(tc, e: A.Call) -> Optional[Ty]:
         return None
     a = e.args[0]
     if is_helper(tc, a):
-        if a.func in ("enumerate", "zip"):
-            return tc.err(a, f"{n}({a.func}(...)) needs tuples, which PySub does not have; use {a.func}() in a "
-                             f"for-loop header: `for i, x in {a.func}(...)`")
         a = e.args[0] = _wrap(a)
     key = _kw(e, "key")
     if n in ("any", "all"):
@@ -305,6 +302,8 @@ def synth_call_hook(tc, e: A.Call) -> Optional[Ty]:
     if key is not None and n in ("sorted", "min", "max"):
         if _bad_kwargs(tc, e, ("key", "reverse") if n == "sorted" else ("key",)):
             return ERR
+        from .tuples import mark_items
+        mark_items(a)                                  # sorted(d.items(), key=...) consumes the view at once
         if n != "sorted" or isinstance(a, A.GenExp) or tc.synth(a).name not in ("list", "<error>"):
             if not isinstance(a, A.GenExp):
                 a = e.args[0] = _wrap(a)
@@ -419,8 +418,6 @@ def alias_edges(n):
     """(name, source expr) pairs: a comprehension / loop / key-lambda variable may denote source's objects."""
     if isinstance(n, A.CompFor):
         return [(nm, n.iter) for nm in names_of(n.target)]
-    if isinstance(n, A.ForEach) and n.targets is not None:
-        return [(nm, n.iter) for nm in names_of(n.targets)]
     if isinstance(n, A.ForEach) and isinstance(n.iter, A.Call) and n.iter.func in HELPERS:
         return [(n.var, n.iter)]
     if isinstance(n, (A.Call, A.MethodCall)):
@@ -510,10 +507,23 @@ def _source(em, it):
             (t.elem, _elem(t, f"{s}->data[{i}]")))
 
 
+def _value(item):
+    """(Ty, C expr) of an item; an enumerate/zip item becomes a std::tuple built left to right."""
+    if not isinstance(item, list):
+        return item
+    from .tuples import ctype_tuple, tuple_of
+    parts = [_value(i) for i in item]
+    t = tuple_of([ty for ty, _ in parts])
+    return t,f"{ctype_tuple(t).strip()}{{{', '.join(cx for _, cx in parts)}}}"
+
+
 def _binds(target, item, declare: bool) -> List[str]:
     if isinstance(target, str):
-        ty, cx = item
+        ty, cx = _value(item)
         return [f"{_ctype(ty) if declare else ''}p_{target} = {cx};"]
+    if not isinstance(item, list):                     # a tuple value (list element, d.items()): source fetches are pure
+        ty, cx = item
+        item = [(t, f"std::get<{k}>({cx})") for k, t in enumerate(ty.elts)]
     return [x for t, i in zip(target, item) for x in _binds(t, i, declare)]
 
 
@@ -537,7 +547,7 @@ def emit_foreach(em, s, d: int) -> None:
         em.w(d + 1, x)
     em.w(d + 1, "for (;;) {")
     em.w(d + 2, f"if (!({cond})) break;")
-    for x in _binds(s.targets if s.targets is not None else s.var, item, False) + adv:
+    for x in _binds(s.var, item, False) + adv:
         em.w(d + 2, x)
     for x in s.body:
         em.stmt(x, d + 2)
