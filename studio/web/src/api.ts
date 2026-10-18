@@ -50,7 +50,7 @@ export interface Api {
   fsList(path: string): Promise<FsList>
   pgCompile(source: string): Promise<PlaygroundCompile>
   pgRun(source: string, stdin?: string, reference?: string): Promise<PlaygroundRun>
-  pgConvert(source: string): Promise<PlaygroundConvert>
+  pgConvert(source: string, stdin?: string): Promise<PlaygroundConvert>
   pgConvertStatus(): Promise<ConvertStatus>
   stages(source: string): Promise<StageDump>
   upload(file: File): Promise<{ job_id: string; workspace_id: string }>
@@ -128,7 +128,7 @@ export const realApi: Api = {
   fsList: (path) => http(`/fs/list?${q({ path })}`),
   pgCompile: (source) => http('/playground/compile', json({ source })),
   pgRun: (source, stdin, reference) => http('/playground/run', json({ source, stdin: stdin ?? '', reference: reference ?? null })),
-  pgConvert: (source) => http('/playground/convert', json({ source })),
+  pgConvert: (source, stdin) => http('/playground/convert', json({ source, stdin: stdin ?? '' })),
   pgConvertStatus: () => http('/playground/convert/status'),
   stages: (source) => http('/stages', json({ source })),
   upload: async (file) => {

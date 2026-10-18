@@ -115,6 +115,8 @@ def _references(expr: Optional[A.Node], name: str) -> bool:
         return _references(expr.left, name) or _references(expr.right, name)
     if isinstance(expr, A.BoolOp):
         return any(_references(v, name) for v in expr.values)
+    if isinstance(expr, A.IfExp):
+        return any(_references(v, name) for v in (expr.test, expr.body, expr.orelse))
     if isinstance(expr, A.Call):
         return any(_references(a, name) for a in expr.args)
     if isinstance(expr, A.MethodCall):
@@ -182,6 +184,10 @@ class GuardElider:
             return None
         if isinstance(e, A.BoolOp):
             for v in e.values:
+                self.eval(v, env)
+            return None
+        if isinstance(e, A.IfExp):
+            for v in (e.test, e.body, e.orelse):
                 self.eval(v, env)
             return None
         if isinstance(e, A.Subscript):
@@ -383,6 +389,8 @@ def _scan_literal_call_sites(mod: A.Module) -> Dict[str, Dict[str, Interval]]:
         elif isinstance(e, A.BoolOp):
             for v in e.values:
                 walk_expr(v)
+        elif isinstance(e, A.IfExp):
+            walk_expr(e.test); walk_expr(e.body); walk_expr(e.orelse)
         elif isinstance(e, A.MethodCall):
             walk_expr(e.recv)
             for a in e.args:

@@ -90,6 +90,13 @@ class BoolOp(Node):
 
 
 @dataclass
+class IfExp(Node):
+    test: Optional[Node] = None       # body if test else orelse
+    body: Optional[Node] = None
+    orelse: Optional[Node] = None
+
+
+@dataclass
 class Compare(Node):
     op: str = ""                      # includes 'in' and 'not in'
     left: Optional[Node] = None

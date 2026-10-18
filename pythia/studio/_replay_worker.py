@@ -73,11 +73,21 @@ def load_original(root, rel, name):
         mod = mod[:-9]
     try:
         m = importlib.import_module(mod)
+        return getattr(m, name)
     except Exception:
-        s = importlib.util.spec_from_file_location("_pythia_orig_" + name, os.path.join(root, rel))
-        m = importlib.util.module_from_spec(s)
-        s.loader.exec_module(m)
-    return getattr(m, name)
+        pass
+    # A script that reads input() or runs its work at import time: execute the top-level statements one by one and
+    # skip the ones that fail, so the definitions (and constants that don't need input) still load.
+    import ast
+    path = os.path.join(root, rel)
+    tree = ast.parse(open(path, encoding="utf-8").read(), path)
+    ns = {"__name__": "_pythia_orig_" + name, "__file__": path}
+    for st in tree.body:
+        try:
+            exec(compile(ast.Module([st], []), path, "exec"), ns)
+        except Exception:
+            pass
+    return ns[name]
 
 
 def load_so(path, modname):

@@ -217,6 +217,29 @@ template <class T> void pyl_sort(PyList<T> *l, bool rev) {   // CPython: stable;
     if (rev) std::reverse(l->data.begin(), l->data.end());
 }
 template <class T> PyList<T> *pyl_sorted(PyList<T> *l, bool rev) { auto *r = pyl_copy(l); pyl_sort(r, rev); return r; }
+// list(s) / sorted(s): one-character strings; list(d) / sorted(d): the keys in insertion order
+inline PyListStr *pyl_chars(PyStr *s) {
+    auto *r = pyl_new<PyStr *>();
+    for (size_t i = 0; i < s->data.size(); ++i) r->data.push_back(pystr_new(s->data.data() + i, 1));
+    return r;
+}
+// ord()/chr() on ASCII; other code points raise PythiaSemanticError (compiled strings are bytes, D13)
+inline int64_t py_ord(PyStr *s) {
+    if (!s->data.empty() && static_cast<unsigned char>(s->data[0]) >= 0x80)
+        throw PythiaSemanticError("ord() of a non-ASCII character is outside PySub (compiled strings are ASCII)");
+    if (s->data.size() != 1)
+        throw PythonException("TypeError", "ord() expected a character, but string of length " + std::to_string(s->data.size()) + " found");
+    return static_cast<unsigned char>(s->data[0]);
+}
+inline PyStr *py_chr(int64_t i) {
+    if (i < 0 || i >= 0x110000) throw ValueError("chr() arg not in range(0x110000)");
+    if (i >= 0x80) throw PythiaSemanticError("chr() of a non-ASCII code point is outside PySub (compiled strings are ASCII)");
+    char c = static_cast<char>(i);
+    return pystr_new(&c, 1);
+}
+template <class D> auto *pyl_keys(D *d) {
+    auto *r = pyl_new<typename decltype(d->keys)::value_type>(); r->data = d->keys; return r;
+}
 template <class T> T pyl_min(PyList<T> *l) {
     if (l->data.empty()) throw ValueError("min() iterable argument is empty");
     T r = l->data[0]; for (size_t i = 1; i < l->data.size(); ++i) if (pyl_lt(l->data[i], r)) r = l->data[i]; return r;

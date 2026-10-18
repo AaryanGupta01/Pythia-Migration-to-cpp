@@ -34,7 +34,7 @@ STDIN = "\n".join([
 src_path = Path(sys.argv[1]) if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else ROOT / "studio/examples/student_grades.py"
 src = src_path.read_text(encoding="utf-8")
 t = time.time()
-res = converter.convert(src, {}, playground.compile_snippet)
+res = converter.convert(src, {}, playground.compile_snippet, STDIN, playground.run_python)
 print(f"provider={res.get('provider')} model={res.get('model')} ok={res['ok']} in {time.time() - t:.1f}s")
 for a in res["attempts"]:
     print(f"  attempt {a['attempt']}: ok={a['ok']} {a['latency_ms']} ms  errors={len(a['diagnostics'])} {a.get('error') or ''}")

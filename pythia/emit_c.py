@@ -640,6 +640,9 @@ class Emitter:
                 return eq if e.op == "==" else f"(!{eq})"
             return f"(({l}) {e.op} ({r}))"
 
+        if isinstance(e, A.IfExp):              # C's ?: evaluates only the chosen branch, like Python
+            return f"({self.cond(e.test)} ? ({self.ex(e.body)}) : ({self.ex(e.orelse)}))"
+
         if isinstance(e, A.BoolOp):
             t = e.ty
             v = self.fresh()
@@ -815,6 +818,8 @@ class Emitter:
             a = e.args[0]
             return (f"pystr_len({self.ex(a)})" if a.ty == STR
                     else f"(({self.ex(a)})->size())")
+        if n in ("ord", "chr"):
+            return f"py_{n}({self.ex(e.args[0])})"
         if n == "abs":
             a = e.args[0]
             return (f"py_abs_i64({self.ex(a)})" if e.ty == INT
@@ -850,9 +855,14 @@ class Emitter:
         if n == "sum":
             fn = {"int": "py_sum_i64", "float": "py_sum_f64", "bool": "py_sum_bool"}[e.args[0].ty.elem.name]
             return f"{fn}({self.ex(e.args[0])})"
-        if n == "sorted":
+        if n in ("sorted", "list"):
+            a = e.args[0]
+            src = {"str": "pyl_chars", "dict": "pyl_keys"}.get(a.ty.name)
+            if n == "list":
+                return f"{src or 'pyl_copy'}({self.ex(a)})"
             rev = self.kwarg(e, "reverse")
-            return f"pyl_sorted({self.ex(e.args[0])}, {self.ex(rev) if rev is not None else 'false'})"
+            lst = f"{src}({self.ex(a)})" if src else self.ex(a)
+            return f"pyl_sorted({lst}, {self.ex(rev) if rev is not None else 'false'})"
         if n in ("min", "max"):
             t = ctype(e.ty)
             x, y = self.fresh(), self.fresh()

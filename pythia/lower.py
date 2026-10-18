@@ -47,6 +47,7 @@ D_FIELDINIT = "D9 class fields are zero-initialised before __init__ runs"
 D_SUMFLOAT  = "D10 sum() of an empty list[float]"
 D_NANORDER  = "D11 ordering of NaN"
 D_STDIN     = "D12 interactive input"
+D_ASCII     = "D13 characters are ASCII"
 
 
 class Lowerer:
@@ -190,6 +191,10 @@ class Lowerer:
             e.values = [self.coerce(self.expr(v), e.ty) for v in e.values]
             return e
 
+        if isinstance(e, A.IfExp):
+            e.test, e.body, e.orelse = self.expr(e.test), self.expr(e.body), self.expr(e.orelse)
+            return e
+
         if isinstance(e, A.UnaryOp):
             e.operand = self.expr(e.operand)
             if e.op == "-" and e.ty == INT:
@@ -285,6 +290,11 @@ class Lowerer:
                       "NaN compares false with everything, so where NaN ends up after sort()/min()/max() depends on "
                       "the algorithm; the compiled stable merge sort and CPython's timsort can disagree.",
                       "identical for lists without NaN.", "guarded")
+        if name in ("ord", "chr"):
+            self.note(n, D_ASCII,
+                      f"compiled strings hold ASCII characters: {name}() of a character (code point) above 127 raises "
+                      "PythiaSemanticError instead of returning what CPython returns.",
+                      "identical for ASCII text (letters, digits, punctuation).", "guarded")
         if name == "input":
             self.note(n, D_STDIN,
                       "input() writes the prompt to stdout and reads one line from stdin, as CPython does; end of input "

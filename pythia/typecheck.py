@@ -674,6 +674,16 @@ class TypeChecker:
                                    f"static result type")
             return j
 
+        if isinstance(e, A.IfExp):
+            self.synth(e.test)
+            bt, ot = self.synth(e.body), self.synth(e.orelse)
+            if bt is ERR or ot is ERR:
+                return ERR
+            if bt != ot:                 # no widening: `83 if odd else 83.0` must not print 83.0
+                return self.err(e, f"the branches of `x if c else y` have types {bt} and {ot}; PySub requires a single "
+                                   f"static result type (convert one branch explicitly, e.g. float(x))")
+            return bt
+
         if isinstance(e, A.Compare):
             lt, rt = self.synth(e.left), self.synth(e.right)
             if e.op in ("in", "not in"):
@@ -921,6 +931,16 @@ class TypeChecker:
             if t.name in ("list", "str", "dict") or t is ERR:
                 return INT
             return self.err(e.args[0], f"object of type {t} has no len()")
+        if name in ("ord", "chr"):
+            if len(e.args) != 1:
+                return self.err(e, f"{name}() takes exactly one argument")
+            t = self.synth(e.args[0])
+            want = STR if name == "ord" else INT
+            if t is ERR:
+                return ERR
+            if not (t == want or (want == INT and t == BOOL)):
+                return self.err(e.args[0], f"{name}() needs a {want}, found {t}")
+            return INT if name == "ord" else STR
         if name == "abs":
             if len(e.args) != 1:
                 return self.err(e, "abs() takes exactly one argument")
@@ -987,15 +1007,21 @@ class TypeChecker:
             if t.name == "list" and t.elem is not None and t.elem.name in NUMERIC:
                 return FLOAT if t.elem == FLOAT else INT
             return self.err(e.args[0], f"sum() needs a list of numbers, found {t}")
-        if name == "sorted":
+        if name in ("sorted", "list"):
             if len(e.args) != 1:
-                return self.err(e, "sorted() takes exactly one list")
+                return self.err(e, f"{name}() takes exactly one argument in PySub" +
+                                   (" (an empty list is written `xs: list[int] = []`)" if name == "list" else ""))
             t = self.synth(e.args[0])
             if t is ERR:
                 return ERR
-            if t.name == "list" and t.elem is not None and t.elem.name in PRIM:
+            if t == STR:                        # characters
+                return list_of(STR)
+            if t.name == "dict":                # keys, in insertion order
+                return list_of(t.key)
+            if t.name == "list" and (name == "list" or (t.elem is not None and t.elem.name in PRIM)):
                 return t
-            return self.err(e.args[0], f"sorted() needs a list of int, float, bool or str, found {t}")
+            return self.err(e.args[0], f"sorted() needs a list of int, float, bool or str, a str or a dict, found {t}"
+                            if name == "sorted" else f"list() takes a list, a str or a dict, found {t}")
         if name in ("int", "float", "str", "bool"):
             if len(e.args) != 1:
                 return self.err(e, f"{name}() takes exactly one argument")

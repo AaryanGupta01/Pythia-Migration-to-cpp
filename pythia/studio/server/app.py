@@ -387,10 +387,12 @@ def create_app(engine=None, home: Optional[str] = None) -> FastAPI:
     @app.post("/api/playground/convert")
     async def pg_convert(request: Request):
         from .. import converter
-        src = await source_of(request)
+        b = await body(request)
+        src = b.get("source")
         if not isinstance(src, str) or not src.strip():
             return JSONResponse({"error": "source is empty"}, status_code=400)
-        return await asyncio.to_thread(converter.convert, src, _llm_settings(), playground.compile_snippet)
+        return await asyncio.to_thread(converter.convert, src, _llm_settings(), playground.compile_snippet,
+                                       str(b.get("stdin") or ""), playground.run_python)
 
     @app.get("/api/playground/convert/status")
     def pg_convert_status():

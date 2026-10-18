@@ -35,10 +35,13 @@ def is_wsl() -> bool:
 
 
 def _probe(port: int) -> Optional[bool]:
-    """True: PYTHIA Studio answers on 127.0.0.1:port.  False: something else does.  None: nothing listens."""
+    """True: this build of PYTHIA Studio answers on 127.0.0.1:port.  False: something else does (another program,
+    or a PYTHIA Studio started from older code, e.g. a forgotten WSL server).  None: nothing listens."""
+    from .doctor import BUILD
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/doctor", timeout=3) as r:
-            return json.load(r).get("app") == "pythia-studio"
+            d = json.load(r)
+            return d.get("app") == "pythia-studio" and d.get("build") == BUILD
     except urllib.error.HTTPError:
         return False
     except Exception:
@@ -262,7 +265,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 url = f"http://{shown}:{p}/"
                 break
     if seen is False:
-        _say(f"port {a.port} is taken by another program. Pick another: pythia-studio --port {a.port + 1}")
+        _say(f"port {a.port} is taken by another program (or an older PYTHIA Studio still running; close it). "
+             f"Pick another: pythia-studio --port {a.port + 1}")
         return 1
 
     print(f"PYTHIA Studio {report['version']}  (data: {home})\n{doctor.render(report)}", flush=True)

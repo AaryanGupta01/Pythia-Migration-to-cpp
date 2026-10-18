@@ -410,6 +410,11 @@ class Parser:
                 left = A.Compare(t.line, t.col, op=op, left=left, right=right)
             else:
                 left = A.BinOp(t.line, t.col, op=op, left=left, right=right)
+        if min_bp == 0 and self.at_kw("if"):           # body if test else orelse (loosest; orelse may nest)
+            t = self.next()
+            test = self.parse_expr(1)
+            self.expect("KEYWORD", "else")
+            left = A.IfExp(t.line, t.col, test=test, body=left, orelse=self.parse_expr(0))
         return left
 
     def parse_unary(self) -> A.Node:
@@ -419,7 +424,8 @@ class Parser:
             return A.UnaryOp(t.line, t.col, op=t.value, operand=self.parse_unary())
         if self.at_kw("not"):
             self.next()
-            return A.UnaryOp(t.line, t.col, op="not", operand=self.parse_unary())
+            # `not` binds looser than comparisons, tighter than `and`: not a == b is not (a == b)
+            return A.UnaryOp(t.line, t.col, op="not", operand=self.parse_expr(BP["and"] + 1))
         return self.parse_postfix()
 
     def parse_postfix(self) -> A.Node:

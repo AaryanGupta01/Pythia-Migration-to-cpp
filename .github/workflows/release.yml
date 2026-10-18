@@ -13,7 +13,11 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - name: The prebuilt UI must be committed (studio/web/dist is bundled into the wheel)
-        run: test -f studio/web/dist/index.html
+        run: |
+          test -f studio/web/dist/index.html
+          for f in $(grep -o 'assets/[^"]*' studio/web/dist/index.html); do
+            test -f "studio/web/dist/$f" || { echo "::error::index.html loads $f, which is not committed"; exit 1; }
+          done
       - name: Build wheel and sdist
         run: |
           python -m pip install build

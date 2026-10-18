@@ -112,7 +112,7 @@ export function Playground() {
     try {
       setRun(await api.pgRun(src, stdin, reference ?? undefined))
     } catch (e) {
-      setRun({ ok: false, error: errMsg(e), python: { stdout: '', exception: null, time_ms: 0 }, cpp: { stdout: '', exception: null, time_ms: 0 }, same: false })
+      setRun({ ok: false, error: errMsg(e), python: { stdout: '', exception: null, time_ms: 0 }, cpp: null, same: false })
     }
     setRunning(false)
   }, [src, stdin, reference])
@@ -127,12 +127,12 @@ export function Playground() {
     const original = src
     setConv({ state: 'running', original, started: Date.now() })
     try {
-      const r = await api.pgConvert(original)
+      const r = await api.pgConvert(original, stdin)
       setConv({ state: r.ok ? 'done' : 'failed', result: r, original })
     } catch (e) {
       setConv({ state: 'failed', result: { ok: false, error: errMsg(e), attempts: [] }, original })
     }
-  }, [src])
+  }, [src, stdin])
   const applyConversion = () => {
     if (!conv.result?.source || conv.original == null) return
     setReference(conv.original)
@@ -180,8 +180,9 @@ export function Playground() {
             </select>
           </label>
           <Legend />
-          <Btn kind="primary" onClick={doRun} disabled={running || nErr > 0 || compiling} title={`Run (${MOD}+Enter)`}>
-            <Play size={12} /> {running ? 'Running…' : 'Run'} <Kbd>{MOD}↵</Kbd>
+          <Btn kind="primary" onClick={doRun} disabled={running || compiling}
+            title={nErr > 0 ? `Not PySub yet: runs under Python only (${MOD}+Enter). Convert it to also run it as compiled C++.` : `Run under CPython and as compiled C++ (${MOD}+Enter)`}>
+            <Play size={12} /> {running ? 'Running…' : nErr > 0 ? 'Run in Python' : 'Run'} <Kbd>{MOD}↵</Kbd>
           </Btn>
         </span>
       </div>
@@ -255,7 +256,7 @@ function ConvertPanel({ conv, provider, onApply, onRetry, onClose }: { conv: Con
         {conv.state === 'running' && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm text-fg2"><span className="h-2 w-2 animate-pulse rounded-full bg-accent" /> Asking {who} for a PySub version… {secs}s</div>
-            <p className="text-xs text-fg3">Each answer goes straight to the PySub type checker; if it is rejected, the exact errors go back to the model (up to 3 rounds). Nothing is accepted on the model's word.</p>
+            <p className="text-xs text-fg3">Each answer goes straight to the PySub type checker, then runs next to your original on the same input. A type error or any difference in the output goes back to the model (up to 4 rounds). Nothing is accepted on the model's word.</p>
             <Skeleton className="h-4 w-2/3" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-3/5" />
           </div>
         )}
@@ -263,9 +264,22 @@ function ConvertPanel({ conv, provider, onApply, onRetry, onClose }: { conv: Con
           <>
             <div className={cn('rounded-lg border px-3 py-2 text-sm', r.ok ? 'border-ok/30 bg-ok/10 text-ok' : 'border-bad/30 bg-bad/10 text-bad')}>
               {r.ok
-                ? (r.already ? 'This program is already valid PySub; nothing to convert.' : `Passed the PySub type checker on attempt ${r.attempts.length} (${who}). Use it, then press Run: your original runs under CPython, the conversion as compiled C++, on the same input.`)
+                ? (r.already ? 'This program is already valid PySub; nothing to convert.' : `Converted on attempt ${r.attempts.length} (${who}): it passes the PySub type checker${r.behaviour_checked ? ' and prints exactly what your original prints on the current input' : ''}. Use it, then press Run: your original runs under CPython, the conversion as compiled C++, on the same input.`)
                 : (r.error ?? 'The conversion failed.')}
             </div>
+            {r.blockers && r.blockers.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-fg2">Why this program can't become compiled C++</div>
+                {r.blockers.map((b, i) => (
+                  <div key={i} className="rounded-md border border-line bg-panel px-2.5 py-2 text-xs">
+                    <div className="font-medium text-fg"><span className="mono text-fg3">line {b.line}</span> {b.what}</div>
+                    <div className="mt-0.5 text-fg2">{b.why}.</div>
+                    <div className="mt-0.5 text-fg3">What you can do: {b.fix}.</div>
+                  </div>
+                ))}
+                <p className="text-xs text-fg3">PySub is a typed subset of Python made of numbers, strings, lists, dicts, classes, input() and print(): exactly the parts a C++ compiler can reproduce bit for bit. Programs that also use libraries, files or randomness run under Python here (press Run); open them as a Project and PYTHIA accelerates only their plain-Python hot functions.</p>
+              </div>
+            )}
             {r.attempts.length > 0 && (
               <ol className="space-y-1.5 text-xs">
                 {r.attempts.map((a) => (
@@ -274,7 +288,7 @@ function ConvertPanel({ conv, provider, onApply, onRetry, onClose }: { conv: Con
                       {a.ok ? <Check size={12} className="text-ok" /> : <X size={12} className="text-bad" />}
                       <span className="font-medium text-fg2">Attempt {a.attempt}</span>
                       <span className="text-fg3">{(a.latency_ms / 1000).toFixed(1)} s</span>
-                      <span className={cn('ml-auto', a.ok ? 'text-ok' : 'text-bad')}>{a.ok ? 'type checker: accepted' : a.error ? 'no answer' : `type checker: ${a.diagnostics.length} error${a.diagnostics.length === 1 ? '' : 's'} sent back`}</span>
+                      <span className={cn('ml-auto', a.ok ? 'text-ok' : 'text-bad')}>{a.ok ? 'accepted' : a.error ? 'no answer' : a.behaviour ? 'type-checks, but prints different output: sent back' : `type checker: ${a.diagnostics.length} error${a.diagnostics.length === 1 ? '' : 's'} sent back`}</span>
                     </div>
                     {!a.ok && (a.error || a.diagnostics.length > 0) && (
                       <ul className="mt-1 space-y-0.5 pl-5 text-fg3">
@@ -282,6 +296,7 @@ function ConvertPanel({ conv, provider, onApply, onRetry, onClose }: { conv: Con
                         {a.diagnostics.slice(0, 4).map((d, i) => <li key={i}><span className="mono">line {d.line}</span> {d.msg}</li>)}
                       </ul>
                     )}
+                    {a.behaviour && <pre className="mono mt-1 max-h-32 overflow-auto rounded bg-bg px-2 py-1 text-2xs text-fg3">{a.behaviour}</pre>}
                   </li>
                 ))}
               </ol>
@@ -315,7 +330,8 @@ function ConvertPanel({ conv, provider, onApply, onRetry, onClose }: { conv: Con
 function RunOutput({ run, running, stdin, setStdin, showStdin, comparedToOriginal }: { run: PlaygroundRun | null; running: boolean; stdin: string; setStdin: (s: string) => void; showStdin: boolean; comparedToOriginal: boolean }) {
   const lines = (s: string) => s.replace(/\n$/, '').split('\n')
   const a = run ? lines(run.python.stdout) : []
-  const b = run ? lines(run.cpp.stdout) : []
+  const b = run?.cpp ? lines(run.cpp.stdout) : []
+  const both = !!run && run.ok && !!run.cpp
   const diff = (i: number, x: string[], y: string[]) => x[i] !== y[i]
   const leftLabel = comparedToOriginal ? 'CPython · your original Python' : 'CPython'
   const rightLabel = comparedToOriginal ? 'Compiled C++ · PySub conversion' : 'Compiled C++'
@@ -335,23 +351,32 @@ function RunOutput({ run, running, stdin, setStdin, showStdin, comparedToOrigina
       <div className="min-w-0 flex-1">
         <div className="flex h-7 items-center gap-3 border-b border-line px-3 text-xs">
           <span className="font-medium text-fg2">Output</span>
-          {run && run.ok && <span className={run.same ? 'text-ok' : 'text-bad'}>{run.same ? (comparedToOriginal ? 'Identical: the conversion behaves exactly like your original program' : 'CPython and compiled output are identical') : 'Outputs differ'}</span>}
-          {run && run.ok && run.cpp.time_ms > 0 && <span className="tnum ml-auto text-fg2">{run.python.time_ms} ms vs {run.cpp.time_ms} ms{run.python.time_ms / run.cpp.time_ms >= 1.05 ? <> · <b className="text-ok">{fmtX(run.python.time_ms / run.cpp.time_ms)}</b></> : <span className="text-fg3"> · startup-bound (interactive programs gain little)</span>}</span>}
+          {both && <span className={run.same ? 'text-ok' : 'text-bad'}>{run.same ? (comparedToOriginal ? 'Identical: the conversion behaves exactly like your original program' : 'CPython and compiled output are identical') : 'Outputs differ'}</span>}
+          {run?.ok && run.python_only && <span className="text-warn">Ran under Python only: this code isn't PySub yet, so there is no compiled version to compare</span>}
+          {both && run.cpp!.time_ms > 0 && <span className="tnum ml-auto text-fg2">{run.python.time_ms} ms vs {run.cpp!.time_ms} ms{run.python.time_ms / run.cpp!.time_ms >= 1.05 ? <> · <b className="text-ok">{fmtX(run.python.time_ms / run.cpp!.time_ms)}</b></> : <span className="text-fg3"> · startup-bound (interactive programs gain little)</span>}</span>}
         </div>
         {running ? (
           <div className="space-y-2 p-3"><Skeleton className="h-4 w-1/3" /><Skeleton className="h-4 w-1/4" /></div>
         ) : !run ? (
-          <div className="p-3 text-sm text-fg3">Press Run to execute the program under CPython and as compiled C++, side by side{showStdin ? ', both reading the input on the left' : ''}.</div>
+          <div className="p-3 text-sm text-fg3">Press Run to execute the program under CPython and as compiled C++, side by side{showStdin ? ', both reading the input on the left' : ''}. Code that isn't PySub yet runs under Python only.</div>
         ) : !run.ok ? (
           <div className="p-3 text-sm text-bad">{run.error ?? 'The program could not be run.'}</div>
+        ) : !run.cpp ? (
+          <div className="h-[calc(100%-28px)] min-h-0 overflow-auto px-3 py-1.5">
+            <div className="mb-0.5 flex justify-between text-2xs text-fg3"><span>CPython · your program{run.reason ? ` · not compiled: ${run.reason}` : ''}</span><span className="tnum">{run.python.time_ms} ms</span></div>
+            <pre className="mono text-xs">{a.map((l, i) => <div key={i}>{l || ' '}</div>)}{run.python.exception && <div className="text-bad">{run.python.exception}</div>}</pre>
+          </div>
         ) : (
-          <div className="grid h-[calc(100%-28px)] grid-cols-2 divide-x divide-line">
+          <div className="flex h-[calc(100%-28px)] min-h-0 flex-col">
+          {run.explain && <div className="flex-none border-b border-line bg-warn/10 px-3 py-1.5 text-xs text-warn">{run.explain}</div>}
+          <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-line">
             {[[leftLabel, a, b, run.python] as const, [rightLabel, b, a, run.cpp] as const].map(([label, x, y, side]) => (
               <div key={label} className="min-h-0 overflow-auto px-3 py-1.5">
                 <div className="mb-0.5 flex justify-between text-2xs text-fg3"><span>{label}</span><span className="tnum">{side.time_ms} ms</span></div>
                 <pre className="mono text-xs">{x.map((l, i) => <div key={i} className={cn(diff(i, x, y) && 'bg-bad/15 text-bad')}>{l || ' '}</div>)}{side.exception && <div className="text-bad">{side.exception}</div>}</pre>
               </div>
             ))}
+          </div>
           </div>
         )}
       </div>

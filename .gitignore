@@ -9,4 +9,4 @@ studio/web/node_modules/
 *.so
 !demo/offline_cache/so/*.so
 .env
-dist/
+/dist/

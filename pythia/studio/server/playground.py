@@ -141,9 +141,21 @@ def _runtime_object(tmp_cache: Path) -> Path:
     return obj
 
 
+def run_python(source: str, stdin: str = "") -> Dict[str, Any]:
+    """`source` under CPython (isolated mode, same limits as Run)."""
+    tmp = Path(tempfile.mkdtemp(prefix="pythia-py-"))
+    try:
+        py = tmp / "snippet.py"
+        py.write_text(source, encoding="utf-8")
+        return _run([sys.executable, "-I", str(py)], str(tmp), (stdin or "")[:200_000])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def run_snippet(source: str, cache_dir: Path, stdin: str = "", reference: Optional[str] = None) -> Dict[str, Any]:
     """Run `source` compiled to C++ and, under CPython, `reference` (the user's original program, when the source is
-    an AI conversion of it) or `source` itself; both read the same stdin."""
+    an AI conversion of it) or `source` itself; both read the same stdin.  Code that isn't PySub still runs, under
+    CPython only (python_only=True, with the reason)."""
     source = _check(source)
     stdin = (stdin or "")[:200_000]
     if reference is not None:
@@ -151,8 +163,9 @@ def run_snippet(source: str, cache_dir: Path, stdin: str = "", reference: Option
     comp = compile_snippet(source)
     if not comp["ok"]:
         d = comp["diagnostics"][0]
-        return {"ok": False, "error": f"{d['kind']} at line {d['line']}: {d['msg']}", "diagnostics": comp["diagnostics"],
-                "python": None, "cpp": None, "same": False}
+        python = run_python(reference if reference is not None else source, stdin)
+        return {"ok": True, "python_only": True, "reason": f"line {d['line']}: {d['msg']}",
+                "diagnostics": comp["diagnostics"], "python": _public(python), "cpp": None, "same": None}
     if toolchain.find_cxx()[0] is None:
         return {"ok": False, "error": "no C++17 compiler found. " + (toolchain.describe()["hint"] or ""),
                 "python": None, "cpp": None, "same": False}
@@ -186,7 +199,11 @@ def run_snippet(source: str, cache_dir: Path, stdin: str = "", reference: Option
             cpp2 = _run([str(binp)], str(tmp), stdin)
             python["time_ms"] = min(python["time_ms"], py2["time_ms"])
             cpp["time_ms"] = min(cpp["time_ms"], cpp2["time_ms"])
-        return {"ok": True, "python": _public(python), "cpp": _public(cpp), "same": same}
+        out = {"ok": True, "python": _public(python), "cpp": _public(cpp), "same": same}
+        if not same:
+            from ..explain import runtime
+            out["explain"] = runtime(python, cpp)
+        return out
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": f"C++ build timed out after {BUILD_TIMEOUT} s", "python": None, "cpp": None, "same": False}
     finally:

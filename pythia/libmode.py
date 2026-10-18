@@ -204,6 +204,8 @@ def _roots(e: Optional[A.Node]) -> Set[str]:
         return _roots(e.value)
     if isinstance(e, A.BoolOp):
         return set().union(*[_roots(v) for v in e.values])
+    if isinstance(e, A.IfExp):
+        return _roots(e.body) | _roots(e.orelse)
     if isinstance(e, A.ListLit):
         return set().union(*[_roots(v) for v in e.elts]) if e.elts else set()
     if isinstance(e, A.MethodCall) and e.method == "pop":

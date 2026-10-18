@@ -91,7 +91,7 @@ def run_worker(job: Dict[str, Any], ws: Workspace, timeout_s: float) -> Dict[str
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env.pop("PYTHONPATH", None)
     try:
-        p = subprocess.run([sys.executable, str(WORKER), jp], cwd=str(ws.original), env=env,
+        p = subprocess.run([sys.executable, str(WORKER), jp], cwd=str(ws.original), env=env, stdin=subprocess.DEVNULL,
                            capture_output=True, text=True, timeout=timeout_s)
     except subprocess.TimeoutExpired as ex:
         out = ex.stdout.decode("utf-8", "replace") if isinstance(ex.stdout, bytes) else (ex.stdout or "")

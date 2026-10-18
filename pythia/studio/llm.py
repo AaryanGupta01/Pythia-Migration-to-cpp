@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -112,16 +113,43 @@ class GroqClient:
 
     def complete(self, system: str, messages: List[Dict[str, str]], *, function_source: Optional[str] = None,
                  attempt: int = 1) -> str:
+        """Ask self.model; when its free DAILY quota is used up, fall back to the next free Groq model (each has its
+        own quota) instead of failing. Per-minute limits and transient errors wait and retry."""
+        import time
+        now = time.time()
+        models = [self.model] + [m for m in GROQ_FALLBACKS if m != self.model]
+        live = [m for m in models if _GROQ_EXHAUSTED.get(m, 0) <= now]
+        if not live:
+            wait = min(_GROQ_EXHAUSTED[m] for m in models) - now
+            raise LLMError(f"Groq's free daily limit is used up for every free model ({', '.join(models)}); it frees up "
+                           f"in about {_fmt_wait(wait)}. Try again then, or add an Anthropic key in Settings.")
+        last = "unknown error"
+        for m in live:
+            try:
+                text = self._ask(m, system, messages)
+            except _DailyLimit as e:
+                _GROQ_EXHAUSTED[m] = time.time() + e.wait
+                last = str(e)
+                continue
+            self.last_model = m
+            if self.record_dir and function_source is not None:
+                write_cache_entry(self.record_dir, function_source, attempt, text, m, "recorded")
+            return text
+        raise LLMError(last)
+
+    def _ask(self, model: str, system: str, messages: List[Dict[str, str]]) -> str:
         import time
         import urllib.error
         import urllib.request
-        body = {"model": self.model, "messages": [{"role": "system", "content": system}] + list(messages),
+        body = {"model": model, "messages": [{"role": "system", "content": system}] + list(messages),
                 "max_completion_tokens": MAX_TOKENS, "temperature": 0.2}
-        if "gpt-oss" in self.model:
+        if "gpt-oss" in model:
             body["reasoning_effort"] = "low"
+        elif "qwen" in model:
+            body["reasoning_format"] = "hidden"         # answer only, no <think> transcript
         data = json.dumps(body).encode()
         last = "unknown error"
-        for n in range(5):
+        for n in range(6):
             req = urllib.request.Request(GROQ_URL, data=data, headers={
                 "Authorization": f"Bearer {self.key}", "Content-Type": "application/json",
                 "User-Agent": "pythia-studio/1.0"})
@@ -131,21 +159,50 @@ class GroqClient:
                 text = (out["choices"][0]["message"].get("content") or "")
                 if not text.strip():
                     raise LLMError("the model returned no text")
-                if self.record_dir and function_source is not None:
-                    write_cache_entry(self.record_dir, function_source, attempt, text, self.model, "recorded")
                 return text
             except urllib.error.HTTPError as e:
-                detail = e.read().decode("utf-8", "replace")[:300]
-                last = f"Groq API error {e.code}: {detail}"
+                detail = e.read().decode("utf-8", "replace")[:600]
+                last = f"Groq API error {e.code}: {detail[:300]}"
+                wait = _groq_wait(detail, e.headers.get("retry-after"))
+                if e.code == 429 and ("per day" in detail or "(TPD)" in detail or "(RPD)" in detail):
+                    raise _DailyLimit(f"Groq's free daily limit for {model} is used up (frees up in about "
+                                      f"{_fmt_wait(wait or 3600)})", wait or 3600)
                 if e.code in (429, 500, 502, 503):
-                    wait = float(e.headers.get("retry-after") or 2 * (n + 1))
-                    time.sleep(min(wait, 20))
+                    time.sleep(min(wait or 2 * (n + 1), 60))
                     continue
                 raise LLMError(last)
-            except (urllib.error.URLError, TimeoutError) as e:
+            except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
                 last = f"cannot reach the Groq API: {e}"
                 time.sleep(2 * (n + 1))
         raise LLMError(last)
+
+
+# Free Groq models that can do the conversions, best first; each has its own daily token quota.
+GROQ_FALLBACKS = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
+_GROQ_EXHAUSTED: Dict[str, float] = {}               # model -> time its daily quota frees up (this process)
+
+
+class _DailyLimit(Exception):
+    def __init__(self, msg: str, wait: float):
+        super().__init__(msg)
+        self.wait = wait
+
+
+def _groq_wait(detail: str, header: Optional[str]) -> Optional[float]:
+    """Seconds Groq asks us to wait: 'Please try again in 10m25.5s' (or the retry-after header)."""
+    m = re.search(r"try again in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?", detail or "")
+    if m and any(m.groups()):
+        h, mi, s = (float(x) if x else 0.0 for x in m.groups())
+        return h * 3600 + mi * 60 + s
+    try:
+        return float(header) if header else None
+    except ValueError:
+        return None
+
+
+def _fmt_wait(s: float) -> str:
+    s = max(0, int(s))
+    return f"{s // 3600} h {s % 3600 // 60} min" if s >= 3600 else f"{s // 60} min" if s >= 60 else f"{s} s"
 
 
 class OfflineCache:

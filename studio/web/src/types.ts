@@ -387,6 +387,13 @@ export interface ConvertAttempt {
   diagnostics: Diagnostic[]
   latency_ms: number
   error?: string | null
+  behaviour?: string          // type-checked, but printed something different from the original (a diff)
+}
+export interface Blocker {
+  line: number
+  what: string
+  why: string
+  fix: string
 }
 export interface PlaygroundConvert {
   ok: boolean
@@ -396,6 +403,8 @@ export interface PlaygroundConvert {
   error?: string
   provider?: string | null
   model?: string | null
+  blockers?: Blocker[]
+  behaviour_checked?: boolean
 }
 export interface ConvertStatus {
   enabled: boolean
@@ -406,9 +415,12 @@ export interface ConvertStatus {
 export interface PlaygroundRun {
   ok: boolean
   python: RunSide
-  cpp: RunSide
-  same: boolean
+  cpp: RunSide | null         // null: the code isn't PySub, it ran under CPython only
+  same: boolean | null
   error?: string
+  python_only?: boolean
+  reason?: string             // why there is no compiled run (first typechecker error)
+  explain?: string | null     // known reason the compiled run differs (64-bit ints, ...)
 }
 export interface ReportData {
   markdown: string

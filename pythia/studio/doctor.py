@@ -55,6 +55,18 @@ def _version() -> str:
         return "dev"
 
 
+def _build() -> str:
+    """Fingerprint of the code this process loaded: a server started before an update reports a different one."""
+    import hashlib
+    h = hashlib.sha1()
+    for f in sorted(Path(__file__).resolve().parents[1].rglob("*.py")):
+        h.update(f.read_bytes().replace(b"\r\n", b"\n"))
+    return h.hexdigest()[:12]
+
+
+BUILD = _build()
+
+
 def run(home: Optional[Path] = None) -> dict:
     home = Path(home or os.environ.get("PYTHIA_HOME") or Path.home() / ".pythia-studio")
     c: List[dict] = []
@@ -116,7 +128,7 @@ def run(home: Optional[Path] = None) -> dict:
         wsl = "microsoft" in Path("/proc/version").read_text().lower()
     except OSError:
         pass
-    return {"app": "pythia-studio", "version": _version(), "ready": all(x["ok"] for x in c if x["required"]), "checks": c,
+    return {"app": "pythia-studio", "version": _version(), "build": BUILD, "ready": all(x["ok"] for x in c if x["required"]), "checks": c,
             "platform": platform.platform(), "wsl": wsl, "home": str(home)}
 
 
