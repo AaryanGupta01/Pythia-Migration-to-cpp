@@ -48,6 +48,11 @@ BP = {
 RIGHT_ASSOC = {"**"}
 AUG_OPS = {"+=": "+", "-=": "-", "*=": "*", "/=": "/",
            "//=": "//", "%=": "%", "**=": "**"}
+# set algebra (Python: comparisons < | < ^ < & < shifts < + -)
+for _k, _v in {"|": 4.25, "^": 4.5, "&": 4.75}.items():
+    BP.setdefault(_k, _v)
+for _k in ("|", "&", "^"):
+    AUG_OPS.setdefault(_k + "=", _k)
 
 
 class Diagnostic:
@@ -140,6 +145,8 @@ class Parser:
                     mod.funcs.append(self.parse_funcdef())
                 elif self.at_kw("class"):
                     mod.classes.append(self.parse_classdef())
+                elif self._at_import():
+                    mod.imports.append(self._parse_import())
                 else:
                     st = self.parse_statement()
                     if self._is_main_guard(st):            # if __name__ == "__main__": runs as the program body
@@ -196,6 +203,11 @@ class Parser:
                 self.expect("OP", ":")
                 ann = self.parse_type()
                 params.append(A.Param(line=pt.line, col=pt.col, name=pt.value, ann=ann))
+                if self.at_op("="):
+                    self.next()
+                    params[-1].default = self.parse_expr()
+                elif any(q.default is not None for q in params[:-1]):
+                    self.error("parameter without a default follows parameter with a default")
             if self.at_op(","):
                 self.next()
             else:
@@ -211,20 +223,7 @@ class Parser:
                          params=params, ret=ret, body=body)
 
     def parse_type(self) -> A.TypeExpr:
-        t = self.cur
-        if t.kind == "KEYWORD" and t.value == "None":
-            self.next()
-            return A.TypeExpr(line=t.line, col=t.col, name="None")
-        n = self.expect("NAME")
-        te = A.TypeExpr(line=n.line, col=n.col, name=n.value)
-        if self.at_op("["):
-            self.next()
-            te.param = self.parse_type()
-            if n.value == "dict":
-                self.expect("OP", ",")
-                te.param2 = self.parse_type()
-            self.expect("OP", "]")
-        return te
+        return self._parse_type_ext()        # parse_ext.py: dotted names, T[A, B], A | B, "Forward"
 
     def parse_block(self) -> List[A.Node]:
         self.expect("NEWLINE")
@@ -279,6 +278,8 @@ class Parser:
             return self.parse_try()
         if self.at_kw("raise"):
             return self.parse_raise()
+        if self.at("NAME", "global") and self.toks[self.i + 1].kind == "NAME":
+            return self._parse_global()
         return self.parse_simple()
 
     def parse_try(self) -> A.TryExcept:
@@ -415,25 +416,29 @@ class Parser:
             is_not_in = (t.kind == "KEYWORD" and op == "not"
                         and self.toks[self.i + 1].kind == "KEYWORD"
                         and self.toks[self.i + 1].value == "in")
+            is_is = t.kind == "NAME" and op == "is"
+            is_is_not = is_is and self.toks[self.i + 1].kind == "KEYWORD" and self.toks[self.i + 1].value == "not"
             if t.kind == "KEYWORD" and op in ("and", "or"):
                 pass
             elif t.kind == "OP" and op in BP:
                 pass
             elif is_in or is_not_in:
                 op = "in" if is_in else "not in"
+            elif is_is:
+                op = "is not" if is_is_not else "is"
             else:
                 break
-            bp = BP["=="] if (is_in or is_not_in) else BP[op]
+            bp = BP["=="] if (is_in or is_not_in or is_is) else BP[op]
             if bp < min_bp:
                 break
-            if is_not_in:
+            if is_not_in or is_is_not:
                 self.next()
             self.next()
-            nxt = bp if op in RIGHT_ASSOC else bp + 1
+            nxt = bp if op in RIGHT_ASSOC else bp + 0.01      # BPs may be fractional (| ^ &)
             right = self.parse_expr(nxt)
             if op in ("and", "or"):
                 left = A.BoolOp(t.line, t.col, op=op, values=[left, right])
-            elif op in ("==", "!=", "<", "<=", ">", ">=", "in", "not in"):
+            elif op in ("==", "!=", "<", "<=", ">", ">=", "in", "not in", "is", "is not"):
                 cmp_left = _chain_tail(left)
                 if cmp_left is None:
                     left = A.Compare(t.line, t.col, op=op, left=left, right=right)
@@ -501,6 +506,8 @@ class Parser:
         if t.kind == "KEYWORD" and t.value == "None":
             self.next(); return A.NoneLit(t.line, t.col)
         if t.kind == "NAME":
+            if t.value == "isinstance" and self.toks[self.i + 1].kind == "OP" and self.toks[self.i + 1].value == "(":
+                return self._parse_isinstance()
             self.next()
             if self.at_op("("):
                 self.next()
@@ -529,6 +536,8 @@ class Parser:
             keys, vals = [], []
             while not self.at_op("}"):
                 k = self.parse_expr()
+                if not keys and not self.at_op(":"):
+                    return self._set_lit_rest(t, k)
                 self.expect("OP", ":")
                 v = self.parse_expr()
                 keys.append(k); vals.append(v)
@@ -686,6 +695,8 @@ def _fstring(self, tok):
 Parser._call_args = _call_args
 Parser._is_main_guard = _is_main_guard
 Parser._fstring = _fstring
+from .parse_ext import install as _install_ext  # noqa: E402  (PySub 1.3 syntax: imports, types, sets, global)
+_install_ext(Parser, _Panic, Diagnostic)
 
 
 def parse(src: str, filename: str = "<input>"):

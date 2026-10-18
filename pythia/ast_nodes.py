@@ -236,6 +236,7 @@ class Continue(Node):
 class Param(Node):
     name: str = ""
     ann: Optional[TypeExpr] = None
+    default: Optional[Node] = None    # constant default value (PySub 1.3)
 
 
 @dataclass
@@ -266,3 +267,30 @@ class Module(Node):
     classes: List[ClassDef] = field(default_factory=list)
     main: List[Node] = field(default_factory=list)
     globals_: dict = field(default_factory=dict)
+    imports: List["Import"] = field(default_factory=list)
+
+
+# ---------------------------------------------- PySub 1.3: type-system extensions
+@dataclass
+class SetLit(Node):
+    elts: List[Node] = field(default_factory=list)
+
+
+@dataclass
+class Global(Node):
+    names: List[str] = field(default_factory=list)
+
+
+@dataclass
+class Import(Node):
+    module: str = ""                  # 'typing' | '__future__' | ...
+    names: List[str] = field(default_factory=list)    # from M import a, b   ([] for `import M`)
+    asnames: List[Optional[str]] = field(default_factory=list)
+    alias: Optional[str] = None       # import M as alias
+
+
+@dataclass
+class DefaultRef(Node):
+    """A mutable default value (evaluated once, shared by every call), filled in for an omitted argument."""
+    func: str = ""                    # C name of the function ('f_f' / 'm_C_m')
+    param: str = ""
