@@ -21,3 +21,5 @@ people: list[tuple[str, int]] = [("di", 30), ("al", 25), ("bo", 30)]
 people.sort(key=lambda t: (-t[1], t[0]))
 print(people, sorted(people, key=lambda t: t[0], reverse=True))
 print([t for t in zip([1, 2], [3, 4], [5, 6])], any(a > b for a, b in zip([1, 5], [2, 4])))
+print([v * 2 for v in d.values()], sorted(d.keys(), key=lambda k: -d[k]), "".join(c for c in "abcdef"[::2]))
+print(max(d.values()), sum(d.values()), [w[1:] for w in names if w[:1] != "b"], any(k in "abc" for k in d.keys()))

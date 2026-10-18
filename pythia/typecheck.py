@@ -112,7 +112,7 @@ class ClassInfo:
 
 
 EXC_NAMES = {"IndexError", "ZeroDivisionError", "OverflowError",
-            "ValueError", "KeyError", "OverflowError", "PythiaSemanticError", "EOFError"}
+            "ValueError", "KeyError", "OverflowError", "PythiaSemanticError", "EOFError", "TypeError"}
 
 PRIM = ("int", "float", "bool", "str")
 _FMT_RE = re.compile(r"^(?:(?P<fill>.)?(?P<align>[<>^=]))?(?P<sign>[+\- ])?(?P<zero>0)?(?P<width>\d+)?"
@@ -134,9 +134,9 @@ def fmt_spec_problem(spec: str, t: "Ty") -> Optional[str]:
             return "sign, grouping, zero-padding and '=' alignment are not allowed when formatting a str"
         return None
     if t.name in ("int", "bool"):
-        if ty not in (None, "d", "f", "F", "e", "E", "g", "G", "%"):
+        if ty not in (None, "d", "f", "F", "e", "E", "g", "G", "%", "x", "X", "o", "b"):
             return f"format code {ty!r} is not supported for int in PySub"
-        if ty in (None, "d") and m.group("prec") is not None:
+        if ty in (None, "d", "x", "X", "o", "b") and m.group("prec") is not None:
             return "precision is not allowed in an integer format spec"
         return None
     if t.name == "float":
@@ -384,6 +384,7 @@ class TypeChecker:
         elif isinstance(s, A.ForEach) and _comp().is_special_foreach(self, s):
             _comp().check_foreach(self, s)
         elif isinstance(s, A.ForEach):
+            _bx.mark_view_ok(self, s.iter)
             _tup.mark_items(s.iter)
             t = self.synth(s.iter)
             if t.name == "list":
@@ -672,6 +673,8 @@ class TypeChecker:
             t = self.synth(e.operand)
             if e.op == "not":
                 return BOOL
+            if e.op == "~":
+                return _bx.invert_result(self, e, t)
             if t.name in NUMERIC:
                 return INT if t == BOOL else t
             return self.err(e, f"unary {e.op!r} is not defined for {t}")
@@ -702,6 +705,8 @@ class TypeChecker:
             return bt
 
         if isinstance(e, A.Compare):
+            if e.op in ("in", "not in"):
+                _bx.mark_view_ok(self, e.right)
             lt, rt = self.synth(e.left), self.synth(e.right)
             if rt.name == "tuple" or (lt.name == "tuple" and e.op not in ("in", "not in")):
                 return _tup.compare(self, e, lt, rt)
@@ -771,6 +776,8 @@ class TypeChecker:
     def binop_result(self, node: A.Node, op: str, lt: Ty, rt: Ty) -> Ty:
         if lt is ERR or rt is ERR:
             return ERR
+        if op in _bx.BITOPS:
+            return _bx.bitop_result(self, node, op, lt, rt)
         if lt.name == "tuple" or rt.name == "tuple":
             return _tup.binop(self, node, op, lt, rt)
         if op == "+" and lt == STR and rt == STR:
@@ -802,11 +809,16 @@ class TypeChecker:
             self.err(a, f"{what}: expected {want}, found {got}")
 
     def synth_method(self, e: A.MethodCall) -> Ty:
+        if _bx.is_fromkeys(self, e):
+            return _bx.synth_fromkeys(self, e)
         hooked = _comp().synth_method_hook(self, e)
         if hooked is not None:
             return hooked
         recv = self.synth(e.recv)
         self.check_kwargs(e, {"reverse"} if (recv.name == "list" and e.method == "sort") else set())
+        _r = _bx.synth_method(self, e, recv)          # str / list / dict methods beyond the core set
+        if _r is not None:
+            return _r
         if recv.name == "list" and e.method in ("pop", "insert", "extend", "clear", "reverse", "copy", "index",
                                                 "count", "remove", "sort"):
             m, el = e.method, recv.elem
@@ -939,6 +951,9 @@ class TypeChecker:
 
     def synth_call(self, e: A.Call) -> Ty:
         name = e.func
+        _r = _bx.synth_call(self, e)                  # math module, slices, pow, bin/hex/oct, int(s, base), repr
+        if _r is not None:
+            return _r
         hooked = _comp().synth_call_hook(self, e)
         if hooked is not None:
             return hooked
@@ -1121,6 +1136,7 @@ class TypeChecker:
         return sig.ret
 
 
+from . import builtins_ext as _bx  # noqa: E402  (math / bitwise / slice / extra methods; imports this module's types)
 from . import tuples as _tup  # noqa: E402  (tuples.py builds on Ty, defined above)
 
 

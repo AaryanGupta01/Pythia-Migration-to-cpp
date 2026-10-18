@@ -17,10 +17,10 @@ KEYWORDS = {
 
 # Multi-character operators must be tried longest-first.
 OPERATORS = [
-    "**=", "//=", "==", "!=", "<=", ">=", "**", "//", "->",
-    "+=", "-=", "*=", "/=", "%=",
+    "**=", "//=", "<<=", ">>=", "==", "!=", "<=", ">=", "**", "//", "->", "<<", ">>",
+    "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=",
     "+", "-", "*", "/", "%", "<", ">", "=", "(", ")", "[", "]", "{", "}",
-    ",", ":", ".",
+    ",", ":", ".", "&", "|", "^", "~",
 ]
 
 
@@ -166,6 +166,19 @@ class Lexer:
         ln, cl = self.line, self.col
         buf = ""
         is_float = False
+        if self._peek() == "0" and self._peek(1) != "" and self._peek(1) in "xXbBoO":
+            base = {"x": 16, "b": 2, "o": 8}[self._peek(1).lower()]      # 0xFF / 0b101 / 0o17, underscores allowed
+            self._advance(2)
+            digs = ""
+            while self._peek() != "" and (self._peek().isalnum() or self._peek() == "_"):
+                digs += self._advance()
+            try:
+                if digs.startswith("_") or digs.endswith("_") or "__" in digs or not digs:
+                    raise ValueError
+                self._emit("INT", str(int(digs.replace("_", ""), base)), ln, cl)
+            except ValueError:
+                raise LexError("invalid number literal", ln, cl)
+            return
         while self._peek().isdigit() or self._peek() == "_":
             c = self._advance()
             if c != "_":
@@ -236,6 +249,32 @@ class Lexer:
             buf += self._advance()
         self._emit("FSTRING", buf, ln, cl)
 
+    _SIMPLE_ESC = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", "'": "'", '"': '"',
+                   "a": "\a", "b": "\b", "f": "\f", "v": "\v", "\n": ""}
+
+    def _escape(self, ln: int, cl: int) -> str:
+        # The text for a backslash escape (the backslash is already consumed): simple, hex, octal and unicode
+        # escapes; an unknown escape keeps its backslash, as in Python.
+        esc = self._advance()
+        if esc in self._SIMPLE_ESC:
+            return self._SIMPLE_ESC[esc]
+        if esc in "xuU":
+            n = {"x": 2, "u": 4, "U": 8}[esc]
+            digs = self.src[self.pos:self.pos + n]
+            if len(digs) != n or any(d not in "0123456789abcdefABCDEF" for d in digs):
+                raise LexError(f"invalid \\{esc} escape", ln, cl)
+            self._advance(n)
+            try:
+                return chr(int(digs, 16))
+            except (ValueError, OverflowError):
+                raise LexError(f"invalid \\{esc} escape", ln, cl)
+        if esc in "01234567":
+            digs = esc
+            while len(digs) < 3 and self._peek() != "" and self._peek() in "01234567":
+                digs += self._advance()
+            return chr(int(digs, 8))
+        return "\\" + esc
+
     def _lex_string(self) -> None:
         ln, cl = self.line, self.col
         quote = self._advance()
@@ -257,9 +296,7 @@ class Lexer:
                 continue
             if c == "\\":
                 self._advance()
-                esc = self._advance()
-                buf += {"n": "\n", "t": "\t", "r": "\r", "\\": "\\",
-                        "'": "'", '"': '"', "0": "\0"}.get(esc, esc)
+                buf += self._escape(ln, cl)
                 continue
             if c == quote:
                 self._advance()

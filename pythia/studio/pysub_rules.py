@@ -16,6 +16,8 @@ from typing import Dict, List, Set
 from .. import lexer as _lexer
 from .. import parser as _parser
 from .. import typecheck as _tc
+from .. import builtins_ext as _bx
+from .. import parse_ext as _px
 from ..lexer import LexError
 
 
@@ -64,7 +66,9 @@ def _methods() -> Dict[str, List[str]]:
                 for c in n.comparators:
                     if isinstance(c, ast.Constant) and isinstance(c.value, str):
                         names.append(c.value)
-        out[label] = sorted(set(names))
+        out[label] = sorted(set(out.get(label, [])) | set(names))    # several `if` blocks per receiver type
+    for label, names in _bx.METHOD_TABLE.items():        # methods added through builtins_ext's hook
+        out[label] = sorted(set(out.get(label, [])) | set(names))
     return out
 
 
@@ -80,7 +84,7 @@ def _call_names() -> Dict[str, List[str]]:
                     names.append(c.value)
                 elif isinstance(c, ast.Tuple):
                     names += [e.value for e in c.elts if isinstance(e, ast.Constant)]
-    return {"builtins": sorted(set(names))}
+    return {"builtins": sorted(set(names) | _bx.BUILTIN_NAMES)}
 
 
 METHODS: Dict[str, List[str]] = _methods()
@@ -118,6 +122,7 @@ def rules_text() -> str:
     ops = "  |  ".join(" ".join(sorted(tiers[b])) for b in sorted(tiers))
     aug = " ".join(sorted(_parser.AUG_OPS))
     m = METHODS
+    mods = ", ".join(sorted(_px.MODULES))
     lines = [
         "PySub is a statically typed subset of Python. A function is valid PySub only if the PySub",
         "parser and typechecker accept it. The rules below are extracted from the compiler source.",
@@ -137,7 +142,13 @@ def rules_text() -> str:
         "  * Functions are CLOSED: module-level variables are invisible inside a function body. Pass state",
         "    (e.g. the list of records) as a parameter, or write literal constants. No closures, no nested defs,",
         "    lambda only as a key= argument (see below), no decorators, no default parameter values,",
-        "    no *args/**kwargs, no imports, no `global`.",
+        "    no *args/**kwargs, no `global`.",
+        "  * Imports: only `import " + mods.replace(", ", "` / `import ") + "` (and `from <module> import name [as alias]`).",
+        "    math: sqrt isqrt floor ceil trunc fabs pow exp log(x[, base]) log2 log10 sin cos tan asin acos atan atan2 sinh cosh",
+        "    tanh asinh acosh atanh log1p expm1 hypot degrees radians gcd lcm factorial comb perm isclose(rel_tol=, abs_tol=)",
+        "    isfinite isinf isnan copysign fmod and the constants pi e tau inf nan. floor/ceil/trunc return int. int results",
+        "    (factorial, comb, perm, gcd, lcm, <<) must fit in 64 bits (OverflowError otherwise).",
+        "    string: ascii_lowercase ascii_uppercase ascii_letters digits hexdigits octdigits punctuation whitespace printable.",
         "  * Module-level statements run in order; `if __name__ == \"__main__\":` is accepted and runs its body.",
         "STATEMENTS: assignment (name / subscript / attribute target), augmented assignment (" + aug + "),",
         "  if/elif/else, while, `for v in range(a[, b[, step]])`, `for v in <list|str|dict>` (dict yields keys),",
@@ -147,6 +158,12 @@ def rules_text() -> str:
         "  Exception names allowed: " + ", ".join(sorted(EXC_NAMES)) + ". In `except E as e`, e is the message (a str).",
         "EXPRESSIONS: literals, names, [..] and {k: v} literals, subscripts a[i], calls, method calls,",
         "  binary operators, loosest to tightest binding: " + ops + " (** is right-associative),",
+        "  bitwise operators & | ^ << >> and unary ~ on int/bool with Python's two's-complement semantics (also &= |= ^= <<= >>=;",
+        "  bool & | ^ bool stays bool; a shift past int64 raises OverflowError),",
+        "  slicing on str and list: a[i:j], a[:j], a[i:], a[::k], a[::-1] (negative / out-of-range bounds as in Python; no slice",
+        "  assignment, no del),",
+        "  \"literal\".format(...) with {} / {0} / {name} fields (+ !s !r and format specs) and \"%d %s\" % (a, b) (flags, width,",
+        "  precision, d i u o x X e E f F g G c r s %%), both only with a string-literal template,",
         "  unary - + not, comparisons and chains like `0 <= i < n` (the middle operand must be a name, literal,",
         "  field or subscript, not a call), `in` / `not in`.",
         "  * f-strings ARE supported: f\"{name} scored {marks:.2f}\" (format specs: fill/align/sign/0/width/,/.precision",
@@ -161,7 +178,7 @@ def rules_text() -> str:
         "  * lambda ONLY as key=: sorted(xs, key=lambda r: r.age, reverse=True), min/max(xs, key=...),",
         "    xs.sort(key=...). key= may also be len, abs, str, str.lower (any str method), or a def'd function.",
         "    The key returns int, float, bool, str or a tuple of those (key=lambda p: (-p.age, p.name)). No other lambdas.",
-        "  * enumerate/zip items are tuples: list(enumerate(xs)), list(zip(a, b)) work. No slicing a[i:j], `is`, walrus,",
+        "  * enumerate/zip items are tuples: list(enumerate(xs)), list(zip(a, b)) work. No `is`/`is not`, walrus,",
         "    star-expressions, `with`, `assert`, `del`. A range()/enumerate()/zip() object can't be stored.",
         "BUILTIN FUNCTIONS (exactly these): " + ", ".join(sorted(BUILTINS)) + ".",
         "  * input(prompt) -> str. print(..., sep=\" \", end=\"\\n\") (keyword arguments: print sep/end, sorted/sort",
@@ -172,13 +189,24 @@ def rules_text() -> str:
         "  * list(x) and sorted(x) also take a str (its characters, list[str]) or a dict (its keys); list(xs) copies a list.",
         "  * round(x) -> int, round(x, n). format(value, \".2f\"). len works on list/str/dict.",
         "  * int()/float() parse a str (surrounding spaces allowed) and raise ValueError on bad input; str()/bool() convert.",
-        "  * There is NO divmod, pow, set, dict(), open, isinstance.",
+        "  * pow(a, b) / pow(a, b, mod) (mod may be negative; pow(a, -1, m) is the modular inverse), bin hex oct (str),",
+        "    int(s, base) (base 0 and 2..36), repr(int/float/bool/str), float('inf') / float('nan'), round(x[, n]) (half-to-even).",
+        "  * divmod(a, b) -> tuple (ints or floats). repr(x) / f\"{x!r}\" for int/float/bool/str and flat lists, dicts, tuples of",
+        "    those (CPython's quoting and escapes). Adjacent string literals concatenate (\"a\" f\"{x}\" \"b\", also across lines).",
+        "  * There is NO set, dict(), open, isinstance, hash.",
         "METHODS (exactly these):",
         "  * str: lower upper strip lstrip rstrip (optional chars) title capitalize swapcase isdigit isalpha isalnum",
         "    isspace isupper islower startswith endswith find rfind index count replace(old, new) split() split(sep) join(list[str])",
+        "    zfill center ljust rjust (fill must be 1 char) isnumeric isdecimal istitle isascii casefold removeprefix removesuffix",
+        "    expandtabs rsplit(sep, maxsplit) split(sep, maxsplit) split(None, maxsplit) splitlines(keepends) rindex; find / rfind /",
+        "    index / rindex / count / startswith / endswith take optional start, end (str arguments only, no tuple prefixes).",
+        "    partition / rpartition need tuples and are not available.",
         "  * list: append pop() pop(i) insert(i, x) extend(list) clear() reverse() copy() index(x) count(x) remove(x)",
         "    sort(reverse=bool)   (sort/index/count/remove need int/float/bool/str elements; objects compare by identity)",
-        "  * dict: get(key, default) only (no items/keys/values/pop/update; iterate `for k in d` and index d[k]).",
+        "    index(x, start, stop)",
+        "  * dict: get(key, default) pop(key[, default]) setdefault(key, default) update(other) copy() clear() fromkeys via",
+        "    dict.fromkeys(keys, value), and keys() / values() (lists, accepted only directly in a for loop, `in`, len, sorted,",
+        "    list, sum, min, max or str.join; no items()). Iterate `for k in d` and index d[k].",
         "  * String indexing s[i] returns a one-character str. str + str, str * int, list + list are allowed.",
         "ARITHMETIC: // and % follow Python semantics; / is true division and always float; int arithmetic is",
         "  64-bit (overflow traps); ** of ints is int.",

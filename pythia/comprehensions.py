@@ -77,7 +77,9 @@ def item_of(tc, it):
     """Type of what iterating `it` yields: a Ty, or a list of items for an enumerate/zip tuple."""
     if not is_helper(tc, it):
         from .tuples import mark_items
+        from .builtins_ext import mark_view_ok
         mark_items(it)                                 # [k for k, v in d.items()] is fine: it is consumed at once
+        mark_view_ok(tc, it)                           # likewise d.keys() / d.values()
         t = tc.synth(it)
         if t is ERR:
             return ERR

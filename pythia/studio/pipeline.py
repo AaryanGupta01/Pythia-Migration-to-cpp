@@ -292,7 +292,7 @@ class Pipeline:
         js, ws = self.js, self.ws
         fixables = [r for r in self.recs() if r.eligibility == "fixable" and r.status in ("fixable", "declined")
                     and not r.private.get("cold")]
-        self.stage("fix", "running", caption="Fixing near-misses: annotate from observed types, else ask the LLM for a PySub rewrite")
+        self.stage("fix", "running", caption="Fixing near-misses: annotate from observed types, infer from usage, else ask the LLM for a PySub rewrite")
         self.llm = self.llm_client() if fixables else None
         fx = None
         if fixables and self.llm is not None:
@@ -354,7 +354,16 @@ class Pipeline:
             if e.ok:
                 return self._fixed(r, e, "annotated from observed types", rewrites=False)
             r.diagnostics = e.diagnostics
-        # 2. LLM rewrite
+        # 2. deterministic inference (doctests, call sites, traced argument types, usage) - no LLM
+        try:
+            e = scan.extract_pysub(r, ws, infer=True)
+        except Exception as ex:
+            self.err(f"infer:{r.id}", ex)
+            e = None
+        if e is not None and e.ok and e.inferred:
+            r.sources["annotated"] = e.source.split("\n\n\n")[0]
+            return self._fixed(r, e, "types inferred from usage", rewrites=False)
+        # 3. LLM rewrite
         if fx is None:
             if r.status == "declined":                      # probe not possible without a fix
                 return False
