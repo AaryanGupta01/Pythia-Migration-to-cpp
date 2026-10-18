@@ -17,10 +17,10 @@ KEYWORDS = {
 
 # Multi-character operators must be tried longest-first.
 OPERATORS = [
-    "**=", "//=", "==", "!=", "<=", ">=", "**", "//", "->",
-    "+=", "-=", "*=", "/=", "%=",
+    "**=", "//=", "<<=", ">>=", "==", "!=", "<=", ">=", "**", "//", "->", "<<", ">>",
+    "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=",
     "+", "-", "*", "/", "%", "<", ">", "=", "(", ")", "[", "]", "{", "}",
-    ",", ":", ".",
+    ",", ":", ".", "&", "|", "^", "~",
 ]
 
 
@@ -166,6 +166,19 @@ class Lexer:
         ln, cl = self.line, self.col
         buf = ""
         is_float = False
+        if self._peek() == "0" and self._peek(1) != "" and self._peek(1) in "xXbBoO":
+            base = {"x": 16, "b": 2, "o": 8}[self._peek(1).lower()]      # 0xFF / 0b101 / 0o17, underscores allowed
+            self._advance(2)
+            digs = ""
+            while self._peek() != "" and (self._peek().isalnum() or self._peek() == "_"):
+                digs += self._advance()
+            try:
+                if digs.startswith("_") or digs.endswith("_") or "__" in digs or not digs:
+                    raise ValueError
+                self._emit("INT", str(int(digs.replace("_", ""), base)), ln, cl)
+            except ValueError:
+                raise LexError("invalid number literal", ln, cl)
+            return
         while self._peek().isdigit() or self._peek() == "_":
             c = self._advance()
             if c != "_":
