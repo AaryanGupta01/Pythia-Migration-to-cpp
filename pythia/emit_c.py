@@ -5,6 +5,7 @@ Owner: Member 4 (Aaryan Gupta)
 Emits readable C++17 using the C++ runtime and lambda IIFEs for expression
 scopes that need to evaluate an operand exactly once.
 """
+import sys
 from typing import List, Optional
 from . import ast_nodes as A
 from .typecheck import Ty, INT, FLOAT, BOOL, STR, NONE, ERR, TypeChecker
@@ -20,12 +21,20 @@ DICT_RT = {
 }
 
 
+def is_obj_list(t: Optional[Ty]) -> bool:
+    """list[SomeClass]: a typed PyList<std::shared_ptr<SomeClass>> driven by the generic pyl_* templates."""
+    return (t is not None and t.name == "list" and t.elem is not None and t.elem.name not in LIST_RT
+            and t.elem.name not in ("list", "dict"))
+
+
 def list_rt_name(t: Ty) -> str:
     """Runtime list type for list[elem]. Primitive elements are monomorphic
     (PyListI64 etc); anything else (nested list, class instance) is a
     pointer, so it rides the generic PyListList and gets cast at each use."""
     if t.elem is not None and t.elem.name in LIST_RT:
         return LIST_RT[t.elem.name]
+    if is_obj_list(t):
+        return f"PyList<std::shared_ptr<{t.elem.name}>>"
     return "PyListList"
 
 
@@ -244,6 +253,7 @@ class Emitter:
 
     def emit_main(self, mod: A.Module) -> None:
         self.w(0, "int main(void) {")
+        self.w(1, f"pyrt_set_py_minor({sys.version_info.minor});   /* match this CPython's error texts */")
         self.w(1, "try {")
         for name, t in mod.globals_.items():
             if t is ERR:
@@ -281,6 +291,8 @@ class Emitter:
                 if bt.name == "dict":
                     self.w(d, self.dict_set(self.ex(base), bt,
                                             self.ex(s.target.index), self.ex(s.value)))
+                elif is_obj_list(bt):
+                    self.w(d, f"pyl_set({self.ex(base)}, {self.ex(s.target.index)}, {self.ex(s.value)});")
                 else:
                     rt = list_rt_name(bt)
                     vexpr = self.ex(s.value)
@@ -441,7 +453,50 @@ class Emitter:
             msg = self.ex(s.message) if s.message is not None else 'pystr_lit("")'
             self.w(d, f'py_raise_pystr("{s.exc_name}", {msg});')
 
+    def kwarg(self, e: A.Node, name: str) -> Optional[A.Node]:
+        for kw in getattr(e, "kwargs", None) or []:
+            if kw.name == name:
+                return kw.value
+        return None
+
+    @staticmethod
+    def _has_call(n) -> bool:
+        if isinstance(n, (A.Call, A.MethodCall)):
+            return True
+        if isinstance(n, A.Node):
+            return any(Emitter._has_call(getattr(n, f)) for f in n.__dataclass_fields__ if f != "ty")
+        if isinstance(n, list):
+            return any(Emitter._has_call(x) for x in n)
+        return False
+
     def emit_print(self, call: A.Call, d: int) -> None:
+        sep, end = self.kwarg(call, "sep"), self.kwarg(call, "end")
+        # CPython evaluates every argument before printing anything: print(xs, xs.pop()) shows the popped xs.
+        eager = len(call.args) > 1 and any(self._has_call(a) for a in call.args[1:])
+        if sep is not None or end is not None or eager:
+            self.w(d, "{")
+            vals = []
+            for a in call.args:
+                if eager:
+                    v = self.fresh()
+                    self.w(d + 1, f"{ctype(a.ty)}{v} = {self.ex(a)};")
+                    vals.append(v)
+                else:
+                    vals.append(None)
+            sv = ev = None
+            if sep is not None:
+                sv = self.fresh()
+                self.w(d + 1, f"PyStr *{sv} = {self.ex(sep)};")
+            if end is not None:
+                ev = self.fresh()
+                self.w(d + 1, f"PyStr *{ev} = {self.ex(end)};")
+            self.w(d + 1, "py_print_begin();")
+            for a, v in zip(call.args, vals):
+                self.w(d + 1, f"py_print_sep_s({sv});" if sv else "py_print_sep();")
+                self.w(d + 1, self.print_call(a, v) + ";")
+            self.w(d + 1, f"py_print_end_s({ev});" if ev else "py_print_end();")
+            self.w(d, "}")
+            return
         self.w(d, "py_print_begin();")
         for a in call.args:
             self.w(d, "py_print_sep();")
@@ -450,8 +505,8 @@ class Emitter:
             pass
         self.w(d, "py_print_end();")
 
-    def print_call(self, a: A.Node) -> str:
-        t, e = a.ty, self.ex(a)
+    def print_call(self, a: A.Node, value: Optional[str] = None) -> str:
+        t, e = a.ty, (value if value is not None else self.ex(a))
         if t == INT:
             return f"py_print_i64({e})"
         if t == FLOAT:
@@ -564,6 +619,8 @@ class Emitter:
                 if rt.name == "dict":
                     drt = dict_rt_name(rt)
                     test = f"{drt}_contains({r}, {l})"
+                elif is_obj_list(rt):
+                    test = f"pyl_contains({r}, {l})"
                 elif rt.name == "list":
                     lrt = list_rt_name(rt)
                     test = f"{lrt}_contains({r}, {l})"
@@ -572,6 +629,9 @@ class Emitter:
                 return test if e.op == "in" else f"(!{test})"
             if lt == STR:
                 return f"(pystr_cmp({l}, {r}) {e.op} 0)"
+            if is_obj_list(lt):
+                eq = f"pyl_eq({l}, {r})"
+                return eq if e.op == "==" else f"(!{eq})"
             if lt.name == "list":
                 rt = list_rt_name(lt)
                 if rt == "PyListList":
@@ -604,6 +664,8 @@ class Emitter:
             if bt.name == "dict":
                 rt = dict_rt_name(bt)
                 return f"{rt}_get({self.ex(e.value)}, {self.ex(e.index)})"
+            if is_obj_list(bt):
+                return f"pyl_get({self.ex(e.value)}, {self.ex(e.index)})"
             rt = list_rt_name(bt)
             if rt == "PyListList":
                 return (f"({ctype(bt.elem)})PyListList_get({self.ex(e.value)}, "
@@ -613,6 +675,11 @@ class Emitter:
         if isinstance(e, A.ListLit):
             rt = list_rt_name(e.ty)
             v = self.fresh()
+            if is_obj_list(e.ty):
+                el = f"std::shared_ptr<{e.ty.elem.name}>"
+                parts = [f"auto *{v} = pyl_new<{el}>();"]
+                parts += [f"pyl_append({v}, {self.ex(x)});" for x in e.elts]
+                return "[&]() { " + " ".join(parts) + f" return {v}; }}()"
             if rt == "PyListList":
                 parts = [f"PyListList *{v} = PyListList_new();"]
                 parts += [f"PyListList_append({v}, (void *)({self.ex(x)}));" for x in e.elts]
@@ -634,6 +701,8 @@ class Emitter:
 
         if isinstance(e, A.MethodCall):
             recv, rt_ = self.ex(e.recv), e.recv.ty
+            if rt_.name == "list" and (is_obj_list(rt_) or e.method not in ("append", "pop") or e.args):
+                return self.list_method(e, recv, rt_)
             if rt_.name == "list":
                 rt = list_rt_name(rt_)
                 if e.method == "append":
@@ -651,7 +720,14 @@ class Emitter:
                     return (f"{drt}_get_default({recv}, {self.ex(e.args[0])}, "
                             f"{self.ex(e.args[1])})")
             if rt_ == STR:
-                return f"pystr_{e.method}({recv})"
+                m, args = e.method, [self.ex(a) for a in e.args]
+                if m in ("strip", "lstrip", "rstrip") and args:
+                    return f"pystr_{m}_chars({recv}, {args[0]})"
+                if m == "split":
+                    return f"pystr_split({recv}, {args[0]})" if args else f"pystr_split_ws({recv})"
+                if m == "index":
+                    return f"pystr_index_of({recv}, {args[0]})"
+                return f"pystr_{m}({recv}" + "".join(", " + a for a in args) + ")"
             if rt_.name in self.tc.classes:
                 mname = self.method_name(rt_.name, e.method)
                 args = ", ".join(self.ex(a) for a in e.args)
@@ -666,12 +742,49 @@ class Emitter:
 
         return "0"
 
+    def list_method(self, e: A.MethodCall, recv: str, t: Ty) -> str:
+        nested = list_rt_name(t) == "PyListList"
+
+        def val(x: A.Node) -> str:
+            v = self.ex(x)
+            return f"(void *)({v})" if nested else v
+        m = e.method
+        if m == "append":
+            return f"(pyl_append({recv}, {val(e.args[0])}), 0)"
+        if m == "pop":
+            call = f"pyl_pop_at({recv}, {self.ex(e.args[0])})" if e.args else f"pyl_pop({recv})"
+            return f"({ctype(t.elem)}){call}" if nested else call
+        if m == "insert":
+            return f"(pyl_insert({recv}, {self.ex(e.args[0])}, {val(e.args[1])}), 0)"
+        if m == "extend":
+            return f"(pyl_extend({recv}, {self.ex(e.args[0])}), 0)"
+        if m in ("clear", "reverse"):
+            return f"(pyl_{m}({recv}), 0)"
+        if m == "copy":
+            return f"pyl_copy({recv})"
+        if m in ("index", "count"):
+            return f"pyl_{m}({recv}, {val(e.args[0])})"
+        if m == "remove":
+            return f"(pyl_remove({recv}, {val(e.args[0])}), 0)"
+        if m == "sort":
+            rev = self.kwarg(e, "reverse")
+            return f"(pyl_sort({recv}, {self.ex(rev) if rev is not None else 'false'}), 0)"
+        return "0"
+
+    @staticmethod
+    def _int_operand(x: A.Node) -> bool:
+        if isinstance(x, A.Coerce):
+            x = x.value
+        return x.ty is not None and x.ty.name in ("int", "bool")
+
     def binop(self, e: A.BinOp) -> str:
         op, t = e.op, e.ty
         l, r = self.ex(e.left), self.ex(e.right)
         lt = e.left.ty
         if op == "+" and t == STR:
             return f"pystr_concat({l}, {r})"
+        if op == "+" and is_obj_list(t):
+            return f"pyl_concat({l}, {r})"
         if op == "+" and t.name == "list":
             rt = list_rt_name(t)
             if rt == "PyListList":
@@ -684,6 +797,8 @@ class Emitter:
             fn = {"+": None, "-": None, "*": None,
                   "/": "py_truediv", "//": "py_floordiv_f64",
                   "%": "py_mod_f64", "**": "py_pow_f64"}.get(op)
+            if op == "/" and all(self._int_operand(x) for x in (e.left, e.right)):
+                fn = "py_truediv_ii"                       # CPython words int/int and float division differently
             if fn:
                 return f"{fn}({l}, {r})"
             return f"(({l}) {op} ({r}))"
@@ -704,6 +819,40 @@ class Emitter:
             a = e.args[0]
             return (f"py_abs_i64({self.ex(a)})" if e.ty == INT
                     else f"fabs({self.ex(a)})")
+        if n in ("min", "max") and len(e.args) == 1:
+            return f"pyl_{n}({self.ex(e.args[0])})"
+        if n in ("min", "max") and (len(e.args) > 2 or e.ty == STR):
+            t = ctype(e.ty)                                    # fold left exactly like CPython: replace on strict < / >
+            r = self.fresh()
+            parts = [f"{t}{r} = ({self.ex(e.args[0])});"]
+            for a in e.args[1:]:
+                x = self.fresh()
+                better = (f"pystr_cmp({x}, {r}) {'<' if n == 'min' else '>'} 0" if e.ty == STR
+                          else f"{x} {'<' if n == 'min' else '>'} {r}")
+                parts.append(f"{{ {t}{x} = ({self.ex(a)}); if ({better}) {r} = {x}; }}")
+            return "[&]() { " + " ".join(parts) + f" return {r}; }}()"
+        if n == "input":
+            prompt = self.ex(e.args[0]) if e.args else 'pystr_lit("")'
+            return f"py_input({prompt})"
+        if n == "format":
+            v = e.args[0]
+            fn = {"int": "py_format_i64", "float": "py_format_f64", "str": "py_format_str",
+                  "bool": "py_format_bool"}[v.ty.name]
+            return f"{fn}({self.ex(v)}, {self.ex(e.args[1])})"
+        if n == "round":
+            a = e.args[0]
+            if len(e.args) == 1:
+                return f"py_round_i64({self.ex(a)})" if a.ty == FLOAT else f"((int64_t)({self.ex(a)}))"
+            nd = self.ex(e.args[1])
+            if a.ty == FLOAT:
+                return f"py_round_f64({self.ex(a)}, {nd})"
+            return f"py_round_int_n((int64_t)({self.ex(a)}), {nd})"
+        if n == "sum":
+            fn = {"int": "py_sum_i64", "float": "py_sum_f64", "bool": "py_sum_bool"}[e.args[0].ty.elem.name]
+            return f"{fn}({self.ex(e.args[0])})"
+        if n == "sorted":
+            rev = self.kwarg(e, "reverse")
+            return f"pyl_sorted({self.ex(e.args[0])}, {self.ex(rev) if rev is not None else 'false'})"
         if n in ("min", "max"):
             t = ctype(e.ty)
             x, y = self.fresh(), self.fresh()

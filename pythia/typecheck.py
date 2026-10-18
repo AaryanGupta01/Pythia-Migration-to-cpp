@@ -11,6 +11,7 @@ key property that makes translation to a statically typed target sound.
 Implicit widening int -> float is the ONLY subtyping edge.  bool is a
 subtype of int (as in Python) for arithmetic, but not for print formatting.
 """
+import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 from . import ast_nodes as A
@@ -108,7 +109,40 @@ class ClassInfo:
 
 
 EXC_NAMES = {"IndexError", "ZeroDivisionError", "OverflowError",
-            "ValueError", "KeyError", "OverflowError", "PythiaSemanticError"}
+            "ValueError", "KeyError", "OverflowError", "PythiaSemanticError", "EOFError"}
+
+PRIM = ("int", "float", "bool", "str")
+_FMT_RE = re.compile(r"^(?:(?P<fill>.)?(?P<align>[<>^=]))?(?P<sign>[+\- ])?(?P<zero>0)?(?P<width>\d+)?"
+                     r"(?P<group>[,_])?(?:\.(?P<prec>\d+))?(?P<type>[a-zA-Z%])?$", re.S)
+
+
+def fmt_spec_problem(spec: str, t: "Ty") -> Optional[str]:
+    """None if format(value_of_type_t, spec) is in the PySub subset, else why not."""
+    m = _FMT_RE.match(spec)
+    if not m:
+        return f"format spec {spec!r} is outside the PySub subset"
+    ty = m.group("type")
+    if m.group("zero") and m.group("group"):
+        return "zero-padding together with digit grouping is outside the PySub subset"
+    if t.name == "str":
+        if ty not in (None, "s"):
+            return f"format code {ty!r} cannot format a str"
+        if m.group("sign") or m.group("group") or m.group("align") == "=" or m.group("zero"):
+            return "sign, grouping, zero-padding and '=' alignment are not allowed when formatting a str"
+        return None
+    if t.name in ("int", "bool"):
+        if ty not in (None, "d", "f", "F", "e", "E", "g", "G", "%"):
+            return f"format code {ty!r} is not supported for int in PySub"
+        if ty in (None, "d") and m.group("prec") is not None:
+            return "precision is not allowed in an integer format spec"
+        return None
+    if t.name == "float":
+        if ty is None and m.group("prec") is not None:
+            return "a float precision needs a type in PySub, e.g. '.2f' or '.3e'"
+        if ty not in (None, "f", "F", "e", "E", "g", "G", "%"):
+            return f"format code {ty!r} cannot format a float"
+        return None
+    return f"cannot format a value of type {t}"
 
 BUILTIN_SIGS = {
     "len":   ("any_seq", INT),
@@ -648,6 +682,8 @@ class TypeChecker:
                 if rt.name == "list":
                     if not (lt == rt.elem or widens_to(lt, rt.elem) or widens_to(rt.elem, lt)):
                         return self.err(e, f"{lt} cannot appear in a {rt}")
+                    if rt.elem is not None and rt.elem.name == "list":
+                        return self.err(e, "membership tests on nested lists are outside the PySub subset")
                     return BOOL
                 if rt.name == "dict":
                     if not widens_to(lt, rt.key):
@@ -718,8 +754,88 @@ class TypeChecker:
                 return FLOAT if FLOAT in (lt, rt) else INT
         return self.err(node, f"operator {op!r} is not defined for {lt} and {rt}")
 
+    def _margs(self, e, n_min: int, n_max: int, what: str) -> bool:
+        if not (n_min <= len(e.args) <= n_max):
+            want = str(n_min) if n_min == n_max else f"{n_min} to {n_max}"
+            self.err(e, f"{what}() takes {want} argument(s) in PySub, {len(e.args)} given")
+            return False
+        return True
+
+    def _want(self, a: A.Node, want: Ty, what: str) -> None:
+        got = self.check_expr(a, want)
+        if got is not ERR and not widens_to(got, want):
+            self.err(a, f"{what}: expected {want}, found {got}")
+
     def synth_method(self, e: A.MethodCall) -> Ty:
         recv = self.synth(e.recv)
+        self.check_kwargs(e, {"reverse"} if (recv.name == "list" and e.method == "sort") else set())
+        if recv.name == "list" and e.method in ("pop", "insert", "extend", "clear", "reverse", "copy", "index",
+                                                "count", "remove", "sort"):
+            m, el = e.method, recv.elem
+            prim = el is not None and el.name in PRIM
+            obj = el is not None and el.name in self.classes
+            if m == "pop":
+                if not self._margs(e, 0, 1, "pop"):
+                    return ERR
+                if e.args:
+                    self._want(e.args[0], INT, "pop() index")
+                return el
+            if m == "insert":
+                if self._margs(e, 2, 2, "insert"):
+                    self._want(e.args[0], INT, "insert() index")
+                    self._want(e.args[1], el, "insert() value")
+                return NONE
+            if m == "extend":
+                if self._margs(e, 1, 1, "extend"):
+                    self._want(e.args[0], recv, "extend() argument")
+                return NONE
+            if m in ("clear", "reverse"):
+                self._margs(e, 0, 0, m)
+                return NONE
+            if m == "copy":
+                self._margs(e, 0, 0, m)
+                return recv
+            if m == "sort":
+                self._margs(e, 0, 0, m)
+                if not prim:
+                    return self.err(e, f"sort() needs a list of int, float, bool or str in PySub, found {recv}")
+                return NONE
+            if not (prim or obj):
+                return self.err(e, f"{m}() on a {recv} needs element equality, which nested lists don't have in PySub")
+            if self._margs(e, 1, 1, m):
+                self._want(e.args[0], el, f"{m}() value")
+            return INT if m in ("index", "count") else NONE
+        if recv == STR and e.method not in ("upper", "lower"):
+            m = e.method
+            zero_str = ("title", "capitalize", "swapcase")
+            if m in ("strip", "lstrip", "rstrip"):
+                if self._margs(e, 0, 1, m) and e.args:
+                    self._want(e.args[0], STR, f"{m}() characters")
+                return STR
+            if m in zero_str:
+                self._margs(e, 0, 0, m)
+                return STR
+            if m in ("isdigit", "isalpha", "isalnum", "isspace", "isupper", "islower"):
+                self._margs(e, 0, 0, m)
+                return BOOL
+            if m in ("startswith", "endswith", "find", "rfind", "index", "count"):
+                if self._margs(e, 1, 1, m):
+                    self._want(e.args[0], STR, f"{m}() argument")
+                return BOOL if m in ("startswith", "endswith") else INT
+            if m == "replace":
+                if self._margs(e, 2, 2, m):
+                    self._want(e.args[0], STR, "replace() old")
+                    self._want(e.args[1], STR, "replace() new")
+                return STR
+            if m == "split":
+                if self._margs(e, 0, 1, m) and e.args:
+                    self._want(e.args[0], STR, "split() separator")
+                return list_of(STR)
+            if m == "join":
+                if self._margs(e, 1, 1, m):
+                    self._want(e.args[0], list_of(STR), "join() argument")
+                return STR
+            return self.err(e, f"str has no method {m!r} in PySub")
         if recv.name == "list":
             if e.method == "append":
                 if len(e.args) != 1:
@@ -729,10 +845,6 @@ class TypeChecker:
                     return self.err(e.args[0],
                                     f"cannot append {at} to {recv}")
                 return NONE
-            if e.method == "pop":
-                if e.args:
-                    return self.err(e, "pop() with an index is outside the PySub subset")
-                return recv.elem
             return self.err(e, f"list has no method {e.method!r} in PySub")
         if recv == STR:
             if e.method == "upper" or e.method == "lower":
@@ -769,8 +881,25 @@ class TypeChecker:
             return ERR
         return self.err(e, f"{recv} has no methods in PySub")
 
+    def check_kwargs(self, e, allowed) -> Dict[str, A.Node]:
+        out: Dict[str, A.Node] = {}
+        for kw in getattr(e, "kwargs", None) or []:
+            if kw.name not in allowed:
+                self.err(kw, f"keyword argument {kw.name!r} is outside the PySub subset (only print(sep=, end=), "
+                             f"sorted(reverse=) and list.sort(reverse=) take keywords)")
+                self.synth(kw.value)
+                continue
+            t = self.synth(kw.value)
+            want = BOOL if kw.name == "reverse" else STR
+            if t is not ERR and t != want:
+                self.err(kw.value, f"{kw.name}= must be {want}, found {t}")
+            kw.ty = t
+            out[kw.name] = kw.value
+        return out
+
     def synth_call(self, e: A.Call) -> Ty:
         name = e.func
+        self.check_kwargs(e, {"print": {"sep", "end"}, "sorted": {"reverse"}}.get(name, set()))
         if name == "print":
             for a in e.args:
                 t = self.synth(a)
@@ -800,12 +929,73 @@ class TypeChecker:
                 return INT if t == BOOL else t
             return self.err(e.args[0], f"bad operand type for abs(): {t}")
         if name in ("min", "max"):
-            if len(e.args) != 2:
-                return self.err(e, f"{name}() requires exactly two arguments in PySub")
-            a, b = self.synth(e.args[0]), self.synth(e.args[1])
-            if a.name in NUMERIC and b.name in NUMERIC:
-                return join(a, b)
-            return self.err(e, f"{name}() needs numeric arguments, found {a} and {b}")
+            if not e.args:
+                return self.err(e, f"{name}() needs at least one argument")
+            ts = [self.synth(a) for a in e.args]
+            if any(t is ERR for t in ts):
+                return ERR
+            if len(ts) == 1:
+                t = ts[0]
+                if t.name == "list" and t.elem is not None and t.elem.name in PRIM:
+                    return t.elem
+                return self.err(e.args[0], f"{name}() of one argument needs a list of numbers or strings, found {t}")
+            if all(t.name in NUMERIC for t in ts):
+                acc = ts[0]
+                for t in ts[1:]:
+                    acc = join(acc, t)
+                return acc
+            if all(t == STR for t in ts) and len(ts) > 1:
+                return STR
+            return self.err(e, f"{name}() needs numeric arguments, found {' and '.join(str(t) for t in ts)}")
+        if name == "input":
+            if len(e.args) > 1:
+                return self.err(e, "input() takes at most one argument (the prompt)")
+            if e.args:
+                t = self.synth(e.args[0])
+                if t is not ERR and t != STR:
+                    self.err(e.args[0], f"input() prompt must be str, found {t}")
+            return STR
+        if name == "format":
+            if len(e.args) != 2 or not isinstance(e.args[1], A.StrLit):
+                return self.err(e, "format() needs a value and a literal format spec, e.g. format(x, '.2f')")
+            t = self.synth(e.args[0])
+            self.synth(e.args[1])
+            if t is ERR:
+                return STR
+            why = fmt_spec_problem(e.args[1].value, t)
+            return self.err(e, why) if why else STR
+        if name == "round":
+            if len(e.args) not in (1, 2):
+                return self.err(e, "round() takes a number and optionally ndigits")
+            t = self.synth(e.args[0])
+            if t is ERR:
+                return ERR
+            if t.name not in NUMERIC:
+                return self.err(e.args[0], f"round() needs a number, found {t}")
+            if len(e.args) == 2:
+                n = self.synth(e.args[1])
+                if n is not ERR and not widens_to(n, INT):
+                    self.err(e.args[1], f"round() ndigits must be int, found {n}")
+                return FLOAT if t == FLOAT else INT
+            return INT
+        if name == "sum":
+            if len(e.args) != 1:
+                return self.err(e, "sum() takes exactly one list in PySub (no start value)")
+            t = self.synth(e.args[0])
+            if t is ERR:
+                return ERR
+            if t.name == "list" and t.elem is not None and t.elem.name in NUMERIC:
+                return FLOAT if t.elem == FLOAT else INT
+            return self.err(e.args[0], f"sum() needs a list of numbers, found {t}")
+        if name == "sorted":
+            if len(e.args) != 1:
+                return self.err(e, "sorted() takes exactly one list")
+            t = self.synth(e.args[0])
+            if t is ERR:
+                return ERR
+            if t.name == "list" and t.elem is not None and t.elem.name in PRIM:
+                return t
+            return self.err(e.args[0], f"sorted() needs a list of int, float, bool or str, found {t}")
         if name in ("int", "float", "str", "bool"):
             if len(e.args) != 1:
                 return self.err(e, f"{name}() takes exactly one argument")
@@ -814,6 +1004,11 @@ class TypeChecker:
             if name == "str":
                 if t.name == "list":
                     return self.err(e.args[0], "str(list) is outside the PySub subset")
+                if t.name == "dict":
+                    return self.err(e.args[0], "str(dict) is outside the PySub subset")
+                if t.name in self.classes:
+                    return self.err(e.args[0], f"str() of a {t.name} instance has no reproducible repr in PySub; "
+                                               f"format its fields instead")
                 return STR
             if name in ("int", "float"):
                 if t.name in NUMERIC or t == STR:

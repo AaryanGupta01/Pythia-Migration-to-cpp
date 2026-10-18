@@ -44,6 +44,9 @@ D_POWNEG    = "D6 int ** negative int changes result type"
 D_MEMORY    = "D7 object lifetime / reclamation"
 D_EXC       = "D8 exception propagation across a call boundary"
 D_FIELDINIT = "D9 class fields are zero-initialised before __init__ runs"
+D_SUMFLOAT  = "D10 sum() of an empty list[float]"
+D_NANORDER  = "D11 ordering of NaN"
+D_STDIN     = "D12 interactive input"
 
 
 class Lowerer:
@@ -240,6 +243,10 @@ class Lowerer:
                          [self.expr(a) for a in e.args]
             else:
                 e.args = [self.expr(a) for a in e.args]
+            for kw in e.kwargs:
+                kw.value = self.expr(kw.value)
+            if rt is not None and rt.name == "list" and e.method in ("sort", "index", "count", "remove"):
+                self.builtin_notes(e.method, e, [rt])
             return e
 
         if isinstance(e, A.Call):
@@ -256,11 +263,33 @@ class Lowerer:
                 e.args = [self.coerce(self.expr(a), e.ty) for a in e.args]
             else:
                 e.args = [self.expr(a) for a in e.args]
+            for kw in e.kwargs:
+                kw.value = self.expr(kw.value)
+            self.builtin_notes(e.func, e, [a.ty for a in e.args])
             return e
 
         if isinstance(e, A.Coerce):
             return e
         return e
+
+    def builtin_notes(self, name: str, n: A.Node, arg_tys) -> None:
+        lst = arg_tys[0] if arg_tys else None
+        float_list = lst is not None and getattr(lst, "name", "") == "list" and lst.elem == FLOAT
+        if name == "sum" and float_list:
+            self.note(n, D_SUMFLOAT,
+                      "CPython's sum() of an EMPTY list[float] is the int 0 (prints 0); the compiled code returns "
+                      "0.0 (prints 0.0). Non-empty lists use the same compensated (Neumaier) summation as CPython 3.12+.",
+                      "only the empty-list case differs; guard with `if len(xs) > 0` if the output matters.", "guarded")
+        if name in ("sort", "sorted", "min", "max", "index", "count", "remove") and float_list:
+            self.note(n, D_NANORDER,
+                      "NaN compares false with everything, so where NaN ends up after sort()/min()/max() depends on "
+                      "the algorithm; the compiled stable merge sort and CPython's timsort can disagree.",
+                      "identical for lists without NaN.", "guarded")
+        if name == "input":
+            self.note(n, D_STDIN,
+                      "input() writes the prompt to stdout and reads one line from stdin, as CPython does; end of input "
+                      "raises EOFError in both.", "exact; replayed calls never block (stdin is empty in the oracle).",
+                      "exact")
 
     # ---- coercion + fidelity bookkeeping -----------------------------------
     def coerce(self, e: Optional[A.Node], want: Optional[Ty]) -> Optional[A.Node]:

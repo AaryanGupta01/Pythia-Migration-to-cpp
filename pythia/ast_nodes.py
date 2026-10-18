@@ -128,9 +128,17 @@ class Raise(Node):
 
 
 @dataclass
+class Keyword(Node):
+    """name=value in a call (PySub allows print(sep=, end=), sorted(reverse=) and list.sort(reverse=))."""
+    name: str = ""
+    value: Optional[Node] = None
+
+
+@dataclass
 class Call(Node):
     func: str = ""
     args: List[Node] = field(default_factory=list)
+    kwargs: List["Keyword"] = field(default_factory=list)
 
 
 @dataclass
@@ -138,6 +146,7 @@ class MethodCall(Node):
     recv: Optional[Node] = None
     method: str = ""
     args: List[Node] = field(default_factory=list)
+    kwargs: List["Keyword"] = field(default_factory=list)
 
 
 @dataclass

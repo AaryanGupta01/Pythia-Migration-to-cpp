@@ -375,6 +375,7 @@ def _gen_wrapper(modname: str, funcs: List[A.FuncDef], tc, mut: Dict[str, Set[in
         out.append("")
     out.append(f"PYBIND11_MODULE({modname}, m) {{")
     out.append('    m.doc() = "PYTHIA-compiled module (library mode)";')
+    out.append('    pyrt::pyrt_set_py_minor(PY_MINOR_VERSION);')
     out.append(f'    pyb::FallbackError = PyErr_NewException("{modname}.FallbackError", PyExc_Exception, nullptr);')
     out.append('    m.attr("FallbackError") = py::reinterpret_borrow<py::object>(pyb::FallbackError);')
     out.append(f'    pyb::SemanticError = PyErr_NewException("{modname}.PythiaSemanticError", PyExc_RuntimeError, nullptr);')

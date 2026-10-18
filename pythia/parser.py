@@ -7,7 +7,7 @@ parser for expressions.  Panic-mode error recovery lets one run report
 several syntax errors instead of dying on the first.
 """
 from typing import List, Optional
-from .lexer import Token, tokenize
+from .lexer import LexError, Token, tokenize
 from . import ast_nodes as A
 
 # Pratt binding powers. Higher binds tighter.
@@ -114,7 +114,11 @@ class Parser:
                 elif self.at_kw("class"):
                     mod.classes.append(self.parse_classdef())
                 else:
-                    mod.main.append(self.parse_statement())
+                    st = self.parse_statement()
+                    if self._is_main_guard(st):            # if __name__ == "__main__": runs as the program body
+                        mod.main.extend(st.body)
+                    else:
+                        mod.main.append(st)
             except _Panic:
                 self.synchronize()
             if self.i == guard:      # safety net: never spin with zero progress
@@ -431,15 +435,8 @@ class Parser:
                 m = self.expect("NAME").value
                 if self.at_op("("):
                     self.next()
-                    args = []
-                    while not self.at_op(")"):
-                        args.append(self.parse_expr())
-                        if self.at_op(","):
-                            self.next()
-                        else:
-                            break
-                    self.expect("OP", ")")
-                    node = A.MethodCall(t.line, t.col, recv=node, method=m, args=args)
+                    args, kwargs = self._call_args()
+                    node = A.MethodCall(t.line, t.col, recv=node, method=m, args=args, kwargs=kwargs)
                 else:
                     node = A.Attribute(t.line, t.col, value=node, attr=m)
             else:
@@ -453,6 +450,8 @@ class Parser:
             self.next(); return A.FloatLit(t.line, t.col, value=float(t.value))
         if t.kind == "STRING":
             self.next(); return A.StrLit(t.line, t.col, value=t.value)
+        if t.kind == "FSTRING":
+            self.next(); return self._fstring(t)
         if t.kind == "KEYWORD" and t.value in ("True", "False"):
             self.next(); return A.BoolLit(t.line, t.col, value=(t.value == "True"))
         if t.kind == "KEYWORD" and t.value == "None":
@@ -461,15 +460,8 @@ class Parser:
             self.next()
             if self.at_op("("):
                 self.next()
-                args = []
-                while not self.at_op(")"):
-                    args.append(self.parse_expr())
-                    if self.at_op(","):
-                        self.next()
-                    else:
-                        break
-                self.expect("OP", ")")
-                return A.Call(t.line, t.col, func=t.value, args=args)
+                args, kwargs = self._call_args()
+                return A.Call(t.line, t.col, func=t.value, args=args, kwargs=kwargs)
             return A.Name(t.line, t.col, id=t.value)
         if self.at_op("("):
             self.next()
@@ -503,6 +495,152 @@ class Parser:
             return A.DictLit(t.line, t.col, keys=keys, values=vals)
         self.error(f"unexpected token {t.value or t.kind!r} in expression")
         raise _Panic()
+
+
+# ---- helpers: call arguments, f-strings, the __main__ guard ---------------------------------------------
+_ESC = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", "'": "'", '"': '"', "0": "\0"}
+
+
+def _relocate(n, line, col):
+    """Give every node parsed out of an f-string field the f-string's own position."""
+    import dataclasses
+    if isinstance(n, A.Node):
+        n.line, n.col = line, col
+        for f in dataclasses.fields(n):
+            v = getattr(n, f.name)
+            if isinstance(v, (A.Node, list)):
+                _relocate(v, line, col)
+    elif isinstance(n, list):
+        for x in n:
+            _relocate(x, line, col)
+
+
+def _call_args(self):
+    args, kwargs = [], []
+    while not self.at_op(")"):
+        nxt = self.toks[self.i + 1] if self.i + 1 < len(self.toks) else None
+        if self.at("NAME") and nxt is not None and nxt.kind == "OP" and nxt.value == "=":
+            kt = self.next()
+            self.next()
+            kwargs.append(A.Keyword(kt.line, kt.col, name=kt.value, value=self.parse_expr()))
+        else:
+            if kwargs:
+                self.error("positional argument follows keyword argument")
+                raise _Panic()
+            args.append(self.parse_expr())
+        if self.at_op(","):
+            self.next()
+        else:
+            break
+    self.expect("OP", ")")
+    return args, kwargs
+
+
+def _is_main_guard(self, st) -> bool:
+    if not isinstance(st, A.If) or st.orelse or not isinstance(st.test, A.Compare) or st.test.op != "==":
+        return False
+    sides = (st.test.left, st.test.right)
+    return (any(isinstance(x, A.Name) and x.id == "__name__" for x in sides) and
+            any(isinstance(x, A.StrLit) and x.value == "__main__" for x in sides))
+
+
+def _fstring_fail(self, tok, msg):
+    self.errors.append(Diagnostic(msg, tok.line, tok.col))
+    raise _Panic()
+
+
+def _sub_expr(self, text, tok):
+    try:
+        toks = tokenize("(" + text.strip() + ")\n", self.filename)
+    except LexError as ex:
+        _fstring_fail(self, tok, f"in f-string field {{{text}}}: {ex.msg}")
+    sub = Parser(toks, self.filename)
+    try:
+        e = sub.parse_expr()
+    except _Panic:
+        e = None
+    if sub.errors or e is None or not sub.at("NEWLINE") or not text.strip():
+        _fstring_fail(self, tok, f"invalid expression in f-string field {{{text}}}")
+    _relocate(e, tok.line, tok.col)
+    return e
+
+
+def _fstring(self, tok):
+    """f"a {x} b {y:.2f}" -> "a " + str(x) + " b " + format(y, ".2f")."""
+    raw, n, parts, lit, i = tok.value, len(tok.value), [], "", 0
+    while i < n:
+        c = raw[i]
+        if c == "\\" and i + 1 < n:
+            lit += _ESC.get(raw[i + 1], "\\" + raw[i + 1])
+            i += 2
+            continue
+        if raw.startswith("{{", i) or raw.startswith("}}", i):
+            lit += c
+            i += 2
+            continue
+        if c == "}":
+            _fstring_fail(self, tok, "f-string: single '}' is not allowed")
+        if c != "{":
+            lit += c
+            i += 1
+            continue
+        j, depth, quote, cut = i + 1, 0, None, None
+        while j < n:
+            ch = raw[j]
+            if quote:
+                if ch == quote:
+                    quote = None
+            elif ch in "'\"":
+                quote = ch
+            elif ch in "([{":
+                depth += 1
+            elif ch in ")]":
+                depth -= 1
+            elif ch == "}":
+                if depth == 0:
+                    break
+                depth -= 1
+            elif depth == 0 and cut is None and ch in ":!" and not raw.startswith("!=", j):
+                cut = j
+            j += 1
+        if j >= n:
+            _fstring_fail(self, tok, "f-string: expecting '}'")
+        field = raw[i + 1:j]
+        k = (cut - i - 1) if cut is not None else len(field)
+        expr_text, rest = field[:k], field[k:]
+        conv = spec = None
+        if rest.startswith("!"):
+            conv, rest = rest[1:2], rest[2:]
+        if rest.startswith(":"):
+            spec = rest[1:]
+        if expr_text.rstrip().endswith("=") and not expr_text.rstrip().endswith(("==", "!=", "<=", ">=")):
+            _fstring_fail(self, tok, "f-string self-documenting fields {x=} are outside the PySub subset")
+        if conv not in (None, "s"):
+            _fstring_fail(self, tok, f"f-string conversion '!{conv}' is outside the PySub subset; use str()")
+        if spec and "{" in spec:
+            _fstring_fail(self, tok, "nested format specs in f-strings are outside the PySub subset")
+        if lit:
+            parts.append(A.StrLit(tok.line, tok.col, value=lit))
+            lit = ""
+        e = _sub_expr(self, expr_text, tok)
+        if spec:
+            parts.append(A.Call(tok.line, tok.col, func="format", args=[e, A.StrLit(tok.line, tok.col, value=spec)]))
+        else:
+            parts.append(A.Call(tok.line, tok.col, func="str", args=[e]))
+        i = j + 1
+    if lit:
+        parts.append(A.StrLit(tok.line, tok.col, value=lit))
+    if not parts:
+        return A.StrLit(tok.line, tok.col, value="")
+    node = parts[0]
+    for p in parts[1:]:
+        node = A.BinOp(tok.line, tok.col, op="+", left=node, right=p)
+    return node
+
+
+Parser._call_args = _call_args
+Parser._is_main_guard = _is_main_guard
+Parser._fstring = _fstring
 
 
 def parse(src: str, filename: str = "<input>"):

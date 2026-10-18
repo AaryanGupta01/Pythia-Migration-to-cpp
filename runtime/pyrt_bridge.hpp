@@ -44,6 +44,7 @@ struct Arena {
     else if (n == "OverflowError") c = PyExc_OverflowError;
     else if (n == "ValueError") c = PyExc_ValueError;
     else if (n == "KeyError") c = PyExc_KeyError;
+    else if (n == "EOFError") c = PyExc_EOFError;
     else if (n == "PythiaSemanticError" && SemanticError) c = SemanticError;
     fail(c, e.message().c_str());
 }
