@@ -30,7 +30,7 @@ class Ty:
             return f"list[{self.elem}]"
         if self.name == "dict":
             return f"dict[{self.key}, {self.elem}]"
-        return self.name
+        return _x.ty_str(self) or self.name
 
 
 INT, FLOAT, BOOL, STR, NONE = Ty("int"), Ty("float"), Ty("bool"), Ty("str"), Ty("None")
@@ -52,6 +52,9 @@ def widens_to(src: Ty, dst: Ty) -> bool:
     """Implicit-conversion lattice.  bool -> int -> float."""
     if src == dst or src is ERR or dst is ERR:
         return True
+    ext = _x.widens(src, dst)                 # Optional / nullable objects (types_ext)
+    if ext is not None:
+        return ext
     order = {"bool": 0, "int": 1, "float": 2}
     if src.name in order and dst.name in order:
         return order[src.name] <= order[dst.name]
@@ -110,6 +113,7 @@ class ClassInfo:
 
 EXC_NAMES = {"IndexError", "ZeroDivisionError", "OverflowError",
             "ValueError", "KeyError", "OverflowError", "PythiaSemanticError", "EOFError"}
+EXC_NAMES |= {"TypeError", "AttributeError", "NameError"}
 
 PRIM = ("int", "float", "bool", "str")
 _FMT_RE = re.compile(r"^(?:(?P<fill>.)?(?P<align>[<>^=]))?(?P<sign>[+\- ])?(?P<zero>0)?(?P<width>\d+)?"
@@ -179,6 +183,9 @@ class TypeChecker:
     def resolve_type(self, te: Optional[A.TypeExpr]) -> Ty:
         if te is None:
             return NONE
+        ext = _x.resolve_type(self, te)       # typing names, Optional, unions, set, dict values (types_ext)
+        if ext is not None:
+            return ext
         if te.name in ("int", "float", "bool", "str"):
             return Ty(te.name)
         if te.name == "None":
@@ -224,6 +231,8 @@ class TypeChecker:
 
     # ---- driver ------------------------------------------------------------
     def run(self) -> List[Diagnostic]:
+        _x.check_imports(self)
+        self._narrow, self._fn_globals = {}, set()
         # pass 0: register class names (stub) so field/method/param types can
         # forward-reference any class, including the class's own methods.
         for c in self.mod.classes:
@@ -276,7 +285,14 @@ class TypeChecker:
                 self.resolve_type(f.ret),
                 f)
 
-        # pass 3: check class method bodies
+        # pass 3 (was 5): the module-level main block first, so function bodies can see module-level names
+        self.scope = self.global_scope
+        self.cur_fn = None
+        for s in self.mod.main:
+            self.check_stmt(s)
+        self.mod.globals_ = dict(self.global_scope.names)
+
+        # pass 4: check class method bodies
         for c in self.mod.classes:
             info = self.classes.get(c.name)
             if info is None:
@@ -286,16 +302,11 @@ class TypeChecker:
                 if sig is not None:
                     self.check_func(sig, self_ty=Ty(c.name))
 
-        # pass 4: check free-function bodies
+        # pass 5: check free-function bodies
         for f in self.mod.funcs:
             self.check_func(self.funcs[f.name])
-
-        # pass 5: module-level main block
         self.scope = self.global_scope
-        self.cur_fn = None
-        for s in self.mod.main:
-            self.check_stmt(s)
-        self.mod.globals_ = dict(self.global_scope.names)
+        _x.finish(self)
         return self.errors
 
     def check_func(self, sig: FuncSig, self_ty: Optional[Ty] = None) -> None:
@@ -314,10 +325,11 @@ class TypeChecker:
                 self.err(p, f"duplicate parameter {p.name!r}")
             fn_scope.declare(p.name, t)
             p.ty = t
+        _x.begin_func(self, sig, fn_scope)    # module-level names, `global`, defaults
         self.returns_seen = False
         for s in f.body:
             self.check_stmt(s)
-        if sig.ret != NONE and not self.always_returns(f.body):
+        if sig.ret != NONE and not self.always_returns(f.body) and not _x.may_fall_off(sig.ret):
             self.err(f, f"function {sig.name!r} declared -> {sig.ret} but control "
                         f"can reach the end without returning a value")
         f.locals_ = {k: v for k, v in fn_scope.names.items()
@@ -347,6 +359,8 @@ class TypeChecker:
 
     # ---- statements --------------------------------------------------------
     def check_stmt(self, s: A.Node) -> None:
+        if _x.check_stmt(self, s):            # narrowing-aware if/while/assign, global (types_ext)
+            return
         if isinstance(s, A.Assign):
             self.check_assign(s)
         elif isinstance(s, A.AugAssign):
@@ -540,6 +554,7 @@ class TypeChecker:
         if self.cur_fn is None:
             self.err(s, "'return' outside function")
             return
+        _x.check_return(self, s)
         want = self.cur_fn.ret
         if s.value is None:
             if want != NONE:
@@ -574,6 +589,9 @@ class TypeChecker:
         if t.name == "dict" and t.key is None and expected.name == "dict":
             e.ty = expected
             return expected
+        if t.name == "set" and t.elem is None and expected.name == "set":
+            e.ty = expected
+            return expected
         return t
 
     def synth(self, e: Optional[A.Node]) -> Ty:
@@ -586,6 +604,9 @@ class TypeChecker:
         return t
 
     def _synth(self, e: A.Node) -> Ty:
+        ext = _x.synth(self, e)               # names (narrowing, globals), sets, None tests, isinstance ...
+        if ext is not None:
+            return ext
         if isinstance(e, A.IntLit):
             return INT
         if isinstance(e, A.FloatLit):
@@ -746,6 +767,9 @@ class TypeChecker:
         return self.err(e, f"unsupported expression {type(e).__name__}")
 
     def binop_result(self, node: A.Node, op: str, lt: Ty, rt: Ty) -> Ty:
+        ext = _x.binop(self, node, op, lt, rt)
+        if ext is not None:
+            return ext
         if lt is ERR or rt is ERR:
             return ERR
         if op == "+" and lt == STR and rt == STR:
@@ -778,6 +802,9 @@ class TypeChecker:
 
     def synth_method(self, e: A.MethodCall) -> Ty:
         recv = self.synth(e.recv)
+        ext = _x.synth_method(self, e, recv)  # set methods; keyword/default arguments of methods
+        if ext is not None:
+            return ext
         self.check_kwargs(e, {"reverse"} if (recv.name == "list" and e.method == "sort") else set())
         if recv.name == "list" and e.method in ("pop", "insert", "extend", "clear", "reverse", "copy", "index",
                                                 "count", "remove", "sort"):
@@ -909,6 +936,9 @@ class TypeChecker:
 
     def synth_call(self, e: A.Call) -> Ty:
         name = e.func
+        ext = _x.synth_call(self, e)          # isinstance, set(), defaults/keywords of user functions ...
+        if ext is not None:
+            return ext
         self.check_kwargs(e, {"print": {"sep", "end"}, "sorted": {"reverse"}}.get(name, set()))
         if name == "print":
             for a in e.args:
@@ -1074,6 +1104,9 @@ class TypeChecker:
                 self.err(a, f"argument {i + 1} of {name}(): expected {want}, "
                             f"found {got}")
         return sig.ret
+
+
+from . import types_ext as _x  # noqa: E402  (PySub 1.3 type-system extensions; imports this module)
 
 
 def typecheck(mod: A.Module, filename: str = "<input>"):
