@@ -216,21 +216,30 @@ def resolve_type(tc, te: A.TypeExpr) -> Optional[Ty]:
 
 
 # ------------------------------------------------------------------ functions: globals, defaults
-class GlobalView(Scope):
+class _Visible:
     """Module-level names as seen from inside a function: everything except the names the function
     assigns (Python makes those local throughout the function unless declared `global`)."""
 
     def __init__(self, tc, hidden: Set[str]):
-        super().__init__(None, "globals")
         self.tc, self.hidden = tc, hidden
 
-    def lookup(self, name: str) -> Optional[Ty]:
-        if name in self.hidden:
-            return None
-        return self.tc.global_scope.names.get(name)
+    def __contains__(self, name) -> bool:
+        return name not in self.hidden and name in self.tc.global_scope.names
 
-    def lookup_local(self, name: str) -> Optional[Ty]:
-        return None
+    def __getitem__(self, name):
+        return self.tc.global_scope.names[name]
+
+    def get(self, name, default=None):
+        return self[name] if name in self else default
+
+
+class GlobalView(Scope):
+    def __init__(self, tc, hidden: Set[str]):
+        super().__init__(None, "globals")
+        self.names = _Visible(tc, hidden)
+
+    def declare(self, name: str, ty: Ty) -> None:
+        raise AssertionError("module-level names are declared by the module body")
 
 
 def walk(n):
@@ -584,12 +593,12 @@ def synth(tc, e) -> Optional[Ty]:
 def _name(tc, e) -> Optional[Ty]:
     t = tc.scope.lookup(e.id)
     if t is None:
-        if tc.cur_fn is not None and e.id in tc.global_scope.names:
+        if tc.cur_fn is not None and e.id in tc.global_scope.names and tc.scope.lookup_local(e.id) is None:
             return _err(tc, e, f"{e.id!r} is assigned in this function, so it is a local variable everywhere in "
                                f"it (CPython raises UnboundLocalError here); add `global {e.id}` to use the "
                                f"module-level variable")
         return None
-    if tc.cur_fn is not None and tc.scope.lookup_local(e.id) is None and isinstance(tc.scope, Scope):
+    if tc.cur_fn is not None and tc.scope.lookup_local(e.id) is None:
         e.global_ref = True
         tc._fn_globals.add(e.id)
     nt = tc._narrow.get(e.id)
@@ -644,7 +653,10 @@ def _ifexp(tc, e) -> Ty:
 
 
 # isinstance / type(): the run-time classes a value of a declared type can have
-def _classes(t: Ty) -> Optional[Set[str]]:
+def _classes(t: Ty, node=None) -> Optional[Set[str]]:
+    if isinstance(node, (A.IntLit, A.FloatLit, A.BoolLit, A.StrLit)) or \
+            (isinstance(node, A.UnaryOp) and isinstance(node.operand, (A.IntLit, A.FloatLit))):
+        return {t.name}                  # a literal's class is exact
     if t.name == "int":
         return {"int", "bool"}           # bool values widen into int variables
     if t.name == "float":
@@ -664,7 +676,7 @@ def decide(tc, x_node, t: Ty, wanted: List[str], exact: bool, what: str, at) -> 
     """('const', bool) | ('test', node, nonnull) | None after an error."""
     nullable = t.name == "optional" or is_class(t)
     base = t.elem if t.name == "optional" else t
-    cs = _classes(base)
+    cs = _classes(base, x_node)
     if cs is None:
         _err(tc, at, f"{what} is not supported for a value of type {t}")
         return None
@@ -874,7 +886,7 @@ def synth_call(tc, e) -> Optional[Ty]:
         if t.name == "dict":
             return set_of(t.key)
         return _err(tc, e.args[0], f"set() takes a list, set, str or dict of int/float/bool/str, found {t}")
-    if name in ("len", "sorted", "list", "print", "str", "min", "max", "sum") and e.args:
+    if name in ("len", "sorted", "list", "print", "str", "min", "max", "sum", "bool") and e.args:
         ts = [tc.synth(a) for a in e.args]
         if ERR in ts:
             return None
@@ -888,6 +900,8 @@ def synth_call(tc, e) -> Optional[Ty]:
                                 f"lists of those or such dicts")
             return None
         t = ts[0]
+        if name == "bool" and len(ts) == 1 and t.name in ("set", "dict", "optional"):
+            return BOOL
         if t.name == "optional":
             if name == "str" and t.elem.name in PRIM:
                 return STR

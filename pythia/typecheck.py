@@ -66,6 +66,8 @@ def join(a: Ty, b: Ty) -> Ty:
         return a
     if a.name in NUMERIC and b.name in NUMERIC:
         return FLOAT if FLOAT in (a, b) else INT
+    if a.name == b.name and a.name in ("list", "dict") and (a.elem is None or b.elem is None):
+        return b if a.elem is None else a                     # [] next to [1, 2], {} next to {"k": 1}
     return ERR
 
 
