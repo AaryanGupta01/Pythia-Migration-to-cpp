@@ -1238,16 +1238,12 @@ def _enclosing_class(tc) -> Optional[str]:
 def synth(tc, e) -> Optional[Ty]:
     """Hook at the top of TypeChecker._synth; None = not a class construct."""
     cx = ctx(tc)
-    if cx is None or not cx.defs and not isinstance(e, A.Call):
+    if cx is None or not cx.defs:
         return None
     if isinstance(e, A.Name) and e.id == "NotImplemented":
         return _notimpl(tc, e)
     if isinstance(e, A.Attribute):
         return _attr(tc, cx, e)
-    if isinstance(e, A.MethodCall):
-        return _mcall(tc, cx, e)
-    if isinstance(e, A.Call):
-        return _call(tc, cx, e)
     if isinstance(e, A.Compare):
         return _compare(tc, cx, e)
     if isinstance(e, A.UnaryOp) and e.op in UNARY:
@@ -1315,6 +1311,14 @@ def _want_arg(tc, a, want: Ty, what: str) -> None:
     got = tc.check_expr(a, want)
     if got is not ERR and not widens_to(got, want):
         _diag(tc, a, f"argument of {what}: expected {want}, found {got}")
+
+
+def synth_method(tc, e) -> Optional[Ty]:
+    """Hook in TypeChecker.synth_method (after the comprehension hook); None = not ours."""
+    cx = ctx(tc)
+    if cx is None or not cx.defs:
+        return None
+    return _mcall(tc, cx, e)
 
 
 def _mcall(tc, cx: Ctx, e) -> Optional[Ty]:
@@ -1400,6 +1404,18 @@ def _super_call(tc, cx: Ctx, e) -> Ty:
     return sig.ret
 
 
+def synth_call(tc, e) -> Optional[Ty]:
+    """Hook in TypeChecker.synth_call (after view / generator arguments are claimed); None = not ours."""
+    cx = ctx(tc)
+    if cx is None:
+        return None
+    if e.func == "super":
+        return _diag(tc, e, "super() is supported only as super().method(...)")
+    if not cx.defs:
+        return None
+    return _call(tc, cx, e)
+
+
 def _call(tc, cx: Ctx, e) -> Optional[Ty]:
     f = e.func
     if f == "super":
@@ -1436,6 +1452,9 @@ def _call(tc, cx: Ctx, e) -> Optional[Ty]:
             return _unary(tc, cx, e, t, "__abs__", "bad operand type for abs()")
         return BOOL
     if f in ("sorted", "min", "max") and e.args and not _has_kw(e, "key"):
+        if f == "sorted":
+            from . import tuples as _tup
+            _tup.mark_items(e.args[0])                   # sorted(d.items()) is allowed (tuples.py)
         ts = [tc.synth(a) for a in e.args]
         if f == "sorted" or len(e.args) == 1:
             t = ts[0]
@@ -1585,6 +1604,8 @@ def _order_plan(tc, e, t: Ty, op: str):
 def _compare(tc, cx: Ctx, e) -> Optional[Ty]:
     op = e.op
     if op in ("in", "not in"):
+        from . import builtins_ext as _bx
+        _bx.mark_view_ok(tc, e.right)
         rt = tc.synth(e.right)
         if not is_cls(tc, rt):
             return None
@@ -1708,6 +1729,10 @@ def _assign_attr(tc, cx: Ctx, s, tgt, value, aug: Optional[str]) -> bool:
         if hit[0] != cname:
             _diag(tc, tgt, f"assigning {cname}.{tgt.attr} would create a new class attribute shadowing "
                            f"{hit[0]}.{tgt.attr}; outside the PySub subset")
+            return True
+        if any(tgt.attr in cx.cattr_field.get(k, set()) for k in cx.order):
+            _diag(tc, tgt, f"{cname}.{tgt.attr} is also assigned as an instance attribute (self.{tgt.attr} = ...); "
+                           f"changing the class attribute afterwards is outside the PySub subset")
             return True
         tgt.value.ty = NONE
         tgt.cattr = (cname, cname, False)
@@ -2219,8 +2244,9 @@ def emit_ctor(em, c: A.ClassDef) -> bool:
             pass
     for name, t in zip(info.field_names, info.fields):
         owner = next((k for k in cx.mro(c.name) if name in cx.cattr_field.get(k, set())), None)
-        if owner is not None:
-            em.w(1, f"p_self->{name} = ca_{owner}_{name}();   /* reads the class attribute until assigned */")
+        hit = cattr_lookup(cx, c.name, name) if owner is not None else None
+        if hit is not None:
+            em.w(1, f"p_self->{name} = ca_{hit[0]}_{name}();   /* reads the class attribute until assigned */")
         else:
             em.w(1, f"p_self->{name} = {zero(t)};")
     if info.init is not None:

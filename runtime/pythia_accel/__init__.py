@@ -38,15 +38,19 @@ def accelerated(modname, name):
             return fn
         try:
             mod = _load(modname)
-            native = getattr(mod, name)
+            native = getattr(mod, name.replace(".", "__"))              # "Class.method" -> Class__method
             fallback = (getattr(mod, "FallbackError", ()), TypeError)   # TypeError: arg not marshallable (tuple, ...)
+            bind = getattr(mod, "_pythia_bind_classes", None)           # user classes: looked up in fn's module
         except Exception:
             return fn
+        bound = [bind is None]
 
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
             if kwargs:
                 return fn(*args, **kwargs)
+            if not bound[0]:
+                bound[0] = bool(bind(fn.__globals__))     # the classes exist once the module has finished loading
             try:
                 return native(*args)
             except fallback:

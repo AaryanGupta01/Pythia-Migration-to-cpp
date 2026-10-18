@@ -320,9 +320,9 @@ def main():
     # errors reported cleanly
     bad = build_library(SRC, ["nope"], os.path.join(work, "o4"), cache_dir=cache)
     assert not bad.ok and bad.diagnostics[0]["kind"] == "LibraryError"
-    cls = build_library("class A:\n    x: int\n    def __init__(self, x: int):\n        self.x = x\n"
+    cls = build_library("class A:\n    def __init__(self, x: int):\n        self.t = ([x], x)\n"
                         "def mk(x: int) -> A:\n    return A(x)\n", ["mk"], os.path.join(work, "o5"), cache_dir=cache)
-    assert not cls.ok and "class marshalling not supported" in cls.diagnostics[0]["msg"]
+    assert not cls.ok and "cannot cross the Python boundary" in cls.diagnostics[0]["msg"], cls.diagnostics
     syn = build_library("def f(:\n", ["f"], os.path.join(work, "o6"), cache_dir=cache)
     assert not syn.ok and syn.diagnostics and syn.diagnostics[0]["kind"] == "SyntaxError"
     nb = build_library(SRC, ["cube"], os.path.join(work, "o7"), build=False, cache_dir=cache)
@@ -332,6 +332,7 @@ def main():
                        extra_cache_dirs=[cache])
     assert ex.ok and ex.cached and ex.so_path
     print("exceptions, fallback, write-back, ordering, diagnostics: ok")
+    check_classes(work, cache)
 
     # memory: repeated calls must not leak (arena)
     def rss_kb():
@@ -367,6 +368,226 @@ def main():
     print(f"leak check: 3000 iterations in {dt:.2f}s, RSS grew {grew} KB")
     assert grew < 20_000, grew
     print("OK")
+
+
+CLS_SRC = '''
+from typing import Optional
+
+
+class Node:
+    def __init__(self, val: int, next: Optional["Node"] = None) -> None:
+        self.val = val
+        self.next = next
+
+
+class Tree:
+    def __init__(self, key: int) -> None:
+        self.key = key
+        self.left: Optional["Tree"] = None
+        self.right: Optional["Tree"] = None
+        self.parent: Optional["Tree"] = None
+
+
+class Shape:
+    made = 0
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        Shape.made += 1
+
+    def area(self) -> float:
+        return 0.0
+
+
+class Rect(Shape):
+    def __init__(self, w: float, h: float) -> None:
+        super().__init__("rect")
+        self.w = w
+        self.h = h
+
+    def area(self) -> float:
+        return self.w * self.h
+
+
+class Bag:
+    def __init__(self) -> None:
+        self.items: list[str] = []
+        self.counts: dict[str, int] = {}
+
+    def add(self, s: str) -> int:
+        self.items.append(s)
+        self.counts[s] = self.counts.get(s, 0) + 1
+        return self.counts[s]
+
+    def take(self) -> str:
+        return self.items.pop()
+
+
+def reverse(head: Optional[Node]) -> Optional[Node]:
+    prev = None
+    while head is not None:
+        nxt = head.next
+        head.next = prev
+        prev = head
+        head = nxt
+    return prev
+
+
+def build(vals: list[int]) -> Optional[Node]:
+    head: Optional[Node] = None
+    for v in vals:
+        head = Node(v, head)
+    return head
+
+
+def insert(root: Optional[Tree], key: int) -> Tree:
+    if root is None:
+        return Tree(key)
+    if key < root.key:
+        root.left = insert(root.left, key)
+        root.left.parent = root
+    else:
+        root.right = insert(root.right, key)
+        root.right.parent = root
+    return root
+
+
+def inorder(root: Optional[Tree]) -> list[int]:
+    if root is None:
+        return []
+    return inorder(root.left) + [root.key] + inorder(root.right)
+
+
+def total_area(shapes: list[Shape]) -> float:
+    t = 0.0
+    for s in shapes:
+        t += s.area()
+    return t
+
+
+def grow(shapes: list[Shape], k: float) -> Shape:
+    out = Shape("none")
+    for s in shapes:
+        if isinstance(s, Rect):
+            s.w *= k
+            out = s
+    shapes.append(Rect(k, k))
+    return out
+
+
+def fill(b: Bag, words: list[str]) -> int:
+    n = 0
+    for w in words:
+        n += b.add(w)
+    if not words:
+        b.take()
+    return n
+'''
+CLS_EXPOSE = ["reverse", "build", "insert", "inorder", "total_area", "grow", "fill", "Bag.add", "Bag.take",
+              "Rect.area"]
+
+
+def state(v, seen=None):
+    """Structure of a value including object identity (sharing / cycles) and the type of every object."""
+    seen = {} if seen is None else seen
+    if isinstance(v, (int, float, str, bool)) or v is None:
+        return bits(v)
+    if id(v) in seen:
+        return ("ref", seen[id(v)])
+    seen[id(v)] = len(seen)
+    if isinstance(v, (list, tuple)):
+        return (type(v).__name__, [state(x, seen) for x in v])
+    if isinstance(v, dict):
+        return ("dict", [(k, state(x, seen)) for k, x in v.items()])
+    return (type(v).__name__, sorted((k, state(x, seen)) for k, x in vars(v).items()))
+
+
+def check_classes(work, cache):
+    r = build_library(CLS_SRC, CLS_EXPOSE, os.path.join(work, "c1"), cache_dir=cache)
+    assert r.ok, (r.error, r.diagnostics)
+    m = load_so(r.so_path, r.modname)
+    py, nat = {}, {}
+    exec(CLS_SRC, py)
+    exec(CLS_SRC, nat)                       # the compiled module binds to this copy of the classes
+    try:
+        m.reverse(nat["Node"](1))
+    except m.FallbackError:
+        pass
+    else:
+        raise AssertionError("unbound classes must fall back")
+    assert m._pythia_bind_classes(nat) is True
+
+    def mk(ns, case):
+        N, T, S, R, B = ns["Node"], ns["Tree"], ns["Shape"], ns["Rect"], ns["Bag"]
+        shared = N(5)
+        b = B()
+        b.items += ["x"]
+        return {
+            "reverse": [(None,), (N(1),), (N(1, N(2, N(3))),), (N(1, shared),)],
+            "build": [([],), ([1, 2, 3],)],
+            "insert": [(None, 5), (T(10), 5), (T(10), 15)],
+            "inorder": [(None,), (T(3),)],
+            "total_area": [([],), ([S("a"), R(2.0, 3.0), R(0.5, 4)],)],
+            "grow": [([R(1.0, 2.0), S("s"), R(3.0, 1.0)], 2.0), ([], 1.5)],
+            "fill": [(B(), ["a", "b", "a"]), (b, []), (B(), [])],
+            "Bag.add": [(B(), "q")],
+            "Bag.take": [(B(),), (b,)],
+            "Rect.area": [(R(2.0, 2.5),)],
+        }[case]
+
+    def run(fn, args):
+        try:
+            res = fn(*args)
+            return ("ok", state((res, args)))
+        except Exception as e:  # noqa: BLE001
+            return ("exc", type(e).__name__, str(e), state(args))
+    def shim(native, original):                 # runtime/pythia_accel: FallbackError -> the original runs
+        def call(*args):
+            try:
+                return native(*args)
+            except m.FallbackError:
+                fb.append(1)
+                return original(*args)
+        return call
+    fb = []
+    n = 0
+    for name in CLS_EXPOSE:
+        cls, _, meth = name.rpartition(".")
+        pyfn = getattr(py[cls], meth) if cls else py[name]
+        nfn = getattr(m, name.replace(".", "__"))
+        for i in range(len(mk(py, name))):
+            py["Shape"].made = nat["Shape"].made = 0
+            want = run(pyfn, mk(py, name)[i])
+            got = run(shim(nfn, getattr(nat[cls], meth) if cls else nat[name]), mk(nat, name)[i])
+            assert want == got, (name, i, want, got)
+            assert py["Shape"].made == nat["Shape"].made, (name, py["Shape"].made, nat["Shape"].made)
+            n += 1
+    # a tree whose nodes point at their parents: cycles and identity survive the round trip
+    root = None
+    for k in [8, 3, 10, 1, 6]:
+        root = m.insert(root, k)
+    assert isinstance(root, nat["Tree"]) and m.inorder(root) == [1, 3, 6, 8, 10]
+    assert root.left.parent is root and root.left.right.parent is root.left
+    # a Python subclass of a compiled class runs in Python (FallbackError), as does an object missing a field
+    class Sub(nat["Node"]):
+        pass
+    for bad in (Sub(1), object()):
+        try:
+            m.reverse(bad)
+        except m.FallbackError:
+            pass
+        else:
+            raise AssertionError(bad)
+    half = nat["Node"].__new__(nat["Node"])
+    half.val = 1                              # no .next attribute
+    try:
+        m.reverse(half)
+    except m.FallbackError:
+        pass
+    else:
+        raise AssertionError("missing attribute")
+    print(f"classes: {n} calls compared against CPython ({len(fb)} ran in Python after FallbackError; objects in/out, "
+          f"identity, write-back, class attributes)")
 
 
 if __name__ == "__main__":

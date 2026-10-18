@@ -864,6 +864,9 @@ class TypeChecker:
         hooked = _comp().synth_method_hook(self, e)
         if hooked is not None:
             return hooked
+        hooked = _cls.synth_method(self, e)           # super().m(), C.m(obj), list[C].sort(), static/property misuse
+        if hooked is not None:
+            return hooked
         recv = self.synth(e.recv)
         ext = _x.synth_method(self, e, recv)  # set methods; keyword/default arguments of methods
         if ext is not None:
@@ -1007,6 +1010,9 @@ class TypeChecker:
         if name in ("sorted", "list", "sum", "min", "max", "any", "all", "len") and e.args:
             _bx.mark_view_ok(self, e.args[0])         # d.keys()/d.values() read once here: same as a list
         hooked = _comp().synth_call_hook(self, e)     # generator / key= / enumerate-zip arguments: claim them first
+        if hooked is not None:
+            return hooked
+        hooked = _cls.synth_call(self, e)             # str/repr/len/bool/abs/sorted/min/max of user objects, super()
         if hooked is not None:
             return hooked
         ext = _x.synth_call(self, e)          # isinstance, set(), defaults/keywords of user functions ...
