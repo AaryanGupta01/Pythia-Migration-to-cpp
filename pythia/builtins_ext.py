@@ -19,8 +19,11 @@ INTLIKE = ("int", "bool")
 METHOD_TABLE = {
     "str": ["zfill", "center", "ljust", "rjust", "isnumeric", "isdecimal", "istitle", "isascii", "casefold",
             "removeprefix", "removesuffix", "expandtabs", "rsplit", "splitlines", "rindex", "split", "find", "rfind",
-            "index", "count", "startswith", "endswith"],
-    "list": ["index"],
+            "index", "count", "startswith", "endswith",
+            # the core set (typecheck.py handles these; listed because the studio's extractor misses `m in (...)` forms)
+            "upper", "lower", "strip", "lstrip", "rstrip", "title", "capitalize", "swapcase", "isdigit", "isalpha",
+            "isalnum", "isspace", "isupper", "islower", "replace", "join"],
+    "list": ["index", "append", "pop", "insert", "extend", "clear", "reverse", "copy", "count", "remove", "sort"],
     "dict": ["keys", "values", "pop", "setdefault", "update", "copy", "clear", "fromkeys"],
 }
 BUILTIN_NAMES = {"pow", "bin", "hex", "oct", "repr"}

@@ -779,35 +779,35 @@ template <class T, class U> int64_t px_list_index(PyList<T> *l, const U &u, int6
 
 // ---- dict methods -----------------------------------------------------------------------------
 template <class D, class K> int64_t px_dfind(D *d, const K &k) {
-    for (int64_t i = 0; i < d->size(); ++i) if (pyl_eqv(d->keys[static_cast<size_t>(i)], static_cast<typename std::decay<decltype(d->keys[0])>::type>(k))) return i;
+    for (int64_t i = 0; i < d->size(); ++i) if (pyl_eqv(d->keys[static_cast<size_t>(i)], static_cast<typename decltype(D::keys)::value_type>(k))) return i;
     return -1;
 }
 template <class D> auto *px_dvalues(D *d) { auto *r = pyl_new<typename decltype(d->vals)::value_type>(); r->data = d->vals; return r; }
-template <class D, class K> auto px_dpop(D *d, const K &k) {
+template <class D, class K> typename decltype(D::vals)::value_type px_dpop(D *d, const K &k) {
     int64_t i = px_dfind(d, k);
-    if (i < 0) throw KeyError(py_value_repr(static_cast<typename std::decay<decltype(d->keys[0])>::type>(k)).c_str());
-    auto v = d->vals[static_cast<size_t>(i)];
+    if (i < 0) throw KeyError(py_value_repr(static_cast<typename decltype(D::keys)::value_type>(k)).c_str());
+    typename decltype(D::vals)::value_type v = d->vals[static_cast<size_t>(i)];
     d->keys.erase(d->keys.begin() + i); d->vals.erase(d->vals.begin() + i);
     return v;
 }
-template <class D, class K, class V> auto px_dpop_default(D *d, const K &k, const V &dflt) {
+template <class D, class K, class V> typename decltype(D::vals)::value_type px_dpop_default(D *d, const K &k, const V &dflt) {
     int64_t i = px_dfind(d, k);
-    typedef typename std::decay<decltype(d->vals[0])>::type VT;
+    typedef typename decltype(D::vals)::value_type VT;
     if (i < 0) return static_cast<VT>(dflt);
     VT v = d->vals[static_cast<size_t>(i)];
     d->keys.erase(d->keys.begin() + i); d->vals.erase(d->vals.begin() + i);
     return v;
 }
-template <class D, class K, class V> auto px_dsetdefault(D *d, const K &k, const V &dflt) {
-    typedef typename std::decay<decltype(d->keys[0])>::type KT;
-    typedef typename std::decay<decltype(d->vals[0])>::type VT;
+template <class D, class K, class V> typename decltype(D::vals)::value_type px_dsetdefault(D *d, const K &k, const V &dflt) {
+    typedef typename decltype(D::keys)::value_type KT;
+    typedef typename decltype(D::vals)::value_type VT;
     int64_t i = px_dfind(d, k);
-    if (i >= 0) return d->vals[static_cast<size_t>(i)];
+    if (i >= 0) return static_cast<VT>(d->vals[static_cast<size_t>(i)]);
     d->keys.push_back(static_cast<KT>(k)); d->vals.push_back(static_cast<VT>(dflt));
     return static_cast<VT>(dflt);
 }
 template <class D> void px_dupdate(D *d, D *o) {
-    std::vector<typename std::decay<decltype(d->keys[0])>::type> ks = o->keys;
+    std::vector<typename decltype(D::keys)::value_type> ks = o->keys;
     auto vs = o->vals;
     for (size_t j = 0; j < ks.size(); ++j) {
         int64_t i = px_dfind(d, ks[j]);
@@ -818,7 +818,7 @@ template <class D> D *px_dcopy(D *d) { return arena_new<D>(*d); }
 template <class D> void px_dclear(D *d) { d->keys.clear(); d->vals.clear(); }
 template <class D, class L, class V> D *px_dfromkeys(L *ks, const V &v) {
     D *d = arena_new<D>();
-    typedef typename std::decay<decltype(d->vals[0])>::type VT;
+    typedef typename decltype(D::vals)::value_type VT;
     for (auto &k : ks->data) {
         if (px_dfind(d, k) < 0) { d->keys.push_back(k); d->vals.push_back(static_cast<VT>(v)); }
     }
