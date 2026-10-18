@@ -51,6 +51,11 @@ MODULES = {
     "math": set(MATH_FUNCS) | set(MATH_FLOAT_CONSTS) | MATH_CALL_CONSTS,
     "string": set(STRING_CONSTS),
 }
+MODULES.update({                       # annotations and containers (resolved in types_ext.py)
+    "typing": {"List", "Dict", "Set", "Tuple", "Optional", "Union", "Sequence", "Iterable", "DefaultDict"},
+    "__future__": {"annotations"},
+    "collections": {"defaultdict", "Counter"},
+})
 
 
 class Imports:

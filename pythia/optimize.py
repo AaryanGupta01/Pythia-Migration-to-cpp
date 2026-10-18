@@ -127,12 +127,15 @@ def _references(expr: Optional[A.Node], name: str) -> bool:
         return _references(expr.value, name) or _references(expr.index, name)
     if isinstance(expr, A.Attribute):
         return _references(expr.value, name)
+    if isinstance(expr, A.SetLit):
+        return any(_references(x, name) for x in expr.elts)
     return False
 
 
 class GuardElider:
-    def __init__(self):
+    def __init__(self, poison=()):
         self.stats = Stats()
+        self.poison = set(poison)
 
     # ---- expression evaluation: computes an interval AND annotates every
     # BinOp it visits with .no_guard when the result is provably safe -----
@@ -209,6 +212,10 @@ class GuardElider:
                 self.eval(k, env)
                 self.eval(v, env)
             return None
+        if isinstance(e, A.SetLit):
+            for x in e.elts:
+                self.eval(x, env)
+            return None
         return None
 
     # ---- statements ---------------------------------------------------
@@ -220,7 +227,8 @@ class GuardElider:
         if isinstance(s, A.Assign):
             iv = self.eval(s.value, env)
             if isinstance(s.target, A.Name):
-                env[s.target.id] = iv if s.ty == INT else None
+                # a module-level variable that a function rebinds (`global`) may change behind any call
+                env[s.target.id] = iv if s.ty == INT and s.target.id not in self.poison else None
             else:
                 self.eval(s.target, env)   # index/attribute targets: just annotate
 
@@ -340,7 +348,7 @@ def elide_guards(mod: A.Module, exposed=()) -> Stats:
     exactly as conservative as leaving it untouched would have been."""
     param_bounds = _scan_literal_call_sites(mod)
 
-    elider = GuardElider()
+    elider = GuardElider(getattr(mod, "global_writers", ()))
     for c in mod.classes:
         for m in c.methods:
             env: Dict[str, Interval] = {}
@@ -414,6 +422,9 @@ def _scan_literal_call_sites(mod: A.Module) -> Dict[str, Dict[str, Interval]]:
                 walk_expr(k); walk_expr(v)
         elif isinstance(e, A.Attribute):
             walk_expr(e.value)
+        elif isinstance(e, A.SetLit):
+            for x in e.elts:
+                walk_expr(x)
 
     def walk_stmts(stmts: List[A.Node]) -> None:
         for s in stmts:

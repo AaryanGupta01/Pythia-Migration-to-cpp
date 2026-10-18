@@ -8,7 +8,10 @@
 #include <cstring>
 #include <exception>
 #include <limits>
+#include <functional>
 #include <memory>
+#include <optional>
+#include <unordered_set>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -104,7 +107,8 @@ PyListList *PyListList_new(void); void PyListList_append(PyListList *, void *); 
 void PyListList_set(PyListList *, int64_t, void *); void *PyListList_pop(PyListList *); PyListList *PyListList_concat(PyListList *, PyListList *);
 
 #define PYRT_DECL_DICT(NAME, KT, VT) \
-    struct NAME { std::vector<KT> keys; std::vector<VT> vals; int64_t size() const { return static_cast<int64_t>(keys.size()); } }; \
+    struct NAME { std::vector<KT> keys; std::vector<VT> vals; int64_t size() const { return static_cast<int64_t>(keys.size()); } \
+                  int mode = 0; const char *fname = nullptr; VT (*dflt)() = nullptr; /* defaultdict / Counter */ }; \
     NAME *NAME##_new(void); void NAME##_set(NAME *, KT, VT); VT NAME##_get(NAME *, KT); VT NAME##_get_default(NAME *, KT, VT); bool NAME##_contains(NAME *, KT);
 PYRT_DECL_DICT(PyDictIntInt, int64_t, int64_t)
 PYRT_DECL_DICT(PyDictIntFloat, int64_t, double)
@@ -152,6 +156,18 @@ int64_t py_sum_i64(PyListI64 *); int64_t py_sum_bool(PyListBool *); double py_su
 template <class... T> std::string py_value_repr(const std::tuple<T...> &);
 template <class T> std::string py_value_repr(PyList<T> *const &);
 template <class D> auto py_value_repr(D *const &d) -> decltype(d->vals, std::string());   // any dict
+// collections.defaultdict / Counter: a dict whose `mode` is 1 / 2 (missing keys: insert dflt() / read 0)
+template <class D, class K> auto pyd_missing(D *d, const K &k) {
+    auto v = d->dflt();
+    if (d->mode == 1) { d->keys.push_back(k); d->vals.push_back(v); }
+    return v;
+}
+template <class D> std::vector<size_t> pyd_order(D *d) {      // display order: Counter by count, stable
+    std::vector<size_t> ix(d->keys.size());
+    for (size_t i = 0; i < ix.size(); ++i) ix[i] = i;
+    if (d->mode == 2) std::stable_sort(ix.begin(), ix.end(), [&](size_t a, size_t b) { return d->vals[b] < d->vals[a]; });
+    return ix;
+}
 template <class... T> bool pyl_eqv(const std::tuple<T...> &, const std::tuple<T...> &);
 template <class... T> bool pyl_lt(const std::tuple<T...> &, const std::tuple<T...> &);
 
@@ -908,9 +924,13 @@ template <class T> std::string py_value_repr(PyList<T> *const &l) {
     return s + "]";
 }
 template <class D> auto py_value_repr(D *const &d) -> decltype(d->vals, std::string()) {
+    std::vector<size_t> ix = pyd_order(d);
     std::string s = "{";
-    for (size_t i = 0; i < d->keys.size(); ++i) s += (i ? ", " : "") + py_value_repr(d->keys[i]) + ": " + py_value_repr(d->vals[i]);
-    return s + "}";
+    for (size_t j = 0; j < ix.size(); ++j) s += (j ? ", " : "") + py_value_repr(d->keys[ix[j]]) + ": " + py_value_repr(d->vals[ix[j]]);
+    s += "}";
+    if (d->mode == 2) return d->keys.empty() ? std::string("Counter()") : "Counter(" + s + ")";
+    if (d->mode == 1) return std::string("defaultdict(<class '") + d->fname + "'>, " + s + ")";
+    return s;
 }
 template <class T> void py_print_repr(const T &v) { std::string s = py_value_repr(v); py_print_str(pystr_new(s.data(), static_cast<int64_t>(s.size()))); }
 template <class T> PyStr *py_repr_pystr(const T &v) { std::string s = py_value_repr(v); return pystr_new(s.data(), static_cast<int64_t>(s.size())); }
@@ -928,6 +948,7 @@ inline PyStr *pystr_unpack(PyStr *s, int64_t n) { pyt_unpack_check(static_cast<i
 template <class K, class V> struct PyDictT {
     std::vector<K> keys; std::vector<V> vals;
     int64_t size() const { return static_cast<int64_t>(keys.size()); }
+    int mode = 0; const char *fname = nullptr; V (*dflt)() = nullptr;     // defaultdict / Counter (see pyd_missing)
 };
 template <class K, class V> int64_t pyd_find(PyDictT<K, V> *d, const K &k) {   // ponytail: linear scan, like the monomorphic dicts
     for (size_t i = 0; i < d->keys.size(); ++i) if (pyl_eqv(d->keys[i], k)) return static_cast<int64_t>(i);
@@ -939,7 +960,10 @@ template <class K, class V> void pyd_set(PyDictT<K, V> *d, const K &k, const V &
 }
 template <class K, class V> V pyd_get(PyDictT<K, V> *d, const K &k) {
     int64_t i = pyd_find(d, k);
-    if (i < 0) throw KeyError(py_value_repr(k).c_str());
+    if (i < 0) {
+        if (d->mode) return pyd_missing(d, k);
+        throw KeyError(py_value_repr(k).c_str());
+    }
     return d->vals[static_cast<size_t>(i)];
 }
 template <class K, class V> V pyd_get_default(PyDictT<K, V> *d, const K &k, const V &v) {
@@ -956,6 +980,127 @@ template <class D> auto *pyd_items(D *d) {                 // any dict -> list[t
 }
 
 
+// ---- PySub 1.3: None, nullable objects, module-level names, mutable defaults ---------------------------------
+inline void py_print_none() { py_print_str(pystr_lit("None")); }
+[[noreturn]] inline void py_none_attr(const char *attr, bool set) {
+    std::string m = std::string("'NoneType' object has no attribute '") + attr + "'";
+    if (set && py_minor >= 13) m += " and no __dict__ for setting new attributes";
+    throw PythonException("AttributeError", m);
+}
+// obj.attr / obj.method(...) on a class reference: None raises AttributeError exactly like CPython
+template <class P> inline const P &py_nn(const P &p, const char *attr) { if (!p) py_none_attr(attr, false); return p; }
+template <class P> inline const P &py_nn_set(const P &p, const char *attr) { if (!p) py_none_attr(attr, true); return p; }
+inline void py_global_ok(bool ok, const char *name) {
+    if (!ok) throw PythonException("NameError", std::string("name '") + name + "' is not defined");
+}
+// a mutable default value lives for the whole program, even when first built inside a library-call arena
+struct ArenaPause {
+    bool saved;
+    ArenaPause() : saved(arena_active) { arena_active = false; }
+    ~ArenaPause() { arena_active = saved; }
+};
+
+// ---- set[T] (T = int64_t / double / bool / PyStr *).  No operation exposes iteration order. ---------------
+struct PyStrHash { size_t operator()(PyStr *s) const { return std::hash<std::string>()(s->data); } };
+struct PyStrEq { bool operator()(PyStr *a, PyStr *b) const { return a->data == b->data; } };
+template <class T> struct py_hash { using H = std::hash<T>; using E = std::equal_to<T>; };
+template <> struct py_hash<PyStr *> { using H = PyStrHash; using E = PyStrEq; };
+template <class T> struct PySet {
+    std::unordered_set<T, typename py_hash<T>::H, typename py_hash<T>::E> s;
+    int64_t size() const { return static_cast<int64_t>(s.size()); }
+};
+template <class T> PySet<T> *pyset_new() { return arena_new<PySet<T>>(); }
+template <class T, class U> void pyset_add(PySet<T> *s, const U &v) { s->s.insert(static_cast<T>(v)); }
+template <class T, class U> bool pyset_contains(PySet<T> *s, const U &v) { return s->s.count(static_cast<T>(v)) != 0; }
+template <class T, class U> void pyset_discard(PySet<T> *s, const U &v) { s->s.erase(static_cast<T>(v)); }
+template <class T, class U> void pyset_remove(PySet<T> *s, const U &u) {
+    T v = static_cast<T>(u);
+    if (!s->s.erase(v)) throw KeyError(py_value_repr(v).c_str());
+}
+template <class T> void pyset_clear(PySet<T> *s) { s->s.clear(); }
+template <class T> PySet<T> *pyset_copy(PySet<T> *a) { auto *r = pyset_new<T>(); r->s = a->s; return r; }
+// set(x) / s.update(x) / s.union(x) ...: x is a set or a list
+template <class T, class U> PySet<T> *pyset_of(PySet<U> *o) { auto *r = pyset_new<T>(); for (const U &x : o->s) r->s.insert(static_cast<T>(x)); return r; }
+template <class T, class U> PySet<T> *pyset_of(PyList<U> *o) { auto *r = pyset_new<T>(); for (const U &x : o->data) r->s.insert(static_cast<T>(x)); return r; }
+template <class T> PySet<T> *pyset_of_chars(PyStr *s) {
+    auto *r = pyset_new<T>();
+    for (size_t i = 0; i < s->data.size(); ++i) r->s.insert(pystr_new(s->data.data() + i, 1));
+    return r;
+}
+template <class T, class D> PySet<T> *pyset_of_keys(D *d) { auto *r = pyset_new<T>(); for (const auto &k : d->keys) r->s.insert(k); return r; }
+template <class T> PySet<T> *pyset_ior(PySet<T> *a, PySet<T> *b) { if (a != b) for (const T &x : b->s) a->s.insert(x); return a; }
+template <class T> PySet<T> *pyset_iand(PySet<T> *a, PySet<T> *b) {
+    for (auto it = a->s.begin(); it != a->s.end();) it = b->s.count(*it) ? std::next(it) : a->s.erase(it);
+    return a;
+}
+template <class T> PySet<T> *pyset_isub(PySet<T> *a, PySet<T> *b) {
+    if (a == b) { a->s.clear(); return a; }
+    for (const T &x : b->s) a->s.erase(x);
+    return a;
+}
+template <class T> PySet<T> *pyset_ixor(PySet<T> *a, PySet<T> *b) {
+    if (a == b) { a->s.clear(); return a; }
+    for (const T &x : b->s) if (!a->s.erase(x)) a->s.insert(x);
+    return a;
+}
+template <class T> PySet<T> *pyset_or(PySet<T> *a, PySet<T> *b) { return pyset_ior(pyset_copy(a), b); }
+template <class T> PySet<T> *pyset_and(PySet<T> *a, PySet<T> *b) { return pyset_iand(pyset_copy(a), b); }
+template <class T> PySet<T> *pyset_sub(PySet<T> *a, PySet<T> *b) { return pyset_isub(pyset_copy(a), b); }
+template <class T> PySet<T> *pyset_xor(PySet<T> *a, PySet<T> *b) { return pyset_ixor(pyset_copy(a), b); }
+template <class T> bool pyset_le(PySet<T> *a, PySet<T> *b) {
+    if (a->s.size() > b->s.size()) return false;
+    for (const T &x : a->s) if (!b->s.count(x)) return false;
+    return true;
+}
+template <class T> bool pyset_eq(PySet<T> *a, PySet<T> *b) { return a->s.size() == b->s.size() && pyset_le(a, b); }
+template <class T> bool pyset_lt(PySet<T> *a, PySet<T> *b) { return a->s.size() < b->s.size() && pyset_le(a, b); }
+template <class T> bool pyset_disjoint(PySet<T> *a, PySet<T> *b) {
+    for (const T &x : a->s) if (b->s.count(x)) return false;
+    return true;
+}
+template <class T> PyList<T> *pyset_sorted(PySet<T> *s, bool rev) {
+    auto *r = pyl_new<T>();
+    r->data.assign(s->s.begin(), s->s.end());
+    pyl_sort(r, rev);
+    return r;
+}
+
+
 } // namespace pyrt
 using namespace pyrt;
+
+// ---- collections.defaultdict / Counter (PySub 1.3): flags on an ordinary runtime dict -----------------------
+namespace pyrt {
+template <class D, class F> D *pyd_defaultdict(D *d, const char *fname, F f) { d->mode = 1; d->fname = fname; d->dflt = f; return d; }
+template <class D> D *pyd_counter(D *d) {
+    d->mode = 2; d->fname = "Counter";
+    d->dflt = []() { return typename decltype(d->vals)::value_type(); };
+    return d;
+}
+template <class D, class K> void pyd_count_one(D *d, const K &k) {
+    for (size_t i = 0; i < d->keys.size(); ++i) if (pyl_eqv(d->keys[i], k)) { d->vals[i] += 1; return; }
+    d->keys.push_back(k); d->vals.push_back(1);
+}
+template <class D, class T> D *pyd_counter_of(D *d, PyList<T> *l) {
+    for (const T &x : std::vector<T>(l->data)) pyd_count_one(d, x);
+    return pyd_counter(d);
+}
+template <class D> D *pyd_counter_of(D *d, PyStr *s) {
+    for (size_t i = 0; i < s->data.size(); ++i) pyd_count_one(d, pystr_new(s->data.data() + i, 1));
+    return pyd_counter(d);
+}
+// Counter.most_common([n]): by count, ties in first-seen order (CPython sorts stably)
+template <class D> auto *pyd_most_common(D *d, int64_t n, bool all) {
+    if (d->mode != 2)
+        throw PythonException("AttributeError", std::string("'") + (d->mode == 1 ? "collections.defaultdict" : "dict") +
+                                                "' object has no attribute 'most_common'");
+    using K = typename decltype(d->keys)::value_type;
+    using V = typename decltype(d->vals)::value_type;
+    std::vector<size_t> ix = pyd_order(d);
+    if (!all) ix.resize(n <= 0 ? 0 : std::min(ix.size(), static_cast<size_t>(n)));
+    auto *r = pyl_new<std::tuple<K, V>>();
+    for (size_t i : ix) r->data.emplace_back(d->keys[i], d->vals[i]);
+    return r;
+}
+}  // namespace pyrt
 #endif

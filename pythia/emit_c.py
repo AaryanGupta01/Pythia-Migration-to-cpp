@@ -26,7 +26,7 @@ DICT_RT = {
 def is_obj_list(t: Optional[Ty]) -> bool:
     """list[SomeClass]: a typed PyList<std::shared_ptr<SomeClass>> driven by the generic pyl_* templates."""
     return (t is not None and t.name == "list" and t.elem is not None and t.elem.name not in LIST_RT
-            and t.elem.name not in ("list", "dict"))
+            and t.elem.name not in ("list", "dict", "set"))
 
 
 def list_rt_name(t: Ty) -> str:
@@ -45,7 +45,7 @@ def list_rt_name(t: Ty) -> str:
 def dict_rt_name(t: Ty) -> str:
     if _tup.generic_dict(t):
         return _tup.dict_t_name(t)
-    return DICT_RT[(t.key.name, t.elem.name)]
+    return DICT_RT.get((t.key.name, t.elem.name)) or _tup.dict_t_name(t)   # any value type
 
 
 def ctype(t: Optional[Ty]) -> str:
@@ -65,12 +65,17 @@ def ctype(t: Optional[Ty]) -> str:
         return list_rt_name(t) + " *"
     if t.name == "dict":
         return dict_rt_name(t) + " *"
+    ext = _ext.ctype(t)                       # Optional[T], set[T]
+    if ext is not None:
+        return ext
     if t.name == "tuple":
         return _tup.ctype_tuple(t)
     return f"std::shared_ptr<{t.name}>"  # class instances use RAII ownership
 
 
 def zero(t: Ty) -> str:
+    if t.name == "optional" and t.elem.name in ("int", "float", "bool"):
+        return "std::nullopt"
     return {"int": "0", "float": "0.0", "bool": "false", "tuple": "{}"}.get(t.name, "NULL")
 
 
@@ -107,6 +112,7 @@ class Emitter:
         self.track = track_lines
         self.cur = 0
         self.src_of: List[int] = []   # parallel to buf when tracking
+        self._fn = None               # FuncDef being emitted (None: module level)
 
     def w(self, indent: int, line: str = "") -> None:
         self.buf.append("    " * indent + line if line else "")
@@ -163,6 +169,7 @@ class Emitter:
                 self.w(0, self.signature(f) + ";")
             self.cur = 0
             self.w(0)
+        _ext.emit_globals(self, mod)      # module-level variables used by functions, mutable defaults
 
         for c in mod.classes:
             self.cur = c.line
@@ -178,6 +185,8 @@ class Emitter:
             self.w(0)
         if not self.library:
             self.emit_main(mod)
+        elif _ext.hoisted(self):
+            _ext.emit_lib_init(self, mod)
         if self.wrappers:
             wlines = ["/* print-adapter wrappers for nested/class containers */"]
             for _, body in self.wrappers.values():
@@ -187,6 +196,11 @@ class Emitter:
             if self.track:
                 self.src_of[wrapper_marker:wrapper_marker] = [0] * len(wlines)
         _tup.splice_dict_defs(self, wrapper_marker)
+        pre = _ext.module_prelude(self, mod)      # classes a generic dict holds must be declared first
+        if pre:
+            self.buf[wrapper_marker:wrapper_marker] = pre
+            if self.track:
+                self.src_of[wrapper_marker:wrapper_marker] = [0] * len(pre)
         return "\n".join(self.buf) + "\n"
 
     # ---- classes -------------------------------------------------------
@@ -240,6 +254,7 @@ class Emitter:
         self.cur = 0
 
     def _emit_func(self, f: A.FuncDef, owner: Optional[str] = None) -> None:
+        self._fn = f
         if owner is not None:
             self.w(0, self.method_signature(self.tc.classes[owner].node, f) + " {")
             sig = self.tc.classes[owner].methods[f.name]
@@ -257,15 +272,16 @@ class Emitter:
         for s in f.body:
             self.stmt(s, 1)
         if sig.ret != NONE:
-            self.w(1, f"return {zero(sig.ret)};   /* unreachable: checked by PYTHIA */")
+            self.w(1, f"return {zero(sig.ret)};   /* unreachable unless the result is Optional */")
         self.w(0, "}")
+        self._fn = None
 
     def emit_main(self, mod: A.Module) -> None:
         self.w(0, "int main(void) {")
         self.w(1, f"pyrt_set_py_minor({sys.version_info.minor});   /* match this CPython's error texts */")
         self.w(1, "try {")
         for name, t in mod.globals_.items():
-            if t is ERR:
+            if t is ERR or name in _ext.hoisted(self):
                 continue
             self.w(2, f"{ctype(t)}p_{name} = {zero(t)};")
         if mod.globals_:
@@ -287,12 +303,16 @@ class Emitter:
 
     def stmt(self, s: A.Node, d: int) -> None:
         if not self.track:
-            return self._stmt(s, d)
+            self._stmt(s, d)
+            return _ext.after_stmt(self, s, d)
         prev, self.cur = self.cur, s.line
         self._stmt(s, d)
+        _ext.after_stmt(self, s, d)
         self.cur = prev
 
     def _stmt(self, s: A.Node, d: int) -> None:
+        if _ext.stmt(self, s, d):             # in-place set |= ..., attribute stores on possibly-None objects
+            return
         if isinstance(s, A.Assign):
             if isinstance(s.target, A.Subscript):
                 base = s.target.value
@@ -472,6 +492,8 @@ class Emitter:
     def _has_call(n) -> bool:
         if isinstance(n, (A.Call, A.MethodCall)):
             return True
+        if isinstance(n, A.Subscript) and n.value.ty is not None and n.value.ty.name == "dict":
+            return True                   # d[k] may insert (defaultdict)
         if isinstance(n, A.Node):
             return any(Emitter._has_call(getattr(n, f)) for f in n.__dataclass_fields__ if f != "ty")
         if isinstance(n, list):
@@ -515,6 +537,9 @@ class Emitter:
         self.w(d, "py_print_end();")
 
     def print_call(self, a: A.Node, value: Optional[str] = None) -> str:
+        ext = _ext.print_call(self, a, value)     # Optional values, dicts of lists/dicts
+        if ext is not None:
+            return ext
         t, e = a.ty, (value if value is not None else self.ex(a))
         if _tup.involves_tuple(t):
             return f"py_print_repr({e})"
@@ -579,6 +604,9 @@ class Emitter:
     def truthy(expr: str, t: Optional[Ty]) -> str:
         if t is None or t is ERR:
             return "false"
+        ext = _ext.truthy(expr, t)
+        if ext is not None:
+            return ext
         if t == BOOL:
             return f"({expr})"
         if t == INT:
@@ -587,7 +615,7 @@ class Emitter:
             return f"(({expr}) != 0.0)"
         if t == STR:
             return f"pystr_truthy({expr})"
-        if t.name in ("list", "dict"):
+        if t.name in ("list", "dict", "set"):
             return f"(({expr})->size() != 0)"
         if t.name == "tuple":
             return f"pyt_truthy({expr})"
@@ -597,6 +625,9 @@ class Emitter:
     def ex(self, e: Optional[A.Node]) -> str:
         if e is None:
             return "0"
+        ext = _ext.ex(self, e)                # None, narrowed names, sets, isinstance, defaults ...
+        if ext is not None:
+            return ext
         if isinstance(e, A.IntLit):
             if e.value == -(2 ** 63):
                 return "INT64_MIN"
@@ -926,6 +957,9 @@ class Emitter:
             return self.truthy(self.ex(a), a.ty)
         args = ", ".join(self.ex(a) for a in e.args)
         return f"f_{n}({args})"
+
+
+from . import emit_ext as _ext  # noqa: E402  (PySub 1.3 code generation)
 
 
 def emit(mod: A.Module, tc: TypeChecker, src_name: str,
