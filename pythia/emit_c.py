@@ -9,6 +9,7 @@ import sys
 from typing import List, Optional
 from . import ast_nodes as A
 from .typecheck import Ty, INT, FLOAT, BOOL, STR, NONE, ERR, TypeChecker
+from . import tuples as _tup
 
 LIST_RT = {"int": "PyListI64", "float": "PyListF64",
            "bool": "PyListBool", "str": "PyListStr"}
@@ -33,12 +34,16 @@ def list_rt_name(t: Ty) -> str:
     pointer, so it rides the generic PyListList and gets cast at each use."""
     if t.elem is not None and t.elem.name in LIST_RT:
         return LIST_RT[t.elem.name]
+    if t.elem is not None and t.elem.name == "tuple":
+        return f"PyList<{ctype(t.elem).strip()}>"
     if is_obj_list(t):
         return f"PyList<std::shared_ptr<{t.elem.name}>>"
     return "PyListList"
 
 
 def dict_rt_name(t: Ty) -> str:
+    if _tup.generic_dict(t):
+        return _tup.dict_t_name(t)
     return DICT_RT[(t.key.name, t.elem.name)]
 
 
@@ -59,11 +64,13 @@ def ctype(t: Optional[Ty]) -> str:
         return list_rt_name(t) + " *"
     if t.name == "dict":
         return dict_rt_name(t) + " *"
+    if t.name == "tuple":
+        return _tup.ctype_tuple(t)
     return f"std::shared_ptr<{t.name}>"  # class instances use RAII ownership
 
 
 def zero(t: Ty) -> str:
-    return {"int": "0", "float": "0.0", "bool": "false"}.get(t.name, "NULL")
+    return {"int": "0", "float": "0.0", "bool": "false", "tuple": "{}"}.get(t.name, "NULL")
 
 
 def c_string(s: str) -> str:
@@ -178,6 +185,7 @@ class Emitter:
             self.buf[wrapper_marker:wrapper_marker] = wlines
             if self.track:
                 self.src_of[wrapper_marker:wrapper_marker] = [0] * len(wlines)
+        _tup.splice_dict_defs(self, wrapper_marker)
         return "\n".join(self.buf) + "\n"
 
     # ---- classes -------------------------------------------------------
@@ -507,6 +515,8 @@ class Emitter:
 
     def print_call(self, a: A.Node, value: Optional[str] = None) -> str:
         t, e = a.ty, (value if value is not None else self.ex(a))
+        if _tup.involves_tuple(t):
+            return f"py_print_repr({e})"
         if t == INT:
             return f"py_print_i64({e})"
         if t == FLOAT:
@@ -578,6 +588,8 @@ class Emitter:
             return f"pystr_truthy({expr})"
         if t.name in ("list", "dict"):
             return f"(({expr})->size() != 0)"
+        if t.name == "tuple":
+            return f"pyt_truthy({expr})"
         return "true"          # class instances: always truthy (no __bool__/__len__ in PySub)
 
     # ---- expressions -------------------------------------------------------
@@ -598,6 +610,8 @@ class Emitter:
             return "0"
         if isinstance(e, A.Name):
             return f"p_{e.id}"
+        if isinstance(e, A.TupleLit):
+            return _tup.emit_lit(self, e)
 
         if isinstance(e, A.Coerce):
             inner = self.ex(e.value)
@@ -613,6 +627,8 @@ class Emitter:
             return self.binop(e)
 
         if isinstance(e, A.Compare):
+            if e.right.ty.name == "tuple" or (e.left.ty.name == "tuple" and e.op not in ("in", "not in")):
+                return _tup.emit_compare(self, e)
             l, r, lt = self.ex(e.left), self.ex(e.right), e.left.ty
             if e.op in ("in", "not in"):
                 rt = e.right.ty
@@ -662,6 +678,8 @@ class Emitter:
 
         if isinstance(e, A.Subscript):
             bt = e.value.ty
+            if bt.name == "tuple":
+                return f"std::get<{e.tuple_index}>({self.ex(e.value)})"
             if bt == STR:
                 return f"pystr_index({self.ex(e.value)}, {self.ex(e.index)})"
             if bt.name == "dict":
@@ -679,7 +697,7 @@ class Emitter:
             rt = list_rt_name(e.ty)
             v = self.fresh()
             if is_obj_list(e.ty):
-                el = f"std::shared_ptr<{e.ty.elem.name}>"
+                el = ctype(e.ty.elem).strip()
                 parts = [f"auto *{v} = pyl_new<{el}>();"]
                 parts += [f"pyl_append({v}, {self.ex(x)});" for x in e.elts]
                 return "[&]() { " + " ".join(parts) + f" return {v}; }}()"
@@ -719,6 +737,8 @@ class Emitter:
                     return f"{rt}_pop({recv})"
             if rt_.name == "dict":
                 drt = dict_rt_name(rt_)
+                if e.method == "items":
+                    return f"pyd_items({recv})"
                 if e.method == "get":
                     return (f"{drt}_get_default({recv}, {self.ex(e.args[0])}, "
                             f"{self.ex(e.args[1])})")
@@ -782,6 +802,8 @@ class Emitter:
 
     def binop(self, e: A.BinOp) -> str:
         op, t = e.op, e.ty
+        if t.name == "tuple":                   # concatenation; operands evaluated left to right
+            return f"[&]() {{ auto _a = {self.ex(e.left)}; auto _b = {self.ex(e.right)}; return std::tuple_cat(_a, _b); }}()"
         l, r = self.ex(e.left), self.ex(e.right)
         lt = e.left.ty
         if op == "+" and t == STR:
@@ -814,6 +836,9 @@ class Emitter:
 
     def call(self, e: A.Call) -> str:
         n = e.func
+        tup = _tup.emit_call(self, e)
+        if tup is not None:
+            return tup
         if n == "len":
             a = e.args[0]
             return (f"pystr_len({self.ex(a)})" if a.ty == STR

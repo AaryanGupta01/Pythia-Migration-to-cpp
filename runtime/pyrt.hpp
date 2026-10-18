@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -144,6 +145,14 @@ PyStr *py_format_bool(bool, PyStr *);
 int64_t py_round_i64(double); double py_round_f64(double, int64_t); int64_t py_round_int_n(int64_t, int64_t);
 int64_t py_sum_i64(PyListI64 *); int64_t py_sum_bool(PyListBool *); double py_sum_f64(PyListF64 *);
 
+// Tuples are std::tuple values.  These overloads must be declared before the generic list helpers below,
+// which bind pyl_eqv/pyl_lt/py_value_repr at their point of definition (definitions at the end of the file).
+template <class... T> std::string py_value_repr(const std::tuple<T...> &);
+template <class T> std::string py_value_repr(PyList<T> *const &);
+template <class D> auto py_value_repr(D *const &d) -> decltype(d->vals, std::string());   // any dict
+template <class... T> bool pyl_eqv(const std::tuple<T...> &, const std::tuple<T...> &);
+template <class... T> bool pyl_lt(const std::tuple<T...> &, const std::tuple<T...> &);
+
 // Generic list helpers for any PyList<T>: the list methods, and every operation on lists of class instances
 // (PyList<std::shared_ptr<C>>).  Equality is value equality for str/numbers and identity for objects, as in
 // CPython for classes without __eq__.
@@ -247,6 +256,106 @@ template <class T> T pyl_min(PyList<T> *l) {
 template <class T> T pyl_max(PyList<T> *l) {
     if (l->data.empty()) throw ValueError("max() iterable argument is empty");
     T r = l->data[0]; for (size_t i = 1; i < l->data.size(); ++i) if (pyl_lt(r, l->data[i])) r = l->data[i]; return r;
+}
+
+// ---- tuples ------------------------------------------------------------------------------------------------
+template <class Tup, class F, size_t... I> void pyt_each2(const Tup &a, const Tup &b, F f, std::index_sequence<I...>) {
+    (f(std::get<I>(a), std::get<I>(b)), ...);
+}
+// op: 0 <, 1 <=, 2 >, 3 >=.  CPython: the first unequal pair decides, compared with the same operator.
+template <class T> bool pyt_rel(int op, const T &a, const T &b) {
+    switch (op) {
+        case 0: return pyl_lt(a, b);
+        case 1: return pyl_lt(a, b) || pyl_eqv(a, b);
+        case 2: return pyl_lt(b, a);
+        default: return pyl_lt(b, a) || pyl_eqv(a, b);
+    }
+}
+template <class... T> bool pyt_rel(int op, const std::tuple<T...> &a, const std::tuple<T...> &b) {
+    bool done = false, r = (op == 1 || op == 3);           // all equal (same length): only <= and >= hold
+    pyt_each2(a, b, [&](const auto &x, const auto &y) {
+        if (!done && !pyl_eqv(x, y)) { done = true; r = pyt_rel(op, x, y); }
+    }, std::index_sequence_for<T...>{});
+    return r;
+}
+template <class... T> bool pyl_eqv(const std::tuple<T...> &a, const std::tuple<T...> &b) {
+    bool eq = true;
+    pyt_each2(a, b, [&](const auto &x, const auto &y) { eq = eq && pyl_eqv(x, y); }, std::index_sequence_for<T...>{});
+    return eq;
+}
+template <class... T> bool pyl_lt(const std::tuple<T...> &a, const std::tuple<T...> &b) { return pyt_rel(0, a, b); }
+template <class T> bool pyt_lt(const T &a, const T &b) { return pyt_rel(0, a, b); }
+template <class T> bool pyt_le(const T &a, const T &b) { return pyt_rel(1, a, b); }
+template <class T> bool pyt_gt(const T &a, const T &b) { return pyt_rel(2, a, b); }
+template <class T> bool pyt_ge(const T &a, const T &b) { return pyt_rel(3, a, b); }
+template <class... T> bool pyt_truthy(const std::tuple<T...> &) { return sizeof...(T) > 0; }
+template <class... T> int64_t pyt_len(const std::tuple<T...> &) { return static_cast<int64_t>(sizeof...(T)); }
+template <class X, class... T> bool pyt_contains(const std::tuple<T...> &t, const X &x) {
+    return std::apply([&](const auto &...e) { return (pyl_eqv(e, x) || ...); }, t);
+}
+template <class E, class... T> PyList<E> *pyt_to_list(const std::tuple<T...> &t) {
+    auto *r = pyl_new<E>();
+    std::apply([&](const auto &...e) { (r->data.push_back(e), ...); }, t);
+    return r;
+}
+
+template <class... T> std::string py_value_repr(const std::tuple<T...> &t) {
+    std::string s = "(";
+    bool first = true;
+    std::apply([&](const auto &...e) { ((s += (first ? "" : ", ") + py_value_repr(e), first = false), ...); }, t);
+    return s + (sizeof...(T) == 1 ? ",)" : ")");
+}
+template <class T> std::string py_value_repr(PyList<T> *const &l) {
+    std::string s = "[";
+    for (size_t i = 0; i < l->data.size(); ++i) s += (i ? ", " : "") + py_value_repr(l->data[i]);
+    return s + "]";
+}
+template <class D> auto py_value_repr(D *const &d) -> decltype(d->vals, std::string()) {
+    std::string s = "{";
+    for (size_t i = 0; i < d->keys.size(); ++i) s += (i ? ", " : "") + py_value_repr(d->keys[i]) + ": " + py_value_repr(d->vals[i]);
+    return s + "}";
+}
+template <class T> void py_print_repr(const T &v) { std::string s = py_value_repr(v); py_print_str(pystr_new(s.data(), static_cast<int64_t>(s.size()))); }
+template <class T> PyStr *py_repr_pystr(const T &v) { std::string s = py_value_repr(v); return pystr_new(s.data(), static_cast<int64_t>(s.size())); }
+
+// a, b = v   (v a list or str; tuples are length-checked statically)
+inline void pyt_unpack_check(int64_t have, int64_t n) {
+    std::string e = "(expected " + std::to_string(n);
+    if (have > n) throw ValueError(("too many values to unpack " + e + (py_minor >= 14 ? ", got " + std::to_string(have) : "") + ")").c_str());
+    if (have < n) throw ValueError(("not enough values to unpack " + e + ", got " + std::to_string(have) + ")").c_str());
+}
+template <class T> PyList<T> *pyl_unpack(PyList<T> *l, int64_t n) { pyt_unpack_check(l->size(), n); return l; }
+inline PyStr *pystr_unpack(PyStr *s, int64_t n) { pyt_unpack_check(static_cast<int64_t>(s->data.size()), n); return s; }
+
+// dicts with tuple keys or values (named PyDictT_<hash> aliases are emitted per program)
+template <class K, class V> struct PyDictT {
+    std::vector<K> keys; std::vector<V> vals;
+    int64_t size() const { return static_cast<int64_t>(keys.size()); }
+};
+template <class K, class V> int64_t pyd_find(PyDictT<K, V> *d, const K &k) {   // ponytail: linear scan, like the monomorphic dicts
+    for (size_t i = 0; i < d->keys.size(); ++i) if (pyl_eqv(d->keys[i], k)) return static_cast<int64_t>(i);
+    return -1;
+}
+template <class K, class V> void pyd_set(PyDictT<K, V> *d, const K &k, const V &v) {
+    int64_t i = pyd_find(d, k);
+    if (i < 0) { d->keys.push_back(k); d->vals.push_back(v); } else d->vals[static_cast<size_t>(i)] = v;
+}
+template <class K, class V> V pyd_get(PyDictT<K, V> *d, const K &k) {
+    int64_t i = pyd_find(d, k);
+    if (i < 0) throw KeyError(py_value_repr(k).c_str());
+    return d->vals[static_cast<size_t>(i)];
+}
+template <class K, class V> V pyd_get_default(PyDictT<K, V> *d, const K &k, const V &v) {
+    int64_t i = pyd_find(d, k);
+    return i < 0 ? v : d->vals[static_cast<size_t>(i)];
+}
+template <class K, class V> bool pyd_contains(PyDictT<K, V> *d, const K &k) { return pyd_find(d, k) >= 0; }
+template <class D> auto *pyd_items(D *d) {                 // any dict -> list[tuple[K, V]]
+    using K = typename decltype(d->keys)::value_type;
+    using V = typename decltype(d->vals)::value_type;
+    auto *r = pyl_new<std::tuple<K, V>>();
+    for (size_t i = 0; i < d->keys.size(); ++i) r->data.emplace_back(d->keys[i], d->vals[i]);
+    return r;
 }
 
 
