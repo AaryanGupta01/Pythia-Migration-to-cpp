@@ -161,7 +161,7 @@ def bench(job, fn_py, mod):
     keep = []
     spent = 0.0
     for c in raw:                                  # drop calls the .so can't take or that are pathologically slow in Python
-        if spent > job.get("py_budget_s", 1.5) and len(keep) >= 5:
+        if spent > job.get("py_budget_s", 1.5) and keep:
             break                                  # enough samples: a 90 s benchmark of one function helps nobody
         a = codec.decode(c["args"])
         try:
@@ -203,7 +203,7 @@ def bench(job, fn_py, mod):
 
     one = run(fn_py, fresh(1))
     loops = int(max(1, min(500, 0.05 / max(one, 1e-7), 6_000_000 // weight)))
-    repeats = 5 if one < 0.5 else 3 if one < 2 else 1
+    repeats = 5 if one < 0.3 else 3 if one < 1 else 1
     py, cp = [], []
     for _ in range(repeats):
         PROTO.write("@b\n")

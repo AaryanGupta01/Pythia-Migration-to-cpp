@@ -35,7 +35,8 @@ MINGW = ("https://github.com/brechtsanders/winlibs_mingw/releases/download/16.2.
          "winlibs-x86_64-posix-seh-gcc-16.2.0-mingw-w64ucrt-14.0.0-r2.zip",
          "d5dbafc4a170e762ca6143151ec918fb9e2c72736fb14cd704abebc6bdd5276a")
 PYTHON = ("https://api.nuget.org/v3-flatcontainer/python/3.13.16/python.3.13.16.nupkg", None)
-INNO = "https://jrsoftware.org/download.php/is.exe"
+INNO = "https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe"
+INNO_PAGE = "https://jrsoftware.org/isdl.php"
 
 # what the compiler needs at run time (everything else in WinLibs is dropped)
 KEEP_BIN = {"g++.exe", "c++.exe", "gcc.exe", "cpp.exe", "as.exe", "ld.exe", "ld.bfd.exe", "ar.exe", "ranlib.exe",
@@ -260,7 +261,17 @@ def iscc() -> Path:
               Path(os.environ.get("ProgramFiles", "")) / "Inno Setup 6" / "ISCC.exe"):
         if c.exists():
             return c
-    inst = fetch(INNO, DL / "innosetup.exe")
+    inst = DL / "innosetup.exe"
+    try:
+        fetch(INNO, inst)
+    except Exception:
+        import re                                   # pinned release gone: take the current one from the download page
+        page = urllib.request.urlopen(urllib.request.Request(INNO_PAGE, headers={"User-Agent": "pythia-build"})).read().decode("latin-1")
+        url = re.search(r"https://[^\"]*innosetup-[0-9.]+\.exe", page).group(0)
+        fetch(url, inst)
+    if inst.read_bytes()[:2] != b"MZ":
+        inst.unlink()
+        raise SystemExit("the Inno Setup download is not an executable; install Inno Setup 6 manually and run again")
     run([inst, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/NOICONS", f"/DIR={DEV / 'innosetup'}"])
     c = DEV / "innosetup" / "ISCC.exe"
     if not c.exists():
