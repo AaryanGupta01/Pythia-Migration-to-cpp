@@ -164,16 +164,15 @@ def bench(job, fn_py, mod):
         if spent > job.get("py_budget_s", 1.5) and keep:
             break                                  # enough samples: a 90 s benchmark of one function helps nobody
         a = codec.decode(c["args"])
+        t0 = time.perf_counter()
         try:
             arm(5)
-            t0 = time.perf_counter()
             outcome(fn_py, a)
-            dt = time.perf_counter() - t0
-            spent += dt
         except TIMEOUT_EXC:
             continue
         finally:
             disarm()
+            spent += time.perf_counter() - t0     # timeouts count too, or a run of 5 s timeouts never trips the budget
         try:
             fn_c(*codec.decode(c["args"]))
         except fb:
