@@ -1,6 +1,9 @@
-"""Whole-program Python -> PySub conversion for the Playground: the LLM suggests, the compiler decides.
+"""Whole-program Python -> PySub conversion for the Playground: the compiler decides.
 
-The model sees the program, the PySub rules (from pysub_rules) and the exact type-checker errors; it answers with
+First the in-house converter (pythia.convert: deterministic type inference + record dicts -> classes, no LLM)
+tries; when its result type-checks and, compiled, prints what the original prints, it is the answer
+(provider "pythia", model "in-house"). Only otherwise, and only if a key is configured, the LLM gets a turn:
+the model sees the program, the PySub rules (from pysub_rules) and the exact type-checker errors; it answers with
 one complete program. Every answer is type-checked, then run under CPython next to the original on the user's
 input: a type error or any difference in the output goes back to the model for another round (<= 4).
 Programs that no rewrite can keep identical (random numbers, files, third-party libraries, ...) are refused up
@@ -15,8 +18,10 @@ from typing import Any, Dict, List, Optional
 
 from . import explain, llm
 from .pysub_rules import rules_text
+from ..convert import to_pysub
 
 MAX_ATTEMPTS = 4
+INHOUSE = {"provider": "pythia", "model": "in-house"}
 
 GUIDE = """You convert ordinary Python programs into PySub, a statically typed subset of Python that compiles to C++.
 
@@ -78,6 +83,47 @@ def status(settings: Optional[dict]) -> Dict[str, Any]:
     return {"enabled": st["enabled"], "provider": st.get("provider"), "model": st.get("model"), "hint": st.get("hint")}
 
 
+def _in_house(source: str, stdin: str, compile_fn, verify_fn):
+    """(attempt record, final result or None). The final result is set when the in-house conversion is accepted
+    (or hits a documented PySub limit no rewrite can fix)."""
+    t0 = time.perf_counter()
+    try:
+        r = to_pysub(source, stdin, check=verify_fn is None)
+    except Exception as ex:                       # never let the in-house pass block the fallback
+        return {"attempt": 1, "ok": False, "source": None, "diagnostics": [], "latency_ms": 0, **INHOUSE,
+                "error": f"in-house converter crashed: {ex!r}"}, None
+    res = compile_fn(r.source)
+    att = {"attempt": 1, "ok": False, "source": r.source, "diagnostics": res.get("diagnostics") or [],
+           "latency_ms": round((time.perf_counter() - t0) * 1000), "error": None, **INHOUSE,
+           "changes": r.changes, "problems": r.problems}
+    if not res.get("ok"):
+        return att, None
+    run = verify_fn(r.source, stdin, source) if verify_fn else None
+    unverifiable = run is None or not run.get("ok") or (run.get("python") or {}).get("timed_out")
+    if (unverifiable and not r.problems) or (not unverifiable and run.get("same")):
+        att["ok"] = True
+        return att, {"ok": True, "already": False, "source": r.source, "attempts": [att], "changes": r.changes,
+                     "behaviour_checked": not unverifiable, **INHOUSE}
+    if not unverifiable:
+        att["behaviour"] = _out_diff(run["python"], run["cpp"])
+        if run.get("explain"):                     # a PySub limit (64-bit ints, ASCII): no rewrite fixes it
+            return att, {"ok": False, "limit": True, "attempts": [att], **INHOUSE,
+                         "error": "The conversion is correct Python, but compiled it can't match your program: "
+                                  + run["explain"]}
+    return att, None
+
+
+def _in_house_reason(att: Dict[str, Any]) -> str:
+    if att.get("problems"):
+        return "; ".join(att["problems"][:3])
+    if att.get("diagnostics"):
+        d = att["diagnostics"][0]
+        return f"the PySub type checker still reports line {d['line']}: {d['msg']}"
+    if att.get("behaviour"):
+        return "compiled, the conversion prints something different from the original"
+    return att.get("error") or "unknown reason"
+
+
 def convert(source: str, settings: Optional[dict], compile_fn, stdin: str = "", verify_fn=None) -> Dict[str, Any]:
     """compile_fn(source) -> {ok, diagnostics, ...} (the Playground's compile).
     verify_fn(code, stdin, original) -> the Playground's Run result {ok, same, python, cpp, explain}: the ORIGINAL
@@ -93,17 +139,22 @@ def convert(source: str, settings: Optional[dict], compile_fn, stdin: str = "", 
         return {"ok": False, "blockers": blocks, "attempts": [], "provider": None, "model": None,
                 "error": "This program can't be compiled to C++ as a whole: " + "; ".join(str(b["what"]) for b in blocks)
                          + ". It still runs under Python (press Run)."}
+    mine, done = _in_house(source, stdin, compile_fn, verify_fn)
+    if done is not None:
+        return done
     client = llm.make_client((settings or {}).get("model"), None, settings=settings or {})
     st = status(settings)
     if client is None:
-        return {"ok": False, "error": "The AI converter is off. Add a free Groq API key in Settings (console.groq.com) "
-                                      "or set ANTHROPIC_API_KEY.", "attempts": [], **st}
+        return {"ok": False, "attempts": [mine], **INHOUSE, "problems": mine.get("problems", []),
+                "error": "The in-house converter could not finish this program: " + _in_house_reason(mine)
+                         + ". The AI converter can try: add a free Groq API key in Settings (console.groq.com) "
+                           "or set ANTHROPIC_API_KEY."}
     who = lambda: {**st, "model": getattr(client, "last_model", None) or st.get("model")}  # noqa: E731
     system = GUIDE.format(rules=rules_text())
     messages = [{"role": "user", "content": (
         "Convert this Python program to PySub.\n\n```python\n" + source.rstrip() + "\n```\n\n"
         "The PySub type checker reports these problems with it as written:\n" + _diag_text(first["diagnostics"]))}]
-    attempts: List[Dict[str, Any]] = []
+    attempts: List[Dict[str, Any]] = [mine]          # the in-house attempt first, then the model's
     for n in range(1, MAX_ATTEMPTS + 1):
         if n == 3:                       # two rounds of fixes didn't land: a fresh start beats a conversation in a rut
             messages = messages[:1]
@@ -111,19 +162,19 @@ def convert(source: str, settings: Optional[dict], compile_fn, stdin: str = "", 
         try:
             reply = client.complete(system, messages, function_source=source + "\n#program", attempt=n)
         except llm.LLMError as ex:
-            attempts.append({"attempt": n, "ok": False, "source": None, "diagnostics": [],
+            attempts.append({"attempt": n + 1, "ok": False, "source": None, "diagnostics": [],
                              "error": str(ex), "latency_ms": round((time.perf_counter() - t0) * 1000)})
             return {"ok": False, "error": str(ex), "attempts": attempts, **who()}
         latency = round((time.perf_counter() - t0) * 1000)
         code = _code(reply)
         if code is None:
-            attempts.append({"attempt": n, "ok": False, "source": None, "diagnostics": [], "latency_ms": latency,
+            attempts.append({"attempt": n + 1, "ok": False, "source": None, "diagnostics": [], "latency_ms": latency,
                              "error": "the model did not return a ```python block"})
             messages += [{"role": "assistant", "content": reply},
                          {"role": "user", "content": "Return the complete program in one ```python block only."}]
             continue
         res = compile_fn(code)
-        att = {"attempt": n, "ok": bool(res.get("ok")), "source": code,
+        att = {"attempt": n + 1, "ok": bool(res.get("ok")), "source": code,
                "diagnostics": res.get("diagnostics") or [], "latency_ms": latency, "error": None}
         attempts.append(att)
         if res.get("ok"):

@@ -66,6 +66,8 @@ class _Src:
 
 def _camel(name: str) -> str:
     name = name.strip("_")
+    irregular = {"people": "person", "children": "child", "men": "man", "women": "woman", "data": "item"}
+    name = irregular.get(name.lower(), name)
     if name.endswith("ies") and len(name) > 4:
         name = name[:-3] + "y"
     elif name.endswith("s") and not name.endswith("ss") and len(name) > 3:
