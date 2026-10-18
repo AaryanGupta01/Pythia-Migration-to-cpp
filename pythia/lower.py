@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 from . import ast_nodes as A
 from .typecheck import Ty, INT, FLOAT, BOOL, STR, NONE, ERR, TypeChecker
+from . import builtins_ext as _bx
 from . import tuples as _tup
 
 
@@ -259,6 +260,7 @@ class Lowerer:
                 kw.value = self.expr(kw.value)
             if rt is not None and rt.name == "list" and e.method in ("sort", "index", "count", "remove"):
                 self.builtin_notes(e.method, e, [rt])
+            _bx.lower_notes(self, e)
             return e
 
         if isinstance(e, A.Call):
@@ -278,6 +280,7 @@ class Lowerer:
             for kw in e.kwargs:
                 kw.value = self.expr(kw.value)
             self.builtin_notes(e.func, e, [a.ty for a in e.args])
+            _bx.lower_notes(self, e)
             return e
 
         if isinstance(e, A.Coerce):
@@ -334,6 +337,7 @@ class Lowerer:
 
     def check_binop(self, n: A.Node, op: str, lt: Ty, rt: Ty) -> None:
         both_int = lt == INT and rt == INT
+        _bx.binop_notes(self, n, op, lt, rt)
         if op in ("+", "-", "*") and both_int:
             self.note(n, D_INTWIDTH,
                       f"CPython ints are arbitrary precision; the C image uses "

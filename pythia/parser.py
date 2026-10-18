@@ -10,6 +10,7 @@ import copy
 from typing import List, Optional
 from .lexer import LexError, Token, tokenize
 from . import ast_nodes as A
+from . import parse_ext as PX
 
 
 def _chain_tail(e: A.Node) -> Optional[A.Compare]:
@@ -41,13 +42,15 @@ def _pure(e: A.Node) -> bool:
 BP = {
     "or": 1, "and": 2,
     "==": 4, "!=": 4, "<": 4, "<=": 4, ">": 4, ">=": 4,
-    "+": 6, "-": 6,
-    "*": 8, "/": 8, "//": 8, "%": 8,
-    "**": 12,                      # right-associative
+    "|": 5, "^": 6, "&": 7, "<<": 8, ">>": 8,        # Python: comparisons < | < ^ < & < shifts < + -
+    "+": 10, "-": 10,
+    "*": 12, "/": 12, "//": 12, "%": 12,
+    "**": 16,                      # right-associative
 }
 RIGHT_ASSOC = {"**"}
 AUG_OPS = {"+=": "+", "-=": "-", "*=": "*", "/=": "/",
-           "//=": "//", "%=": "%", "**=": "**"}
+           "//=": "//", "%=": "%", "**=": "**",
+           "&=": "&", "|=": "|", "^=": "^", "<<=": "<<", ">>=": ">>"}
 
 
 class Diagnostic:
@@ -68,6 +71,7 @@ class Parser:
         self.i = 0
         self.filename = filename
         self.errors: List[Diagnostic] = []
+        self.imports = PX.Imports()            # `import math` / `from math import sqrt` bindings seen so far
 
     # ---- token helpers -----------------------------------------------------
     @property
@@ -282,6 +286,8 @@ class Parser:
             return self.parse_try()
         if self.at_kw("raise"):
             return self.parse_raise()
+        if self.cur.kind == "NAME" and self.cur.value in ("import", "from") and self.toks[self.i + 1].kind == "NAME":
+            return PX.parse_import(self)
         return self.parse_simple()
 
     def parse_try(self) -> A.TryExcept:
@@ -437,7 +443,8 @@ class Parser:
                 self.next()
             self.next()
             nxt = bp if op in RIGHT_ASSOC else bp + 1
-            right = self.parse_expr(nxt)
+            pct_args = PX.parse_pct_rhs(self) if (op == "%" and isinstance(left, A.StrLit)) else None
+            right = self.parse_expr(nxt) if pct_args is None else None
             if op in ("and", "or"):
                 left = A.BoolOp(t.line, t.col, op=op, values=[left, right])
             elif op in ("==", "!=", "<", "<=", ">", ">=", "in", "not in"):
@@ -453,6 +460,10 @@ class Parser:
                     nxt = A.Compare(t.line, t.col, op=op, left=copy.deepcopy(mid), right=right)
                     left = A.BoolOp(t.line, t.col, op="and", values=[left, nxt])
                     left.chain = True
+            elif pct_args is not None:
+                left = PX.desugar_percent(self, left, pct_args, t)
+            elif op == "%" and isinstance(left, A.StrLit):
+                left = PX.desugar_percent(self, left, [right], t)
             else:
                 left = A.BinOp(t.line, t.col, op=op, left=left, right=right)
         if min_bp == 0 and self.at_kw("if"):           # body if test else orelse (loosest; orelse may nest)
@@ -464,9 +475,10 @@ class Parser:
 
     def parse_unary(self) -> A.Node:
         t = self.cur
-        if self.at_op("-", "+"):
+        if self.at_op("-", "+", "~"):
             self.next()
-            return A.UnaryOp(t.line, t.col, op=t.value, operand=self.parse_unary())
+            # -x ** 2 is -(x ** 2): the operand of a prefix operator absorbs a following `**`
+            return A.UnaryOp(t.line, t.col, op=t.value, operand=self.parse_expr(BP["**"]))
         if self.at_kw("not"):
             self.next()
             # `not` binds looser than comparisons, tighter than `and`: not a == b is not (a == b)
@@ -478,16 +490,19 @@ class Parser:
         while True:
             if self.at_op("["):
                 t = self.next()
-                idx = self.parse_exprlist()
-                self.expect("OP", "]")
-                node = A.Subscript(t.line, t.col, value=node, index=idx)
+                node = PX.parse_subscript(self, node, t)
+            elif self.at_op(".") and isinstance(node, A.Name) and node.id in self.imports.modules:
+                node = PX.module_attr(self, node, self.cur)
             elif self.at_op("."):
                 t = self.next()
                 m = self.expect("NAME").value
                 if self.at_op("("):
                     self.next()
                     args, kwargs = self._call_args()
-                    node = A.MethodCall(t.line, t.col, recv=node, method=m, args=args, kwargs=kwargs)
+                    if m == "format" and isinstance(node, A.StrLit):
+                        node = PX.desugar_format(self, node, args, kwargs, t)
+                    else:
+                        node = A.MethodCall(t.line, t.col, recv=node, method=m, args=args, kwargs=kwargs)
                 else:
                     node = A.Attribute(t.line, t.col, value=node, attr=m)
             else:
@@ -499,14 +514,15 @@ class Parser:
             self.next(); return A.IntLit(t.line, t.col, value=int(t.value))
         if t.kind == "FLOAT":
             self.next(); return A.FloatLit(t.line, t.col, value=float(t.value))
-        if t.kind == "STRING":
-            self.next(); return A.StrLit(t.line, t.col, value=t.value)
-        if t.kind == "FSTRING":
-            self.next(); return self._fstring(t)
+        if t.kind in ("STRING", "FSTRING"):
+            return PX.parse_string_run(self)             # adjacent literals (plain and f-strings) concatenate
         if t.kind == "KEYWORD" and t.value in ("True", "False"):
             self.next(); return A.BoolLit(t.line, t.col, value=(t.value == "True"))
         if t.kind == "KEYWORD" and t.value == "None":
             self.next(); return A.NoneLit(t.line, t.col)
+        if t.kind == "NAME" and t.value in self.imports.names:
+            self.next()
+            return PX.imported_name(self, t)
         if t.kind == "NAME":
             self.next()
             if self.at_op("("):
@@ -546,7 +562,9 @@ class Parser:
 
 
 # ---- helpers: call arguments, f-strings, the __main__ guard ---------------------------------------------
-_ESC = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", "'": "'", '"': '"', "0": "\0"}
+_ESC = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", "'": "'", '"': '"', "0": "\0",
+        "a": "\a", "b": "\b", "f": "\f", "v": "\v"}
+_HEXLEN = {"x": 2, "u": 4, "U": 8}
 
 
 def _relocate(n, line, col):
@@ -603,6 +621,7 @@ def _sub_expr(self, text, tok):
     except LexError as ex:
         _fstring_fail(self, tok, f"in f-string field {{{text}}}: {ex.msg}")
     sub = Parser(toks, self.filename)
+    sub.imports = self.imports
     try:
         e = sub.parse_expr()
     except _Panic:
@@ -619,7 +638,20 @@ def _fstring(self, tok):
     while i < n:
         c = raw[i]
         if c == "\\" and i + 1 < n:
-            lit += _ESC.get(raw[i + 1], "\\" + raw[i + 1])
+            e1 = raw[i + 1]
+            if e1 in "xuU" and e1 in _HEXLEN and all(h in "0123456789abcdefABCDEF" for h in raw[i + 2:i + 2 + _HEXLEN[e1]]) \
+                    and len(raw[i + 2:i + 2 + _HEXLEN[e1]]) == _HEXLEN[e1]:
+                lit += chr(int(raw[i + 2:i + 2 + _HEXLEN[e1]], 16))
+                i += 2 + _HEXLEN[e1]
+                continue
+            if e1 in "1234567" or (e1 == "0" and raw[i + 2:i + 3] in tuple("01234567")):
+                j = i + 1
+                while j < n and j < i + 4 and raw[j] in "01234567":
+                    j += 1
+                lit += chr(int(raw[i + 1:j], 8))
+                i = j
+                continue
+            lit += _ESC.get(e1, "\\" + e1)
             i += 2
             continue
         if raw.startswith("{{", i) or raw.startswith("}}", i):
@@ -663,14 +695,16 @@ def _fstring(self, tok):
             spec = rest[1:]
         if expr_text.rstrip().endswith("=") and not expr_text.rstrip().endswith(("==", "!=", "<=", ">=")):
             _fstring_fail(self, tok, "f-string self-documenting fields {x=} are outside the PySub subset")
-        if conv not in (None, "s"):
-            _fstring_fail(self, tok, f"f-string conversion '!{conv}' is outside the PySub subset; use str()")
+        if conv not in (None, "s", "r"):
+            _fstring_fail(self, tok, f"f-string conversion '!{conv}' is outside the PySub subset (use !r, !s or none)")
         if spec and "{" in spec:
             _fstring_fail(self, tok, "nested format specs in f-strings are outside the PySub subset")
         if lit:
             parts.append(A.StrLit(tok.line, tok.col, value=lit))
             lit = ""
         e = _sub_expr(self, expr_text, tok)
+        if conv == "r":
+            e = A.Call(tok.line, tok.col, func="repr", args=[e])
         if spec:
             parts.append(A.Call(tok.line, tok.col, func="format", args=[e, A.StrLit(tok.line, tok.col, value=spec)]))
         else:
