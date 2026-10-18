@@ -374,6 +374,8 @@ class TypeChecker:
             self.loop_depth += 1
             self.block(s.body)
             self.loop_depth -= 1
+        elif isinstance(s, A.ForEach) and _comp().is_special_foreach(self, s):
+            _comp().check_foreach(self, s)
         elif isinstance(s, A.ForEach):
             t = self.synth(s.iter)
             if t.name == "list":
@@ -743,6 +745,8 @@ class TypeChecker:
         if isinstance(e, A.Call):
             return self.synth_call(e)
 
+        if _comp().is_comp_node(e):
+            return _comp().synth(self, e)
         return self.err(e, f"unsupported expression {type(e).__name__}")
 
     def binop_result(self, node: A.Node, op: str, lt: Ty, rt: Ty) -> Ty:
@@ -777,6 +781,9 @@ class TypeChecker:
             self.err(a, f"{what}: expected {want}, found {got}")
 
     def synth_method(self, e: A.MethodCall) -> Ty:
+        hooked = _comp().synth_method_hook(self, e)
+        if hooked is not None:
+            return hooked
         recv = self.synth(e.recv)
         self.check_kwargs(e, {"reverse"} if (recv.name == "list" and e.method == "sort") else set())
         if recv.name == "list" and e.method in ("pop", "insert", "extend", "clear", "reverse", "copy", "index",
@@ -909,6 +916,9 @@ class TypeChecker:
 
     def synth_call(self, e: A.Call) -> Ty:
         name = e.func
+        hooked = _comp().synth_call_hook(self, e)
+        if hooked is not None:
+            return hooked
         self.check_kwargs(e, {"print": {"sep", "end"}, "sorted": {"reverse"}}.get(name, set()))
         if name == "print":
             for a in e.args:
@@ -1074,6 +1084,11 @@ class TypeChecker:
                 self.err(a, f"argument {i + 1} of {name}(): expected {want}, "
                             f"found {got}")
         return sig.ret
+
+
+def _comp():
+    from . import comprehensions          # comprehensions, generators, key lambdas, enumerate/zip/reversed
+    return comprehensions
 
 
 def typecheck(mod: A.Module, filename: str = "<input>"):

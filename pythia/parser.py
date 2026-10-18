@@ -338,9 +338,11 @@ class Parser:
 
     def parse_for(self) -> A.Node:
         t = self.expect("KEYWORD", "for")
-        var = self.expect("NAME").value
+        targets = _targets(self)
+        var = targets if isinstance(targets, str) else _first_name(targets)
+        targets = None if isinstance(targets, str) else targets
         self.expect("KEYWORD", "in")
-        if self.at_kw("range"):
+        if self.at_kw("range") and targets is None:
             self.next()
             self.expect("OP", "(")
             args = [self.parse_expr()]
@@ -364,7 +366,7 @@ class Parser:
         it = self.parse_expr()
         self.expect("OP", ":")
         return A.ForEach(line=t.line, col=t.col, var=var, iter=it,
-                         body=self.parse_block())
+                         body=self.parse_block(), targets=targets)
 
     def parse_simple(self) -> A.Node:
         t = self.cur
@@ -500,6 +502,10 @@ class Parser:
             self.next(); return A.BoolLit(t.line, t.col, value=(t.value == "True"))
         if t.kind == "KEYWORD" and t.value == "None":
             self.next(); return A.NoneLit(t.line, t.col)
+        if t.kind == "NAME" and t.value == "lambda":
+            return _lambda(self)
+        if t.kind == "KEYWORD" and t.value == "range" and self.toks[self.i + 1].value == "(":
+            t = Token("NAME", "range", t.line, t.col)      # range(...) as a value: comprehension / zip / reversed source
         if t.kind == "NAME":
             self.next()
             if self.at_op("("):
@@ -510,6 +516,8 @@ class Parser:
         if self.at_op("("):
             self.next()
             e = self.parse_expr()
+            if self.at_kw("for"):
+                return _comp_tail(self, t, e, ")")
             self.expect("OP", ")")
             e.paren = True                             # (a < b) < c is NOT a chain
             return e
@@ -518,6 +526,8 @@ class Parser:
             elts = []
             while not self.at_op("]"):
                 elts.append(self.parse_expr())
+                if len(elts) == 1 and self.at_kw("for"):
+                    return _comp_tail(self, t, elts[0], "]")
                 if self.at_op(","):
                     self.next()
                 else:
@@ -529,8 +539,13 @@ class Parser:
             keys, vals = [], []
             while not self.at_op("}"):
                 k = self.parse_expr()
+                if not keys and self.at_kw("for"):
+                    self.error("set comprehensions are outside the PySub subset (PySub has no sets)")
+                    raise _Panic()
                 self.expect("OP", ":")
                 v = self.parse_expr()
+                if not keys and self.at_kw("for"):
+                    return _comp_tail(self, t, (k, v), "}")
                 keys.append(k); vals.append(v)
                 if self.at_op(","):
                     self.next()
@@ -573,12 +588,87 @@ def _call_args(self):
                 self.error("positional argument follows keyword argument")
                 raise _Panic()
             args.append(self.parse_expr())
+            if self.at_kw("for"):                      # f(x for x in xs): a bare generator argument
+                args[-1] = _comp_tail(self, self.cur, args[-1], None)
         if self.at_op(","):
             self.next()
         else:
             break
+    _check_bare_genexp(self, args, kwargs)
     self.expect("OP", ")")
     return args, kwargs
+
+
+# ---- comprehensions, generator expressions, lambdas, tuple loop targets ----------------------------------
+def _target1(self):
+    if self.at_op("(", "["):
+        close = ")" if self.next().value == "(" else "]"
+        t = _targets(self)
+        self.expect("OP", close)
+        return t
+    return self.expect("NAME").value
+
+
+def _targets(self):
+    """for-loop target: NAME, or a comma list of (possibly parenthesised) targets -> str | nested list."""
+    items, trailing = [_target1(self)], False
+    while self.at_op(","):
+        self.next()
+        if self.at_kw("in") or self.at_op(")", "]"):
+            trailing = True
+            break
+        items.append(_target1(self))
+    return items[0] if len(items) == 1 and not trailing else items
+
+
+def _first_name(t):
+    return t if isinstance(t, str) else _first_name(t[0])
+
+
+def _comp_tail(self, open_tok, elt, close):
+    """After `[elt`, `{k: v`, `(elt` or a bare call argument: parse the `for ... in ... if ...` clauses."""
+    gens = []
+    while self.at_kw("for"):
+        ft = self.next()
+        target = _targets(self)
+        self.expect("KEYWORD", "in")
+        it = self.parse_expr(1)                        # an `if` here is a filter, not a conditional expression
+        ifs = []
+        while self.at_kw("if"):
+            self.next()
+            ifs.append(self.parse_expr(1))
+        gens.append(A.CompFor(ft.line, ft.col, target=target, iter=it, ifs=ifs))
+    if close is not None:
+        self.expect("OP", close)
+    ln, cl = open_tok.line, open_tok.col
+    if close == "]":
+        return A.ListComp(ln, cl, elt=elt, gens=gens)
+    if close == "}":
+        return A.DictComp(ln, cl, key=elt[0], value=elt[1], gens=gens)
+    g = A.GenExp(ln, cl, elt=elt, gens=gens)
+    if close is None:
+        g.line, g.col = elt.line, elt.col
+        g.bare = True
+    return g
+
+
+def _check_bare_genexp(self, args, kwargs):
+    if len(args) + len(kwargs) > 1 and any(getattr(a, "bare", False) for a in args):
+        self.error("Generator expression must be parenthesized")
+        raise _Panic()
+
+
+def _lambda(self):
+    t = self.next()                                    # 'lambda'
+    params = []
+    while not self.at_op(":"):
+        params.append(self.expect("NAME").value)
+        if self.at_op(","):
+            self.next()
+        else:
+            break
+    self.expect("OP", ":")
+    return A.Lambda(t.line, t.col, params=params, body=self.parse_expr())
 
 
 def _is_main_guard(self, st) -> bool:

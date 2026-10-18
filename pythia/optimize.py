@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
 from . import ast_nodes as A
 from .typecheck import INT
+from . import comprehensions as _comp
 
 Interval = Optional[Tuple[int, int]]     # None = unknown
 
@@ -93,6 +94,7 @@ class NameCollector:
                 NameCollector._walk(s.body, out)
             elif isinstance(s, (A.ForRange, A.ForEach)):
                 out.add(s.var)
+                out.update(_comp.loop_names(s))
                 NameCollector._walk(s.body, out)
             elif isinstance(s, A.TryExcept):
                 NameCollector._walk(s.body, out)
@@ -125,6 +127,8 @@ def _references(expr: Optional[A.Node], name: str) -> bool:
         return _references(expr.value, name) or _references(expr.index, name)
     if isinstance(expr, A.Attribute):
         return _references(expr.value, name)
+    if _comp.is_comp_node(expr):
+        return _comp.mentions(expr, name)
     return False
 
 
@@ -203,6 +207,8 @@ class GuardElider:
                 self.eval(k, env)
                 self.eval(v, env)
             return None
+        if _comp.is_comp_node(e):
+            return _comp.eval_interval(self, e, env)
         return None
 
     # ---- statements ---------------------------------------------------
@@ -287,11 +293,11 @@ class GuardElider:
             carried = NameCollector.collect(s.body) - {s.var}
             body_env = dict(env)
             body_env[s.var] = None
-            for n in carried:
+            for n in carried | set(_comp.loop_names(s)):
                 body_env[n] = None
             self.block(s.body, body_env)
             env[s.var] = None
-            for n in carried:
+            for n in carried | set(_comp.loop_names(s)):
                 env[n] = None
 
         elif isinstance(s, A.TryExcept):
@@ -377,6 +383,8 @@ def _scan_literal_call_sites(mod: A.Module) -> Dict[str, Dict[str, Interval]]:
         if isinstance(e, A.Call):
             for a in e.args:
                 walk_expr(a)
+            for kw in e.kwargs:                 # key=lambda ...: calls inside are call sites too
+                walk_expr(kw.value)
             visit_call(e)
         elif isinstance(e, A.Coerce):
             walk_expr(e.value)
@@ -395,6 +403,8 @@ def _scan_literal_call_sites(mod: A.Module) -> Dict[str, Dict[str, Interval]]:
             walk_expr(e.recv)
             for a in e.args:
                 walk_expr(a)
+            for kw in e.kwargs:
+                walk_expr(kw.value)
         elif isinstance(e, A.Subscript):
             walk_expr(e.value); walk_expr(e.index)
         elif isinstance(e, A.ListLit):
@@ -405,6 +415,9 @@ def _scan_literal_call_sites(mod: A.Module) -> Dict[str, Dict[str, Interval]]:
                 walk_expr(k); walk_expr(v)
         elif isinstance(e, A.Attribute):
             walk_expr(e.value)
+        elif _comp.is_comp_node(e) or isinstance(e, A.CompFor):
+            for c in _comp.children(e):
+                walk_expr(c)
 
     def walk_stmts(stmts: List[A.Node]) -> None:
         for s in stmts:

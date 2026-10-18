@@ -162,6 +162,41 @@ class Subscript(Node):
     index: Optional[Node] = None
 
 
+# ---- comprehensions, generator expressions, key lambdas (see comprehensions.py) ----
+@dataclass
+class CompFor(Node):
+    """One `for target in iter if c1 if c2` clause. target: a name, or a (nested) list of names."""
+    target: Any = None
+    iter: Optional[Node] = None
+    ifs: List[Node] = field(default_factory=list)
+
+
+@dataclass
+class ListComp(Node):
+    elt: Optional[Node] = None
+    gens: List[CompFor] = field(default_factory=list)
+
+
+@dataclass
+class DictComp(Node):
+    key: Optional[Node] = None
+    value: Optional[Node] = None
+    gens: List[CompFor] = field(default_factory=list)
+
+
+@dataclass
+class GenExp(Node):
+    elt: Optional[Node] = None
+    gens: List[CompFor] = field(default_factory=list)
+
+
+@dataclass
+class Lambda(Node):
+    params: List[str] = field(default_factory=list)
+    body: Optional[Node] = None
+    param_tys: List[Any] = field(default_factory=list)   # filled by typecheck (key functions only)
+
+
 # ------------------------------------------------------------- statements
 @dataclass
 class Assign(Node):
@@ -215,6 +250,7 @@ class ForEach(Node):
     var: str = ""
     iter: Optional[Node] = None
     body: List[Node] = field(default_factory=list)
+    targets: Any = None       # `for i, x in ...`: nested list of names (var is then the first one)
 
 
 @dataclass

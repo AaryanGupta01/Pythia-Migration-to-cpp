@@ -153,6 +153,9 @@ class Lowerer:
     def expr(self, e: Optional[A.Node]) -> Optional[A.Node]:
         if e is None:
             return None
+        if isinstance(e, (A.ListComp, A.DictComp, A.GenExp, A.Lambda)):
+            from .comprehensions import lower_expr
+            return lower_expr(self, e)
         if isinstance(e, A.BinOp):
             e.left = self.expr(e.left)
             e.right = self.expr(e.right)
