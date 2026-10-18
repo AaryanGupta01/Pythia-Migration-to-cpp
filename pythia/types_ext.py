@@ -935,3 +935,77 @@ def finish(tc) -> None:
     tc.mod.global_writers = set()
     for f in list(tc.mod.funcs) + [m for c in tc.mod.classes for m in c.methods]:
         tc.mod.global_writers |= getattr(f, "global_names", set())
+
+
+# ------------------------------------------------------------------ lowering (lower.Lowerer hooks)
+def lower_defaults(lw, mod) -> None:
+    for f in list(mod.funcs) + [m for c in mod.classes for m in c.methods]:
+        for p in f.params:
+            if p.default is not None and p.ty is not None:
+                p.default = lw.coerce(lw.expr(p.default), p.ty)
+
+
+def lower_coerce(lw, e, want):
+    """None = not handled here."""
+    if e.ty is None or want is None or e.ty is ERR or want is ERR:
+        return None
+    if want.name == "optional":
+        if e.ty == want:
+            return e
+        if e.ty == NONE:
+            e.ty = want
+            return e
+        if e.ty.name == "optional":
+            return e
+        inner = lw.coerce(e, want.elem)
+        if not opt_scalar(want):
+            return inner
+        c = A.Coerce(e.line, e.col, value=inner, to=want)
+        c.ty = want
+        return c
+    if is_class(want) and e.ty == NONE:
+        e.ty = want
+        return e
+    if e.ty.name == "set" and e.ty.elem is None and want.name == "set":
+        e.ty = want
+        return e
+    return None
+
+
+def lower_expr(lw, e):
+    """None = let the original lowering handle e."""
+    if isinstance(e, A.SetLit):
+        e.elts = [lw.coerce(lw.expr(x), e.ty.elem) for x in e.elts]
+        return e
+    if isinstance(e, A.DefaultRef):
+        return e
+    if isinstance(e, A.IfExp) and e.ty is not None and e.ty.name == "optional":
+        e.test = lw.expr(e.test)
+        e.body, e.orelse = lw.coerce(lw.expr(e.body), e.ty), lw.coerce(lw.expr(e.orelse), e.ty)
+        return e
+    if isinstance(e, A.Call) and e.func == "isinstance":
+        e.args[0] = lw.expr(e.args[0])
+        return e
+    if isinstance(e, A.Compare):
+        if getattr(e, "static", None) is not None:
+            if isinstance(e.left, A.Call) and e.left.func == "type":
+                e.left.args[0] = lw.expr(e.left.args[0])
+                e.right = lw.expr(e.right)
+            elif isinstance(e.right, A.Call) and e.right.func == "type":
+                e.right.args[0] = lw.expr(e.right.args[0])
+                e.left = lw.expr(e.left)
+            else:
+                e.left, e.right = lw.expr(e.left), lw.expr(e.right)
+            return e
+        rt = e.right.ty
+        if rt is not None and rt.name == "set" and e.op in ("in", "not in"):
+            e.left, e.right = lw.coerce(lw.expr(e.left), rt.elem), lw.expr(e.right)
+            return e
+        return None
+    if isinstance(e, A.MethodCall) and e.recv.ty is not None and e.recv.ty.name == "set":
+        e.recv = lw.expr(e.recv)
+        el = e.recv.ty.elem
+        e.args = [lw.coerce(lw.expr(a), el) if e.method in ("add", "remove", "discard") else lw.expr(a)
+                  for a in e.args]
+        return e
+    return None

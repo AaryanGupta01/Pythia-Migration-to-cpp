@@ -6,7 +6,10 @@
 #include <cstdint>
 #include <exception>
 #include <limits>
+#include <functional>
 #include <memory>
+#include <optional>
+#include <unordered_set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -249,6 +252,135 @@ template <class T> T pyl_max(PyList<T> *l) {
     T r = l->data[0]; for (size_t i = 1; i < l->data.size(); ++i) if (pyl_lt(r, l->data[i])) r = l->data[i]; return r;
 }
 
+
+// ---- PySub 1.3: None, nullable objects, module-level names, mutable defaults ---------------------------------
+inline void py_print_none() { py_print_str(pystr_lit("None")); }
+[[noreturn]] inline void py_none_attr(const char *attr, bool set) {
+    std::string m = std::string("'NoneType' object has no attribute '") + attr + "'";
+    if (set && py_minor >= 13) m += " and no __dict__ for setting new attributes";
+    throw PythonException("AttributeError", m);
+}
+// obj.attr / obj.method(...) on a class reference: None raises AttributeError exactly like CPython
+template <class P> inline const P &py_nn(const P &p, const char *attr) { if (!p) py_none_attr(attr, false); return p; }
+template <class P> inline const P &py_nn_set(const P &p, const char *attr) { if (!p) py_none_attr(attr, true); return p; }
+inline void py_global_ok(bool ok, const char *name) {
+    if (!ok) throw PythonException("NameError", std::string("name '") + name + "' is not defined");
+}
+// a mutable default value lives for the whole program, even when first built inside a library-call arena
+struct ArenaPause {
+    bool saved;
+    ArenaPause() : saved(arena_active) { arena_active = false; }
+    ~ArenaPause() { arena_active = saved; }
+};
+
+// ---- set[T] (T = int64_t / double / bool / PyStr *).  No operation exposes iteration order. ---------------
+struct PyStrHash { size_t operator()(PyStr *s) const { return std::hash<std::string>()(s->data); } };
+struct PyStrEq { bool operator()(PyStr *a, PyStr *b) const { return a->data == b->data; } };
+template <class T> struct py_hash { using H = std::hash<T>; using E = std::equal_to<T>; };
+template <> struct py_hash<PyStr *> { using H = PyStrHash; using E = PyStrEq; };
+template <class T> struct PySet {
+    std::unordered_set<T, typename py_hash<T>::H, typename py_hash<T>::E> s;
+    int64_t size() const { return static_cast<int64_t>(s.size()); }
+};
+template <class T> PySet<T> *pyset_new() { return arena_new<PySet<T>>(); }
+template <class T, class U> void pyset_add(PySet<T> *s, const U &v) { s->s.insert(static_cast<T>(v)); }
+template <class T, class U> bool pyset_contains(PySet<T> *s, const U &v) { return s->s.count(static_cast<T>(v)) != 0; }
+template <class T, class U> void pyset_discard(PySet<T> *s, const U &v) { s->s.erase(static_cast<T>(v)); }
+template <class T, class U> void pyset_remove(PySet<T> *s, const U &u) {
+    T v = static_cast<T>(u);
+    if (!s->s.erase(v)) throw KeyError(py_value_repr(v).c_str());
+}
+template <class T> void pyset_clear(PySet<T> *s) { s->s.clear(); }
+template <class T> PySet<T> *pyset_copy(PySet<T> *a) { auto *r = pyset_new<T>(); r->s = a->s; return r; }
+// set(x) / s.update(x) / s.union(x) ...: x is a set or a list
+template <class T, class U> PySet<T> *pyset_of(PySet<U> *o) { auto *r = pyset_new<T>(); for (const U &x : o->s) r->s.insert(static_cast<T>(x)); return r; }
+template <class T, class U> PySet<T> *pyset_of(PyList<U> *o) { auto *r = pyset_new<T>(); for (const U &x : o->data) r->s.insert(static_cast<T>(x)); return r; }
+template <class T> PySet<T> *pyset_of_chars(PyStr *s) {
+    auto *r = pyset_new<T>();
+    for (size_t i = 0; i < s->data.size(); ++i) r->s.insert(pystr_new(s->data.data() + i, 1));
+    return r;
+}
+template <class T, class D> PySet<T> *pyset_of_keys(D *d) { auto *r = pyset_new<T>(); for (const auto &k : d->keys) r->s.insert(k); return r; }
+template <class T> PySet<T> *pyset_ior(PySet<T> *a, PySet<T> *b) { if (a != b) for (const T &x : b->s) a->s.insert(x); return a; }
+template <class T> PySet<T> *pyset_iand(PySet<T> *a, PySet<T> *b) {
+    for (auto it = a->s.begin(); it != a->s.end();) it = b->s.count(*it) ? std::next(it) : a->s.erase(it);
+    return a;
+}
+template <class T> PySet<T> *pyset_isub(PySet<T> *a, PySet<T> *b) {
+    if (a == b) { a->s.clear(); return a; }
+    for (const T &x : b->s) a->s.erase(x);
+    return a;
+}
+template <class T> PySet<T> *pyset_ixor(PySet<T> *a, PySet<T> *b) {
+    if (a == b) { a->s.clear(); return a; }
+    for (const T &x : b->s) if (!a->s.erase(x)) a->s.insert(x);
+    return a;
+}
+template <class T> PySet<T> *pyset_or(PySet<T> *a, PySet<T> *b) { return pyset_ior(pyset_copy(a), b); }
+template <class T> PySet<T> *pyset_and(PySet<T> *a, PySet<T> *b) { return pyset_iand(pyset_copy(a), b); }
+template <class T> PySet<T> *pyset_sub(PySet<T> *a, PySet<T> *b) { return pyset_isub(pyset_copy(a), b); }
+template <class T> PySet<T> *pyset_xor(PySet<T> *a, PySet<T> *b) { return pyset_ixor(pyset_copy(a), b); }
+template <class T> bool pyset_le(PySet<T> *a, PySet<T> *b) {
+    if (a->s.size() > b->s.size()) return false;
+    for (const T &x : a->s) if (!b->s.count(x)) return false;
+    return true;
+}
+template <class T> bool pyset_eq(PySet<T> *a, PySet<T> *b) { return a->s.size() == b->s.size() && pyset_le(a, b); }
+template <class T> bool pyset_lt(PySet<T> *a, PySet<T> *b) { return a->s.size() < b->s.size() && pyset_le(a, b); }
+template <class T> bool pyset_disjoint(PySet<T> *a, PySet<T> *b) {
+    for (const T &x : a->s) if (b->s.count(x)) return false;
+    return true;
+}
+template <class T> PyList<T> *pyset_sorted(PySet<T> *s, bool rev) {
+    auto *r = pyl_new<T>();
+    r->data.assign(s->s.begin(), s->s.end());
+    pyl_sort(r, rev);
+    return r;
+}
+
+// ---- dict[K, V] for any V (lists, dicts, sets, objects): one alias + functions per type, like PYRT_DECL_DICT --
+template <class K, class V> struct PyDictG {
+    std::vector<K> keys;
+    std::vector<V> vals;
+    int64_t size() const { return static_cast<int64_t>(keys.size()); }
+};
+template <class D, class K> int64_t pyd_find(D *d, const K &k) {
+    for (size_t i = 0; i < d->keys.size(); ++i) if (pyl_eqv(d->keys[i], k)) return static_cast<int64_t>(i);
+    return -1;
+}
+#define PYRT_DICTG(NAME, KT, VT) \
+    using NAME = PyDictG<KT, VT>; \
+    inline NAME *NAME##_new() { return arena_new<NAME>(); } \
+    inline void NAME##_set(NAME *d, KT k, VT v) { \
+        int64_t i = pyd_find(d, k); \
+        if (i < 0) { d->keys.push_back(k); d->vals.push_back(v); } else d->vals[static_cast<size_t>(i)] = v; } \
+    inline VT NAME##_get(NAME *d, KT k) { \
+        int64_t i = pyd_find(d, k); \
+        if (i < 0) throw KeyError(py_value_repr(k).c_str()); \
+        return d->vals[static_cast<size_t>(i)]; } \
+    inline VT NAME##_get_default(NAME *d, KT k, VT v) { int64_t i = pyd_find(d, k); return i < 0 ? v : d->vals[static_cast<size_t>(i)]; } \
+    inline bool NAME##_contains(NAME *d, KT k) { return pyd_find(d, k) >= 0; }
+
+// repr() of numbers, str, lists of those and dicts of any of these (print(d) for dict[K, list[int]] etc.)
+inline void py_repr_into(std::string &o, int64_t v) { o += std::to_string(v); }
+inline void py_repr_into(std::string &o, double v) { o += py_float_repr(v); }
+inline void py_repr_into(std::string &o, bool v) { o += v ? "True" : "False"; }
+inline void py_repr_into(std::string &o, PyStr *v) { o += py_repr_str(v->data); }
+template <class T> void py_repr_into(std::string &o, const std::optional<T> &v) { if (v) py_repr_into(o, *v); else o += "None"; }
+template <class T> void py_repr_into(std::string &o, PyList<T> *l) {
+    o += '[';
+    for (size_t i = 0; i < l->data.size(); ++i) { if (i) o += ", "; py_repr_into(o, l->data[i]); }
+    o += ']';
+}
+template <class D> auto py_repr_into(std::string &o, D *d) -> decltype((void)d->keys, void()) {
+    o += '{';
+    for (size_t i = 0; i < d->keys.size(); ++i) {
+        if (i) o += ", ";
+        py_repr_into(o, d->keys[i]); o += ": "; py_repr_into(o, d->vals[i]);
+    }
+    o += '}';
+}
+template <class T> void py_print_repr(const T &v) { std::string s; py_repr_into(s, v); py_print_str(pystr_new(s.data(), static_cast<int64_t>(s.size()))); }
 
 } // namespace pyrt
 using namespace pyrt;

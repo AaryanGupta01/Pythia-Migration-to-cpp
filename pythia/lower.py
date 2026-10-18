@@ -71,6 +71,7 @@ class Lowerer:
         for f in mod.funcs:
             self.block(f.body)
         self.block(mod.main)
+        _x.lower_defaults(self, mod)
         if mod.classes:
             self.notes.append(FidelityNote(
                 0, 0, D_FIELDINIT,
@@ -153,6 +154,9 @@ class Lowerer:
     def expr(self, e: Optional[A.Node]) -> Optional[A.Node]:
         if e is None:
             return None
+        ext = _x.lower_expr(self, e)          # sets, None tests, isinstance, Optional branches
+        if ext is not None:
+            return ext
         if isinstance(e, A.BinOp):
             e.left = self.expr(e.left)
             e.right = self.expr(e.right)
@@ -307,6 +311,9 @@ class Lowerer:
             return e
         if e.ty == want:
             return e
+        ext = _x.lower_coerce(self, e, want)  # T -> Optional[T], None -> object, set() -> set[T]
+        if ext is not None:
+            return ext
         if e.ty.name in ("bool", "int", "float") and want.name in ("bool", "int", "float"):
             c = A.Coerce(e.line, e.col, value=e, to=want)
             c.ty = want
@@ -357,6 +364,9 @@ class Lowerer:
                       "py_pow_i64 raises PythiaSemanticError at run time; the "
                       "type checker cannot see the exponent's sign. DIVERGENT.",
                       "divergent")
+
+
+from . import types_ext as _x  # noqa: E402
 
 
 def lower(mod: A.Module, tc: TypeChecker) -> List[FidelityNote]:
