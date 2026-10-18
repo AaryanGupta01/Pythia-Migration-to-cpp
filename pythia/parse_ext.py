@@ -102,15 +102,24 @@ def install(Parser, Panic, Diagnostic) -> None:
         te.args = None
         if self.at_op("["):
             self.next()
-            args: List[A.TypeExpr] = [self.parse_type()]
+            args: List[A.TypeExpr] = [_type_arg(self)]
             while self.at_op(","):
                 self.next()
-                args.append(self.parse_type())
+                args.append(_type_arg(self))
             self.expect("OP", "]")
             te.args = args
+            te.params = list(args)                   # tuple[T1, T2, ...] (tuples.py)
             te.param = args[0]
             te.param2 = args[1] if len(args) > 1 else None
         return te
+
+    def _type_arg(self) -> A.TypeExpr:
+        if self.at_op("."):                          # tuple[T, ...]: parsed so the checker can reject it clearly
+            d = self.cur
+            for _ in range(3):
+                self.expect("OP", ".")
+            return A.TypeExpr(line=d.line, col=d.col, name="...")
+        return self.parse_type()
 
     def _parse_type_ext(self) -> A.TypeExpr:
         te = _type_atom(self)

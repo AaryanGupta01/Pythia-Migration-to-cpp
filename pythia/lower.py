@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 from . import ast_nodes as A
 from .typecheck import Ty, INT, FLOAT, BOOL, STR, NONE, ERR, TypeChecker
+from . import tuples as _tup
 
 
 @dataclass
@@ -133,6 +134,8 @@ class Lowerer:
             self.block(s.body)
         elif isinstance(s, A.ForEach):
             s.iter = self.expr(s.iter)
+            if s.iter.ty is not None and s.iter.ty.name == "tuple":    # for x in (1, 2, 3): iterate a list copy
+                s.iter = _tup.tolist_node(s.iter)
             self.block(s.body)
         elif isinstance(s, A.TryExcept):
             self.note(s, D_EXC,
@@ -197,6 +200,10 @@ class Lowerer:
 
         if isinstance(e, A.IfExp):
             e.test, e.body, e.orelse = self.expr(e.test), self.expr(e.body), self.expr(e.orelse)
+            return e
+
+        if isinstance(e, A.TupleLit):            # tuple types match exactly: nothing to coerce
+            e.elts = [self.expr(x) for x in e.elts]
             return e
 
         if isinstance(e, A.UnaryOp):

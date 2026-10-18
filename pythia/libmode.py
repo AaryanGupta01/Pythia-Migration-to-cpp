@@ -28,7 +28,7 @@ from functools import lru_cache
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from . import ast_nodes as A
-from .emit_c import LIST_RT, dict_rt_name
+from .emit_c import LIST_RT, dict_rt_name, list_rt_name
 from .lexer import LexError
 from .lower import FidelityNote, lower
 from .optimize import elide_guards
@@ -190,7 +190,7 @@ def _walk(n: A.Node):
 
 
 def _is_container(t: Optional[Ty]) -> bool:
-    return _lx.is_container(t)
+    return _lx.is_container(t) or (t is not None and t.name == "tuple")   # a tuple may hold a list
 
 
 def _roots(e: Optional[A.Node]) -> Set[str]:
@@ -207,13 +207,16 @@ def _roots(e: Optional[A.Node]) -> Set[str]:
         return set().union(*[_roots(v) for v in e.values])
     if isinstance(e, A.IfExp):
         return _roots(e.body) | _roots(e.orelse)
-    if isinstance(e, A.ListLit):
+    if isinstance(e, (A.ListLit, A.TupleLit)):
         return set().union(*[_roots(v) for v in e.elts]) if e.elts else set()
     if isinstance(e, A.MethodCall) and e.method == "pop":
         return _roots(e.recv)
     if isinstance(e, A.Call) and _is_container(e.ty) and e.args:
         return set().union(*[_roots(a) for a in e.args])
     return set()
+
+
+_MUTATORS = ("append", "pop", "insert", "extend", "clear", "reverse", "remove", "sort")
 
 
 def _mutated_params(mod: A.Module) -> Dict[str, Set[int]]:
@@ -262,7 +265,7 @@ def _mutated_params(mod: A.Module) -> Dict[str, Set[int]]:
                     elif isinstance(n.target, A.Attribute):
                         hits |= hit(n.value)
                 elif isinstance(n, A.MethodCall):
-                    if n.method in _lx.MUTATORS and _is_container(n.recv.ty):
+    return _lx.is_container(t) or (t is not None and t.name == "tuple")   # a tuple may hold a list
                         hits |= hit(n.recv)
                         for a in n.args:
                             hits |= hit(a)
@@ -332,6 +335,19 @@ def _trait(t: Optional[Ty]) -> Optional[str]:
             return f"pyb::List<{_SCALAR[e.name]}, {LIST_RT[e.name]}>"
         if e.name == "list" and e.elem is not None and e.elem.name in LIST_RT:
             return f"pyb::List2<{_trait(e)}>"
+        if e.name == "tuple" and _trait(e) is not None:
+            return f"pyb::List<{_trait(e)}, {list_rt_name(t)}>"
+    if t.name == "tuple" and t.elts is not None:     # immutable contents only: a Tuple never needs write-back
+        if any(x.name in ("list", "dict") for x in t.elts):
+            return None
+        inner = [_trait(x) for x in t.elts]
+        if all(inner):
+            return "pyb::Tuple<" + ", ".join(inner) + ">"
+        return None
+    if t.name == "dict" and t.key is not None and t.key.name == "tuple" or \
+            (t.name == "dict" and t.elem is not None and t.elem.name == "tuple"):
+        k, v = _trait(t.key), _trait(t.elem)
+        return f"pyb::Dict<{k}, {v}, {dict_rt_name(t)}>" if k and v else None
     if t.name == "dict" and t.key is not None and t.elem is not None:
         if t.key.name in ("int", "str") and t.elem.name in _SCALAR:
             return f"pyb::Dict<{_SCALAR[t.key.name]}, {_SCALAR[t.elem.name]}, {dict_rt_name(t)}>"

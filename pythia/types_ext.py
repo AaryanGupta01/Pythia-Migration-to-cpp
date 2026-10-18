@@ -119,6 +119,7 @@ def _te(src: A.TypeExpr, name: str, args) -> A.TypeExpr:
     te.args = args
     te.param = args[0] if args else None
     te.param2 = args[1] if args and len(args) > 1 else None
+    te.params = list(args or [])
     return te
 
 
@@ -205,6 +206,9 @@ def resolve_type(tc, te: A.TypeExpr) -> Optional[Ty]:
         k, v = tc.resolve_type(args[0]), tc.resolve_type(args[1])
         if k is ERR or v is ERR:
             return ERR
+        if k.name == "tuple" or v.name == "tuple":
+            from . import tuples
+            return tuples.resolve_dict(tc, te, k, v)
         if k.name not in ("int", "str"):
             return _err(tc, te, f"dict key type must be int or str; found {k}")
         if v.name in ("optional", "None"):
@@ -515,6 +519,8 @@ def check_stmt(tc, s) -> bool:
         _set_narrow(tc, {**pre, **({} if _has_break(s.body) else ff)})
         return True
     if isinstance(s, A.ForEach):
+        from . import tuples
+        tuples.mark_items(s.iter)             # `for k, v in d.items()` is allowed (tuples.py)
         t = tc.synth(s.iter)
         if t.name in ("set", "optional"):
             for k in assigned_names([s]):
@@ -887,6 +893,9 @@ def synth_call(tc, e) -> Optional[Ty]:
             return set_of(t.key)
         return _err(tc, e.args[0], f"set() takes a list, set, str or dict of int/float/bool/str, found {t}")
     if name in ("len", "sorted", "list", "print", "str", "min", "max", "sum", "bool") and e.args:
+        if name in ("list", "sorted"):
+            from . import tuples
+            tuples.mark_items(e.args[0])
         ts = [tc.synth(a) for a in e.args]
         if ERR in ts:
             return None

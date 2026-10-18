@@ -108,6 +108,25 @@ struct Str {
     }
 };
 
+// ---- tuple[scalar or tuple, ...]: immutable, so never written back ------------
+template <class... E> struct Tuple {
+    using C = std::tuple<typename E::C...>;
+    template <size_t... I> static C in_(PyObject *o, std::index_sequence<I...>) {
+        return C{E::in(PyTuple_GET_ITEM(o, static_cast<Py_ssize_t>(I)))...};    // braced: left to right
+    }
+    static C in(PyObject *o) {
+        if (!PyTuple_Check(o) || PyTuple_GET_SIZE(o) != static_cast<Py_ssize_t>(sizeof...(E)))
+            fallback("expected a tuple of the declared size");
+        return in_(o, std::index_sequence_for<E...>{});
+    }
+    template <size_t... I> static PyObject *out_(const C &v, std::index_sequence<I...>) {
+        py::object r = steal(PyTuple_New(static_cast<Py_ssize_t>(sizeof...(E))));
+        (PyTuple_SET_ITEM(r.ptr(), static_cast<Py_ssize_t>(I), E::out(std::get<I>(v))), ...);
+        return r.release().ptr();
+    }
+    static PyObject *out(const C &v) { return out_(v, std::index_sequence_for<E...>{}); }
+};
+
 // ---- list[scalar] ------------------------------------------------------------
 template <class E, class L> struct List {
     using C = L *;

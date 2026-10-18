@@ -10,7 +10,6 @@ from .typecheck import Ty, INT, FLOAT, BOOL, STR, NONE, ERR
 from .types_ext import is_class, opt_scalar, is_mutable_default, c_func_name
 
 _SCALAR_C = {"int": "int64_t", "float": "double", "bool": "bool", "str": "PyStr *"}
-DICTG = {}          # alias name -> (key C type, value Ty); deterministic per type, shared across compilations
 
 
 def _c(t: Ty) -> str:
@@ -34,12 +33,6 @@ def none_value(t: Optional[Ty]) -> str:
     if opt_scalar(t):
         return f"{_c(t)}()"
     return "nullptr"
-
-
-def dictg_name(t: Ty) -> str:
-    name = "PyDictG_" + re.sub(r"\W+", "_", f"{t.key}_{t.elem}").strip("_")
-    DICTG[name] = (_SCALAR_C[t.key.name], t.elem)
-    return name
 
 
 def _pure_name(e) -> bool:
@@ -67,28 +60,10 @@ def _const_with_effects(em, node, value: str) -> str:
 
 # ---------------------------------------------------------------- module layout
 def module_prelude(em, mod) -> list:
-    """Lines spliced in right after #include: forward class declarations + generic dict aliases."""
-    used = [n for n in DICTG if re.search(r"\b" + n + r"\b", "\n".join(em.buf))]
-    if not used:
+    """Forward class declarations, needed when a generic dict (PyDictT) holds objects."""
+    if not mod.classes or "PyDictT_" not in "\n".join(em.buf):
         return []
-    out = ["/* dicts with list/dict/set/object values */"]
-    out += [f"struct {c.name};" for c in mod.classes]
-    # an alias must follow the aliases its value type mentions
-    done = []
-    pending = sorted(used, key=len)
-    while pending:
-        for n in pending:
-            vt = _c(DICTG[n][1])
-            if not any(m in vt for m in pending if m != n):
-                out.append(f"PYRT_DICTG({n}, {DICTG[n][0]}, {vt})")
-                done.append(n)
-                pending.remove(n)
-                break
-        else:
-            out += [f"PYRT_DICTG({n}, {DICTG[n][0]}, {_c(DICTG[n][1])})" for n in pending]
-            break
-    out.append("")
-    return out
+    return [f"struct {c.name};" for c in mod.classes] + [""]
 
 
 def hoisted(em) -> set:
