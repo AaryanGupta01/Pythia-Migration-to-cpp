@@ -162,6 +162,7 @@ class Emitter:
                     self.w(0, self.method_signature(c, m) + ";")
             self.cur = 0
             self.w(0)
+            _cls.emit_decls(self, mod)        # class attributes, dispatchers, dunder helpers (classes_ext)
 
         if mod.funcs:
             self.w(0, "/* forward declarations (PySub allows mutual recursion) */")
@@ -210,6 +211,8 @@ class Emitter:
         return f"m_{cls}_{m}"
 
     def emit_class_struct(self, c: A.ClassDef) -> None:
+        if _cls.emit_struct(self, c):         # struct D : B, run-time class id (classes_ext)
+            return
         info = self.tc.classes[c.name]
         self.w(0, f"struct {c.name} {{")
         for name, t in zip(info.field_names, info.fields):
@@ -225,6 +228,8 @@ class Emitter:
         return f"static std::shared_ptr<{c.name}> {c.name}_new({ps or 'void'})"
 
     def emit_class_ctor(self, c: A.ClassDef) -> None:
+        if _cls.emit_ctor(self, c):           # inherited __init__, class-attribute initial values
+            return
         info = self.tc.classes[c.name]
         self.w(0, self.ctor_signature(c) + " {")
         self.w(1, f"auto p_self = std::make_shared<{c.name}>();")
@@ -312,6 +317,8 @@ class Emitter:
         self.cur = prev
 
     def _stmt(self, s: A.Node, d: int) -> None:
+        if _cls.stmt(self, s, d):             # class attributes, property setters, __setitem__, __iadd__
+            return
         if _ext.stmt(self, s, d):             # in-place set |= ..., attribute stores on possibly-None objects
             return
         if isinstance(s, A.Assign):
@@ -541,6 +548,9 @@ class Emitter:
         self.w(d, "py_print_end();")
 
     def print_call(self, a: A.Node, value: Optional[str] = None) -> str:
+        ext = _cls.print_call(self, a, value)     # objects via __str__ / __repr__
+        if ext is not None:
+            return ext
         ext = _ext.print_call(self, a, value)     # Optional values, dicts of lists/dicts
         if ext is not None:
             return ext
@@ -608,6 +618,9 @@ class Emitter:
     def truthy(expr: str, t: Optional[Ty]) -> str:
         if t is None or t is ERR:
             return "false"
+        ext = _cls.truthy(expr, t)            # __bool__ / __len__
+        if ext is not None:
+            return ext
         ext = _ext.truthy(expr, t)
         if ext is not None:
             return ext
@@ -629,6 +642,9 @@ class Emitter:
     def ex(self, e: Optional[A.Node]) -> str:
         if e is None:
             return "0"
+        ext = _cls.ex(self, e)                # user-class constructs (classes_ext)
+        if ext is not None:
+            return ext
         ext = _ext.ex(self, e)                # None, narrowed names, sets, isinstance, defaults ...
         if ext is not None:
             return ext
@@ -846,6 +862,9 @@ class Emitter:
         return x.ty is not None and x.ty.name in ("int", "bool")
 
     def binop(self, e: A.BinOp) -> str:
+        ext = _cls.emit_binop(self, e)        # __add__ / __radd__ ... on user classes
+        if ext is not None:
+            return ext
         op, t = e.op, e.ty
         if t.name == "tuple":                   # concatenation; operands evaluated left to right
             return f"[&]() {{ auto _a = {self.ex(e.left)}; auto _b = {self.ex(e.right)}; return std::tuple_cat(_a, _b); }}()"
@@ -973,6 +992,7 @@ class Emitter:
 
 
 from . import emit_ext as _ext  # noqa: E402  (PySub 1.3 code generation)
+from . import classes_ext as _cls  # noqa: E402  (user classes)
 
 
 def emit(mod: A.Module, tc: TypeChecker, src_name: str,

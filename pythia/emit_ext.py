@@ -43,6 +43,9 @@ def _static(em, st) -> str:
     """('const', b) | ('test', node, nonnull) -> C boolean expression."""
     if st[0] == "const":
         return "true" if st[1] else "false"
+    if st[0] == "cls":                                 # isinstance on a class hierarchy (classes_ext)
+        from . import classes_ext
+        return classes_ext.emit_static(em, st)
     node, nonnull = st[1], st[2]
     v = em.ex(node)
     t = node.ty

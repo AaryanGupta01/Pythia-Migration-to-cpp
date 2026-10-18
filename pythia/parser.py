@@ -144,6 +144,8 @@ class Parser:
                     mod.funcs.append(self.parse_funcdef())
                 elif self.at_kw("class"):
                     mod.classes.append(self.parse_classdef())
+                elif self.at_op("@"):                       # decorated class / function (classes_ext)
+                    _cls().parse_decorated(self, mod)
                 else:
                     st = self.parse_statement()
                     if self._is_main_guard(st):            # if __name__ == "__main__": runs as the program body
@@ -160,17 +162,21 @@ class Parser:
     def parse_classdef(self) -> A.ClassDef:
         kw = self.expect("KEYWORD", "class")
         name = self.expect("NAME").value
+        bases = _cls().parse_bases(self)              # class C(Base): (classes_ext)
         self.expect("OP", ":")
         self.expect("NEWLINE")
         self.expect("INDENT")
         cd = A.ClassDef(line=kw.line, col=kw.col, name=name)
+        cd.bases = bases
         while not self.at("DEDENT") and not self.at("EOF"):
             guard = self.i
             if self.at("NEWLINE"):
                 self.next()
                 continue
             try:
-                if self.at_kw("def"):
+                if _cls().parse_class_item(self, cd):   # decorators, docstrings, pass, class attributes
+                    pass
+                elif self.at_kw("def"):
                     cd.methods.append(self.parse_funcdef())
                 else:
                     ft = self.expect("NAME")
@@ -195,8 +201,8 @@ class Parser:
         params: List[A.Param] = []
         while not self.at_op(")"):
             pt = self.expect("NAME")
-            if pt.value == "self" and not params and not self.at_op(":"):
-                params.append(A.Param(line=pt.line, col=pt.col, name="self", ann=None))
+            if pt.value in ("self", "cls") and not params and not self.at_op(":"):
+                params.append(A.Param(line=pt.line, col=pt.col, name=pt.value, ann=None))
             else:
                 self.expect("OP", ":")
                 ann = self.parse_type()
@@ -386,6 +392,8 @@ class Parser:
                             ann=ann, value=val)
 
         first = self.parse_exprlist()
+        if self.at_op(":") and isinstance(first, A.Attribute):     # self.x: T = v (classes_ext)
+            return _cls().parse_attr_ann(self, t, first)
 
         if self.at_op("="):
             self.next()
@@ -972,6 +980,11 @@ Parser._is_main_guard = _is_main_guard
 Parser._fstring = _fstring
 from .parse_types import install as _install_types  # noqa: E402  (PySub 1.3: annotations, sets, global, isinstance)
 _install_types(Parser, _Panic, Diagnostic)
+
+
+def _cls():
+    from . import classes_ext                 # user classes: bases, decorators, class attributes
+    return classes_ext
 
 
 def parse(src: str, filename: str = "<input>"):

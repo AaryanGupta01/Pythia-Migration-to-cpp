@@ -56,6 +56,7 @@ MODULES.update({                       # annotations and containers (resolved in
     "__future__": {"annotations"},
     "collections": {"defaultdict", "Counter"},
 })
+MODULES["dataclasses"] = {"dataclass"}  # @dataclass on user classes (classes_ext.py)
 
 
 class Imports:

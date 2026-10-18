@@ -25,6 +25,7 @@ OPERATORS = [
 # set algebra / `T | None` annotations (two-character forms must precede one-character ones)
 OPERATORS[:0] = [op for op in ("|=", "&=", "^=") if op not in OPERATORS]
 OPERATORS += [op for op in ("|", "&", "^") if op not in OPERATORS]
+OPERATORS += ["@"]                     # decorators (classes_ext): @staticmethod, @classmethod, @property, @dataclass
 
 
 @dataclass
