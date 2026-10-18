@@ -106,11 +106,12 @@ def _limits():
         pass
 
 
-def _run(argv, cwd) -> Dict[str, Any]:
+def _run(argv, cwd, stdin: str = "") -> Dict[str, Any]:
     t = time.perf_counter()
     try:
-        r = subprocess.run(argv, capture_output=True, text=True, timeout=RUN_TIMEOUT, cwd=cwd,
-                           preexec_fn=_limits if os.name == "posix" else None, errors="replace")
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=RUN_TIMEOUT, cwd=cwd, input=stdin,
+                           preexec_fn=_limits if os.name == "posix" else None, errors="replace",
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0)
     except subprocess.TimeoutExpired:
         return {"stdout": "", "exception": "TimeoutError", "time_ms": RUN_TIMEOUT * 1000.0, "timed_out": True,
                 "stderr": f"timed out after {RUN_TIMEOUT} s"}
@@ -140,8 +141,13 @@ def _runtime_object(tmp_cache: Path) -> Path:
     return obj
 
 
-def run_snippet(source: str, cache_dir: Path) -> Dict[str, Any]:
+def run_snippet(source: str, cache_dir: Path, stdin: str = "", reference: Optional[str] = None) -> Dict[str, Any]:
+    """Run `source` compiled to C++ and, under CPython, `reference` (the user's original program, when the source is
+    an AI conversion of it) or `source` itself; both read the same stdin."""
     source = _check(source)
+    stdin = (stdin or "")[:200_000]
+    if reference is not None:
+        reference = _check(reference)
     comp = compile_snippet(source)
     if not comp["ok"]:
         d = comp["diagnostics"][0]
@@ -153,8 +159,8 @@ def run_snippet(source: str, cache_dir: Path) -> Dict[str, Any]:
     tmp = Path(tempfile.mkdtemp(prefix="pythia-pg-"))
     try:
         py = tmp / "snippet.py"
-        py.write_text(source, encoding="utf-8")
-        python = _run([sys.executable, "-I", str(py)], str(tmp))
+        py.write_text(reference if reference is not None else source, encoding="utf-8")
+        python = _run([sys.executable, "-I", str(py)], str(tmp), stdin)
         cpp_path = tmp / "snippet.cpp"
         cpp_path.write_text(comp["cpp"], encoding="utf-8")
         for f in ("pyrt.hpp",):
@@ -170,7 +176,7 @@ def run_snippet(source: str, cache_dir: Path) -> Dict[str, Any]:
         if cc.returncode != 0:
             return {"ok": False, "error": "generated C++ failed to compile (internal error): " + cc.stderr[-1500:],
                     "python": _public(python), "cpp": None, "same": False}
-        cpp = _run([str(binp)], str(tmp))
+        cpp = _run([str(binp)], str(tmp), stdin)
         cpp["build_ms"] = build_ms
         same = python["stdout"] == cpp["stdout"] and python["exception"] == cpp["exception"]
         return {"ok": True, "python": _public(python), "cpp": _public(cpp), "same": same}

@@ -91,6 +91,8 @@ export const mockApi: Api = {
     return wait({ path: p, parent, entries: [...kids.map((n) => ({ name: n, type: 'dir' as const })), ...(p.endsWith('textlab') ? [{ name: 'main.py', type: 'file' as const }] : [])] }, 40)
   },
   pgCompile: (source) => wait(compileForPlayground(source), 120),
+  pgConvert: () => wait({ ok: false, attempts: [], error: 'AI conversion needs the real PYTHIA server (it is not part of the offline mock).' }, 400),
+  pgConvertStatus: () => wait({ enabled: false, provider: null, model: null, hint: 'Not available in the mock UI' }, 20),
   pgRun: (source) => {
     const r = interpret(source)
     const c = compileForPlayground(source)

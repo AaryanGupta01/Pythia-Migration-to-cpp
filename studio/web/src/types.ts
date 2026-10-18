@@ -379,6 +379,29 @@ export interface RunSide {
   exception: string | null
   time_ms: number
 }
+export interface ConvertAttempt {
+  attempt: number
+  ok: boolean
+  source: string | null
+  diagnostics: Diagnostic[]
+  latency_ms: number
+  error?: string | null
+}
+export interface PlaygroundConvert {
+  ok: boolean
+  already?: boolean
+  source?: string
+  attempts: ConvertAttempt[]
+  error?: string
+  provider?: string | null
+  model?: string | null
+}
+export interface ConvertStatus {
+  enabled: boolean
+  provider: string | null
+  model: string | null
+  hint: string | null
+}
 export interface PlaygroundRun {
   ok: boolean
   python: RunSide

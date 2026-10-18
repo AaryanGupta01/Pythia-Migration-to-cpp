@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Copy, Download, FileDown, Play, Printer, Sparkles } from 'lucide-react'
+import { BookOpen, Check, Copy, Download, FileDown, KeyRound, Play, Printer, RotateCcw, ShieldCheck, Sparkles, Wand2, X } from 'lucide-react'
 import { api, errMsg } from './api'
 import { useStudio } from './store'
 import { CodeView, cppNotes, pyNotes, type LineNote } from './editors'
@@ -11,7 +11,8 @@ import { Btn, Empty, IconBtn, Segmented, Skeleton, StatusChip, useDebounced, MOD
 import { STATUS, basename, cn, compilerLabel, fmtInt, fmtPct, fmtX, llmLabel } from './lib/format'
 import { Legend } from './journey'
 import { countStatus, totalSpeedup } from './reducer'
-import type { FunctionRecord, PlaygroundCompile, PlaygroundRun } from './types'
+import type { ConvertStatus, FunctionRecord, PlaygroundCompile, PlaygroundConvert, PlaygroundRun } from './types'
+import { EXAMPLES } from './examples'
 
 // ------------------------------------------------------------------ file view
 export function FileView({ path, line }: { path: string; line?: number }) {
@@ -62,34 +63,27 @@ export function FileView({ path, line }: { path: string; line?: number }) {
 }
 
 // ------------------------------------------------------------------ playground
-const SAMPLE = `def edit_distance(a: str, b: str) -> int:
-    n = len(a)
-    m = len(b)
-    prev: list[int] = []
-    for j in range(m + 1):
-        prev.append(j)
-    for i in range(1, n + 1):
-        cur = [i]
-        for j in range(1, m + 1):
-            cost = 0 if a[i - 1] == b[j - 1] else 1
-            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost))
-        prev = cur
-    return prev[m]
+const LS = (k: string, v?: string | null) => {
+  try {
+    if (v === undefined) return localStorage.getItem(k)
+    if (v === null) localStorage.removeItem(k)
+    else localStorage.setItem(k, v)
+  } catch {
+    /* private mode */
+  }
+  return null
+}
 
-
-print(edit_distance("kitten", "sitting"))
-print(edit_distance("intention", "execution"))
-`
+type ConvState = { state: 'idle' | 'running' | 'done' | 'failed'; result?: PlaygroundConvert; original?: string; started?: number }
 
 export function Playground() {
   const active = useStudio((s) => s.activeTab === 'playground')
-  const [src, setSrc] = useState(() => {
-    try {
-      return localStorage.getItem('pythia:playground') || SAMPLE
-    } catch {
-      return SAMPLE
-    }
-  })
+  const openSpecial = useStudio((s) => s.openSpecial)
+  const settingsRev = useStudio((s) => s.settings)
+  const [src, setSrc] = useState(() => LS('pythia:playground') || EXAMPLES[0].code)
+  const [stdin, setStdin] = useState(() => LS('pythia:playground:stdin') ?? '')
+  const [reference, setReference] = useState<string | null>(() => LS('pythia:playground:ref'))
+  const [exampleId, setExampleId] = useState<string>('')
   const dsrc = useDebounced(src, 450)
   const [comp, setComp] = useState<PlaygroundCompile | null>(null)
   const [compiling, setCompiling] = useState(true)
@@ -97,11 +91,16 @@ export function Playground() {
   const [run, setRun] = useState<PlaygroundRun | null>(null)
   const [running, setRunning] = useState(false)
   const [pyLine, setPyLine] = useState<number | null>(null)
+  const [conv, setConv] = useState<ConvState>({ state: 'idle' })
+  const [cstat, setCstat] = useState<ConvertStatus | null>(null)
   const seq = useRef(0)
 
+  useEffect(() => { LS('pythia:playground', src) }, [src])
+  useEffect(() => { LS('pythia:playground:stdin', stdin) }, [stdin])
+  useEffect(() => { LS('pythia:playground:ref', reference) }, [reference])
   useEffect(() => {
-    try { localStorage.setItem('pythia:playground', src) } catch { /* private mode */ }
-  }, [src])
+    api.pgConvertStatus().then(setCstat).catch(() => setCstat(null))
+  }, [settingsRev])
   useEffect(() => {
     const id = ++seq.current
     setCompiling(true)
@@ -111,12 +110,12 @@ export function Playground() {
   const doRun = useCallback(async () => {
     setRunning(true)
     try {
-      setRun(await api.pgRun(src))
+      setRun(await api.pgRun(src, stdin, reference ?? undefined))
     } catch (e) {
       setRun({ ok: false, error: errMsg(e), python: { stdout: '', exception: null, time_ms: 0 }, cpp: { stdout: '', exception: null, time_ms: 0 }, same: false })
     }
     setRunning(false)
-  }, [src])
+  }, [src, stdin, reference])
   useEffect(() => {
     if (!active) return
     const h = () => doRun()
@@ -124,10 +123,40 @@ export function Playground() {
     return () => window.removeEventListener('pythia:run', h)
   }, [active, doRun])
 
+  const doConvert = useCallback(async () => {
+    const original = src
+    setConv({ state: 'running', original, started: Date.now() })
+    try {
+      const r = await api.pgConvert(original)
+      setConv({ state: r.ok ? 'done' : 'failed', result: r, original })
+    } catch (e) {
+      setConv({ state: 'failed', result: { ok: false, error: errMsg(e), attempts: [] }, original })
+    }
+  }, [src])
+  const applyConversion = () => {
+    if (!conv.result?.source || conv.original == null) return
+    setReference(conv.original)
+    setSrc(conv.result.source)
+    setConv({ state: 'idle' })
+    setRun(null)
+  }
+  const loadExample = (id: string) => {
+    const ex = EXAMPLES.find((x) => x.id === id)
+    setExampleId('')
+    if (!ex) return
+    setSrc(ex.code)
+    setStdin(ex.stdin ?? '')
+    setReference(null)
+    setRun(null)
+    setConv({ state: 'idle' })
+  }
+
   const pyN = useMemo(() => (comp ? pyNotes(comp.fidelity) : []), [comp])
   const cN = useMemo(() => (comp ? cppNotes({ fidelity: comp.fidelity, cpp_line_map: comp.cpp_line_map }) : []), [comp])
   const sync = comp && pyLine ? comp.cpp_line_map[String(pyLine)] ?? [] : []
   const nErr = comp?.diagnostics.length ?? 0
+  const wantsInput = /\binput\s*\(/.test(src) || (!!reference && /\binput\s*\(/.test(reference))
+  const showConvert = !compiling && !cerr && nErr > 0 && conv.state === 'idle'
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -136,16 +165,43 @@ export function Playground() {
         <span className="text-xs text-fg3">
           {compiling ? 'Compiling…' : cerr ? 'Server error' : nErr ? `${nErr} typechecker error${nErr === 1 ? '' : 's'}` : 'Compiled to C++17'}
         </span>
+        {reference && (
+          <span className="flex items-center gap-1 rounded-full border border-ok/30 bg-ok/10 px-2 py-0.5 text-2xs text-ok" title="Run executes your ORIGINAL program under CPython and this converted program as compiled C++, on the same input.">
+            <ShieldCheck size={11} /> AI conversion: Run checks it against your original
+            <button onClick={() => setReference(null)} className="ml-0.5 rounded hover:text-fg" aria-label="Stop comparing with the original"><X size={11} /></button>
+          </span>
+        )}
         <span className="ml-auto flex items-center gap-3 text-xs text-fg3">
+          <label className="flex items-center gap-1.5">
+            <BookOpen size={13} />
+            <select value={exampleId} onChange={(e) => loadExample(e.target.value)} aria-label="Load an example" className="h-7 rounded-md border border-line2 bg-bg px-1.5 text-xs text-fg2 outline-none focus:border-accent">
+              <option value="">Examples…</option>
+              {EXAMPLES.map((x) => <option key={x.id} value={x.id}>{x.title} ({x.note})</option>)}
+            </select>
+          </label>
           <Legend />
           <Btn kind="primary" onClick={doRun} disabled={running || nErr > 0 || compiling} title={`Run (${MOD}+Enter)`}>
             <Play size={12} /> {running ? 'Running…' : 'Run'} <Kbd>{MOD}↵</Kbd>
           </Btn>
         </span>
       </div>
+      {showConvert && (
+        <div className="flex flex-none items-center gap-3 border-b border-accent/30 bg-accent/10 px-3 py-2 text-sm">
+          <Sparkles size={15} className="flex-none text-accent" />
+          <div className="min-w-0 flex-1">
+            <span className="font-medium text-fg">This is regular Python, not PySub yet.</span>{' '}
+            <span className="text-fg2">PySub needs types and a few rewrites (records become classes, shared state becomes parameters, enumerate and lambdas become loops). The AI does it; the type checker checks every answer.</span>
+          </div>
+          {cstat?.enabled ? (
+            <Btn kind="primary" onClick={doConvert} className="flex-none"><Wand2 size={13} /> Convert to PySub with AI</Btn>
+          ) : (
+            <Btn onClick={() => openSpecial('settings')} className="flex-none" title={cstat?.hint ?? ''}><KeyRound size={13} /> Add a free API key to convert</Btn>
+          )}
+        </div>
+      )}
       <div className="grid min-h-0 flex-1 grid-cols-2">
         <div className="flex min-h-0 flex-col border-r border-line">
-          <PaneTitle l="PySub / Python" r="edit here" />
+          <PaneTitle l={reference ? 'PySub (converted from your Python)' : 'PySub / Python'} r="edit here" />
           <div className="min-h-0 flex-1">
             <CodeView path="playground.py" value={src} readOnly={false} onChange={setSrc} notes={pyN} markers={comp?.diagnostics ?? []} onLineClick={setPyLine} />
           </div>
@@ -158,13 +214,19 @@ export function Playground() {
           )}
         </div>
         <div className="flex min-h-0 flex-col">
-          <PaneTitle l="Generated C++17" r={compiling ? 'updating…' : 'live'} />
-          <div className="min-h-0 flex-1">
-            {cerr ? <Empty title="Compile request failed">{cerr}</Empty> : comp?.ok ? <CodeView path="playground.cpp" value={comp.cpp} language="cpp" notes={cN} syncLines={sync} /> : <Empty title={comp ? 'Nothing to compile yet' : 'Compiling'}>{comp ? 'Fix the typechecker errors on the left and the C++ appears here.' : ''}</Empty>}
-          </div>
+          {conv.state !== 'idle' ? (
+            <ConvertPanel conv={conv} provider={cstat} onApply={applyConversion} onRetry={doConvert} onClose={() => setConv({ state: 'idle' })} />
+          ) : (
+            <>
+              <PaneTitle l="Generated C++17" r={compiling ? 'updating…' : 'live'} />
+              <div className="min-h-0 flex-1">
+                {cerr ? <Empty title="Compile request failed">{cerr}</Empty> : comp?.ok ? <CodeView path="playground.cpp" value={comp.cpp} language="cpp" notes={cN} syncLines={sync} /> : <Empty title={comp ? 'Nothing to compile yet' : 'Compiling'}>{comp ? (cstat?.enabled ? 'Fix the errors on the left, or let the AI convert the program to PySub (button above).' : 'Fix the typechecker errors on the left and the C++ appears here.') : ''}</Empty>}
+              </div>
+            </>
+          )}
         </div>
       </div>
-      <RunOutput run={run} running={running} />
+      <RunOutput run={run} running={running} stdin={stdin} setStdin={setStdin} showStdin={wantsInput || stdin.length > 0} comparedToOriginal={!!reference} />
     </div>
   )
 }
@@ -172,34 +234,127 @@ const PaneTitle = ({ l, r }: { l: string; r: string }) => (
   <div className="flex h-7 flex-none items-center justify-between border-b border-line bg-panel px-3 text-xs"><span className="font-medium text-fg2">{l}</span><span className="text-fg3">{r}</span></div>
 )
 
-function RunOutput({ run, running }: { run: PlaygroundRun | null; running: boolean }) {
+function ConvertPanel({ conv, provider, onApply, onRetry, onClose }: { conv: ConvState; provider: ConvertStatus | null; onApply: () => void; onRetry: () => void; onClose: () => void }) {
+  const r = conv.result
+  const [secs, setSecs] = useState(0)
+  useEffect(() => {
+    if (conv.state !== 'running') return
+    const t = setInterval(() => setSecs(Math.round((Date.now() - (conv.started ?? Date.now())) / 1000)), 500)
+    return () => clearInterval(t)
+  }, [conv.state, conv.started])
+  const model = (r?.model ?? provider?.model ?? '').replace(/^openai\//, '')
+  const who = `${r?.provider ?? provider?.provider ?? 'LLM'}${model ? ' · ' + model : ''}`
+  const last = r?.attempts?.[r.attempts.length - 1]
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex h-7 flex-none items-center justify-between border-b border-line bg-panel px-3 text-xs">
+        <span className="flex items-center gap-1.5 font-medium text-fg2"><Wand2 size={12} className="text-accent" /> AI conversion to PySub</span>
+        <button onClick={onClose} className="rounded p-0.5 text-fg3 hover:bg-hover hover:text-fg" aria-label="Close"><X size={13} /></button>
+      </div>
+      <div className="min-h-0 flex-1 space-y-3 overflow-auto p-3">
+        {conv.state === 'running' && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-fg2"><span className="h-2 w-2 animate-pulse rounded-full bg-accent" /> Asking {who} for a PySub version… {secs}s</div>
+            <p className="text-xs text-fg3">Each answer goes straight to the PySub type checker; if it is rejected, the exact errors go back to the model (up to 3 rounds). Nothing is accepted on the model's word.</p>
+            <Skeleton className="h-4 w-2/3" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-3/5" />
+          </div>
+        )}
+        {r && (
+          <>
+            <div className={cn('rounded-lg border px-3 py-2 text-sm', r.ok ? 'border-ok/30 bg-ok/10 text-ok' : 'border-bad/30 bg-bad/10 text-bad')}>
+              {r.ok
+                ? (r.already ? 'This program is already valid PySub; nothing to convert.' : `Passed the PySub type checker on attempt ${r.attempts.length} (${who}). Use it, then press Run: your original runs under CPython, the conversion as compiled C++, on the same input.`)
+                : (r.error ?? 'The conversion failed.')}
+            </div>
+            {r.attempts.length > 0 && (
+              <ol className="space-y-1.5 text-xs">
+                {r.attempts.map((a) => (
+                  <li key={a.attempt} className="rounded-md border border-line bg-panel px-2.5 py-1.5">
+                    <div className="flex items-center gap-2">
+                      {a.ok ? <Check size={12} className="text-ok" /> : <X size={12} className="text-bad" />}
+                      <span className="font-medium text-fg2">Attempt {a.attempt}</span>
+                      <span className="text-fg3">{(a.latency_ms / 1000).toFixed(1)} s</span>
+                      <span className={cn('ml-auto', a.ok ? 'text-ok' : 'text-bad')}>{a.ok ? 'type checker: accepted' : a.error ? 'no answer' : `type checker: ${a.diagnostics.length} error${a.diagnostics.length === 1 ? '' : 's'} sent back`}</span>
+                    </div>
+                    {!a.ok && (a.error || a.diagnostics.length > 0) && (
+                      <ul className="mt-1 space-y-0.5 pl-5 text-fg3">
+                        {a.error && <li>{a.error}</li>}
+                        {a.diagnostics.slice(0, 4).map((d, i) => <li key={i}><span className="mono">line {d.line}</span> {d.msg}</li>)}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+            {r.ok && r.source && !r.already && conv.original != null && (
+              <div>
+                <div className="mb-1 text-xs font-medium text-fg2">Your Python → PySub</div>
+                <MiniDiff a={conv.original} b={r.source} maxH={9999} />
+              </div>
+            )}
+            {!r.ok && last?.source && conv.original != null && (
+              <div>
+                <div className="mb-1 text-xs font-medium text-fg2">Last attempt (rejected)</div>
+                <MiniDiff a={conv.original} b={last.source} maxH={9999} />
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      {r && (
+        <div className="flex flex-none items-center justify-end gap-2 border-t border-line bg-panel px-3 py-2">
+          {!r.ok && <Btn onClick={onRetry}><RotateCcw size={12} /> Try again</Btn>}
+          <Btn kind="ghost" onClick={onClose}>{r.ok ? 'Discard' : 'Close'}</Btn>
+          {r.ok && !r.already && <Btn kind="primary" onClick={onApply}><Check size={12} /> Use the PySub version</Btn>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RunOutput({ run, running, stdin, setStdin, showStdin, comparedToOriginal }: { run: PlaygroundRun | null; running: boolean; stdin: string; setStdin: (s: string) => void; showStdin: boolean; comparedToOriginal: boolean }) {
   const lines = (s: string) => s.replace(/\n$/, '').split('\n')
   const a = run ? lines(run.python.stdout) : []
   const b = run ? lines(run.cpp.stdout) : []
   const diff = (i: number, x: string[], y: string[]) => x[i] !== y[i]
+  const leftLabel = comparedToOriginal ? 'CPython · your original Python' : 'CPython'
+  const rightLabel = comparedToOriginal ? 'Compiled C++ · PySub conversion' : 'Compiled C++'
   return (
-    <div className="h-[170px] flex-none border-t border-line bg-panel">
-      <div className="flex h-7 items-center gap-3 border-b border-line px-3 text-xs">
-        <span className="font-medium text-fg2">Output</span>
-        {run && run.ok && <span className={run.same ? 'text-ok' : 'text-bad'}>{run.same ? 'CPython and compiled output are identical' : 'Outputs differ'}</span>}
-        {run && run.ok && run.cpp.time_ms > 0 && <span className="tnum ml-auto text-fg2">{run.python.time_ms} ms vs {run.cpp.time_ms} ms · <b className="text-ok">{fmtX(run.python.time_ms / run.cpp.time_ms)}</b></span>}
-      </div>
-      {running ? (
-        <div className="space-y-2 p-3"><Skeleton className="h-4 w-1/3" /><Skeleton className="h-4 w-1/4" /></div>
-      ) : !run ? (
-        <div className="p-3 text-sm text-fg3">Press Run to execute the program under CPython and as compiled C++, side by side.</div>
-      ) : !run.ok ? (
-        <div className="p-3 text-sm text-bad">{run.error ?? 'The program could not be run.'}</div>
-      ) : (
-        <div className="grid h-[calc(100%-28px)] grid-cols-2 divide-x divide-line">
-          {[['CPython', a, b, run.python] as const, ['Compiled C++', b, a, run.cpp] as const].map(([label, x, y, side]) => (
-            <div key={label} className="min-h-0 overflow-auto px-3 py-1.5">
-              <div className="mb-0.5 flex justify-between text-2xs text-fg3"><span>{label}</span><span className="tnum">{side.time_ms} ms</span></div>
-              <pre className="mono text-xs">{x.map((l, i) => <div key={i} className={cn(diff(i, x, y) && 'bg-bad/15 text-bad')}>{l || ' '}</div>)}{side.exception && <div className="text-bad">{side.exception}</div>}</pre>
-            </div>
-          ))}
+    <div className={cn('flex flex-none border-t border-line bg-panel', showStdin ? 'h-[230px]' : 'h-[170px]')}>
+      {showStdin && (
+        <div className="flex w-[260px] flex-none flex-col border-r border-line">
+          <div className="flex h-7 flex-none items-center justify-between border-b border-line px-3 text-xs">
+            <span className="font-medium text-fg2">Input (stdin)</span>
+            <span className="text-fg3">one line per input()</span>
+          </div>
+          <textarea value={stdin} onChange={(e) => setStdin(e.target.value)} spellCheck={false} aria-label="Program input"
+            placeholder={'Lines your program reads with input(),\none per line. Both versions get the same input.'}
+            className="mono min-h-0 flex-1 resize-none bg-bg px-3 py-2 text-xs text-fg outline-none placeholder:text-fg3" />
         </div>
       )}
+      <div className="min-w-0 flex-1">
+        <div className="flex h-7 items-center gap-3 border-b border-line px-3 text-xs">
+          <span className="font-medium text-fg2">Output</span>
+          {run && run.ok && <span className={run.same ? 'text-ok' : 'text-bad'}>{run.same ? (comparedToOriginal ? 'Identical: the conversion behaves exactly like your original program' : 'CPython and compiled output are identical') : 'Outputs differ'}</span>}
+          {run && run.ok && run.cpp.time_ms > 0 && <span className="tnum ml-auto text-fg2">{run.python.time_ms} ms vs {run.cpp.time_ms} ms{run.python.time_ms / run.cpp.time_ms >= 1.05 ? <> · <b className="text-ok">{fmtX(run.python.time_ms / run.cpp.time_ms)}</b></> : <span className="text-fg3"> · startup-bound (interactive programs gain little)</span>}</span>}
+        </div>
+        {running ? (
+          <div className="space-y-2 p-3"><Skeleton className="h-4 w-1/3" /><Skeleton className="h-4 w-1/4" /></div>
+        ) : !run ? (
+          <div className="p-3 text-sm text-fg3">Press Run to execute the program under CPython and as compiled C++, side by side{showStdin ? ', both reading the input on the left' : ''}.</div>
+        ) : !run.ok ? (
+          <div className="p-3 text-sm text-bad">{run.error ?? 'The program could not be run.'}</div>
+        ) : (
+          <div className="grid h-[calc(100%-28px)] grid-cols-2 divide-x divide-line">
+            {[[leftLabel, a, b, run.python] as const, [rightLabel, b, a, run.cpp] as const].map(([label, x, y, side]) => (
+              <div key={label} className="min-h-0 overflow-auto px-3 py-1.5">
+                <div className="mb-0.5 flex justify-between text-2xs text-fg3"><span>{label}</span><span className="tnum">{side.time_ms} ms</span></div>
+                <pre className="mono text-xs">{x.map((l, i) => <div key={i} className={cn(diff(i, x, y) && 'bg-bad/15 text-bad')}>{l || ' '}</div>)}{side.exception && <div className="text-bad">{side.exception}</div>}</pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

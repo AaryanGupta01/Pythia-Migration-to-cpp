@@ -367,7 +367,29 @@ def create_app(engine=None, home: Optional[str] = None) -> FastAPI:
 
     @app.post("/api/playground/run")
     async def pg_run(request: Request):
-        return await asyncio.to_thread(playground.run_snippet, await source_of(request), home_p / "build-cache")
+        b = await body(request)
+        return await asyncio.to_thread(playground.run_snippet, b.get("source"), home_p / "build-cache",
+                                       b.get("stdin") or "", b.get("reference"))
+
+    def _llm_settings() -> dict:
+        full = getattr(engine, "_settings_full", None)
+        try:
+            return full() if full else {}
+        except Exception:
+            return {}
+
+    @app.post("/api/playground/convert")
+    async def pg_convert(request: Request):
+        from .. import converter
+        src = await source_of(request)
+        if not isinstance(src, str) or not src.strip():
+            return JSONResponse({"error": "source is empty"}, status_code=400)
+        return await asyncio.to_thread(converter.convert, src, _llm_settings(), playground.compile_snippet)
+
+    @app.get("/api/playground/convert/status")
+    def pg_convert_status():
+        from .. import converter
+        return converter.status(_llm_settings())
 
     @app.post("/api/stages")
     async def pg_stages(request: Request):

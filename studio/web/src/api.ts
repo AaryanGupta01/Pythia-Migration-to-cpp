@@ -10,6 +10,8 @@ import type {
   JobOptions,
   PlaygroundCompile,
   PlaygroundRun,
+  PlaygroundConvert,
+  ConvertStatus,
   RecentWorkspace,
   ReportData,
   Settings,
@@ -45,7 +47,9 @@ export interface Api {
   file(ws: string, path: string, version?: 'work' | 'original'): Promise<FileContent>
   fsList(path: string): Promise<FsList>
   pgCompile(source: string): Promise<PlaygroundCompile>
-  pgRun(source: string): Promise<PlaygroundRun>
+  pgRun(source: string, stdin?: string, reference?: string): Promise<PlaygroundRun>
+  pgConvert(source: string): Promise<PlaygroundConvert>
+  pgConvertStatus(): Promise<ConvertStatus>
   stages(source: string): Promise<StageDump>
   upload(file: File): Promise<{ job_id: string; workspace_id: string }>
   /** Subscribe to a job's event stream (backlog + live). Returns unsubscribe. */
@@ -119,7 +123,9 @@ export const realApi: Api = {
   file: (ws, path, version = 'work') => http(`/workspaces/${ws}/file?${q({ path, version })}`),
   fsList: (path) => http(`/fs/list?${q({ path })}`),
   pgCompile: (source) => http('/playground/compile', json({ source })),
-  pgRun: (source) => http('/playground/run', json({ source })),
+  pgRun: (source, stdin, reference) => http('/playground/run', json({ source, stdin: stdin ?? '', reference: reference ?? null })),
+  pgConvert: (source) => http('/playground/convert', json({ source })),
+  pgConvertStatus: () => http('/playground/convert/status'),
   stages: (source) => http('/stages', json({ source })),
   upload: async (file) => {
     const fd = new FormData()
