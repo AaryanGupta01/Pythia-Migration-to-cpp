@@ -173,12 +173,21 @@ def to_pysub(source: str, stdin: str = "", run: bool = True, check: bool = True)
     if obs and obs["types"]:
         seeds = {k: t for k, t in obs["types"].items()
                  if not complete(base.slots.get(k)) and not is_bad(base.slots.get(k)) and complete(t)}
-    eng, records, rejected = infer(tree, seeds=seeds)
-    plan = _Plan(source, tree, eng, records)
-    for rid, why in rejected.items():
-        plan.problems.append(f"the dicts with keys {', '.join(rid)} look like records but can't become a class: {why}")
-    plan.build()
+    def build_with(sd):
+        eng_, records_, rejected_ = infer(tree, seeds=sd)
+        plan_ = _Plan(source, tree, eng_, records_)
+        for rid, why in rejected_.items():
+            plan_.problems.append(f"the dicts with keys {', '.join(rid)} look like records but can't become a class: "
+                                  f"{why}")
+        plan_.build()
+        return eng_, plan_
+
+    eng, plan = build_with(seeds)
     out = plan.apply()
+    guessed = _guess_uncalled(tree, eng, seeds, build_with, plan, out)
+    if guessed is not None:
+        plan, out, note = guessed
+        plan.changes.append(note)
     res = ConvertResult(out, plan.changes, plan.problems)
     try:
         ast.parse(out)
@@ -194,6 +203,50 @@ def to_pysub(source: str, stdin: str = "", run: bool = True, check: bool = True)
                 res.problems.append("internal: the converted program prints something different under CPython; "
                                     "please report this program")
     return res
+
+
+def _compiles(src: str) -> bool:
+    try:
+        from ..cli import compile_source
+        return not compile_source(src, "convert.py")[2]
+    except Exception:
+        return False
+
+
+def _guess_uncalled(tree, eng, seeds, build_with, plan, out):
+    """Parameters that no call site types (a `class Solution` of LeetCode methods, a library function nobody calls
+    here): pick types by trying candidates, best hint first, and keeping the first that makes the whole program
+    type-check. Returns (plan, out, note) or None when nothing is unresolved / nothing fits."""
+    if not any("couldn't work out the type of parameter" in p and "never called" in p for p in plan.problems):
+        return None
+    if _compiles(out):
+        return None
+    from . import search
+    unresolved = []
+    for f in eng.funcs.values():
+        pos = f.node.args.posonlyargs + f.node.args.args
+        skip = 1 if f.kind in ("method", "classmethod") and pos else 0
+        for p in (pos + f.node.args.kwonlyargs)[skip:]:
+            if p.annotation is None and not complete(eng.slots.get(("var", f.qual, p.arg))):
+                unresolved.append((f.qual, f.node, p.arg))
+    if not unresolved or len(unresolved) > 6:
+        return None
+    cache = {}
+
+    def build(sd):
+        merged = dict(seeds or {})
+        merged.update(sd)
+        e2, p2 = build_with(merged)
+        o2 = p2.apply()
+        cache[o2] = p2
+        return o2
+    hit = search.best_assignment(unresolved, build, _compiles)
+    if hit is None:
+        return None
+    sd, o = hit
+    shown = ", ".join(f"{k[2]}: {render(t, lambda r: 'Record')}" for k, t in sd.items())
+    return cache[o], o, (f"parameter types guessed from how the body uses them ({shown}); nothing in this file calls "
+                         f"the function, so check they match your intent")
 
 
 class _Plan:
