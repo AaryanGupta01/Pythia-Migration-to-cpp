@@ -30,7 +30,8 @@ for name in names:
     stdin_p = CORPUS / f"{name}.stdin"
     stdin = stdin_p.read_text(encoding="utf-8") if stdin_p.exists() else ""
     t = time.time()
-    res = converter.convert(src, {}, playground.compile_snippet, stdin, playground.run_python)
+    res = converter.convert(src, {}, playground.compile_snippet, stdin,
+                            lambda code, sin, orig: playground.run_snippet(code, cache, sin, orig))
     secs = time.time() - t
     row = {"name": name, "converted": res["ok"], "attempts": len(res["attempts"]), "secs": round(secs, 1)}
     if res["ok"]:
@@ -48,6 +49,8 @@ for name in names:
         last = res["attempts"][-1] if res["attempts"] else {}
         row["why"] = res.get("error") or ""
         row["errors"] = [f"line {d['line']}: {d['msg']}" for d in (last.get("diagnostics") or [])[:3]]
+        if res.get("limit"):                             # converter stopped on a documented limit, with the reason
+            row["limit"] = res["error"]
         if res.get("blockers"):
             row["blockers"] = [b["what"] for b in res["blockers"]]
     rows.append(row)

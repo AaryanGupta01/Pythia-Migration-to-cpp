@@ -167,6 +167,8 @@ class GroqClient:
                 if e.code == 429 and ("per day" in detail or "(TPD)" in detail or "(RPD)" in detail):
                     raise _DailyLimit(f"Groq's free daily limit for {model} is used up (frees up in about "
                                       f"{_fmt_wait(wait or 3600)})", wait or 3600)
+                if e.code == 413:                        # this request is bigger than the model's per-minute cap
+                    raise _DailyLimit(f"the program is too large for {model} on Groq's free tier", 0)
                 if e.code in (429, 500, 502, 503):
                     time.sleep(min(wait or 2 * (n + 1), 60))
                     continue

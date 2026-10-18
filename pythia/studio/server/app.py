@@ -391,8 +391,9 @@ def create_app(engine=None, home: Optional[str] = None) -> FastAPI:
         src = b.get("source")
         if not isinstance(src, str) or not src.strip():
             return JSONResponse({"error": "source is empty"}, status_code=400)
+        verify = lambda code, stdin, original: playground.run_snippet(code, home_p / "build-cache", stdin, original)  # noqa: E731
         return await asyncio.to_thread(converter.convert, src, _llm_settings(), playground.compile_snippet,
-                                       str(b.get("stdin") or ""), playground.run_python)
+                                       str(b.get("stdin") or ""), verify)
 
     @app.get("/api/playground/convert/status")
     def pg_convert_status():

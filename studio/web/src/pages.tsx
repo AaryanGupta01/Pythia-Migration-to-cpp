@@ -256,7 +256,7 @@ function ConvertPanel({ conv, provider, onApply, onRetry, onClose }: { conv: Con
         {conv.state === 'running' && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm text-fg2"><span className="h-2 w-2 animate-pulse rounded-full bg-accent" /> Asking {who} for a PySub version… {secs}s</div>
-            <p className="text-xs text-fg3">Each answer goes straight to the PySub type checker, then runs next to your original on the same input. A type error or any difference in the output goes back to the model (up to 4 rounds). Nothing is accepted on the model's word.</p>
+            <p className="text-xs text-fg3">Each answer goes straight to the PySub type checker, then is compiled to C++ and run next to your original on the same input. A type error or any difference in the output goes back to the model (up to 4 rounds). Nothing is accepted on the model's word.</p>
             <Skeleton className="h-4 w-2/3" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-3/5" />
           </div>
         )}
@@ -264,7 +264,7 @@ function ConvertPanel({ conv, provider, onApply, onRetry, onClose }: { conv: Con
           <>
             <div className={cn('rounded-lg border px-3 py-2 text-sm', r.ok ? 'border-ok/30 bg-ok/10 text-ok' : 'border-bad/30 bg-bad/10 text-bad')}>
               {r.ok
-                ? (r.already ? 'This program is already valid PySub; nothing to convert.' : `Converted on attempt ${r.attempts.length} (${who}): it passes the PySub type checker${r.behaviour_checked ? ' and prints exactly what your original prints on the current input' : ''}. Use it, then press Run: your original runs under CPython, the conversion as compiled C++, on the same input.`)
+                ? (r.already ? 'This program is already valid PySub; nothing to convert.' : `Converted on attempt ${r.attempts.length} (${who}): it passes the PySub type checker${r.behaviour_checked ? ' and, compiled to C++, prints exactly what your original prints on the current input' : ''}. Use it, then press Run: your original runs under CPython, the conversion as compiled C++, on the same input.`)
                 : (r.error ?? 'The conversion failed.')}
             </div>
             {r.blockers && r.blockers.length > 0 && (
@@ -288,7 +288,7 @@ function ConvertPanel({ conv, provider, onApply, onRetry, onClose }: { conv: Con
                       {a.ok ? <Check size={12} className="text-ok" /> : <X size={12} className="text-bad" />}
                       <span className="font-medium text-fg2">Attempt {a.attempt}</span>
                       <span className="text-fg3">{(a.latency_ms / 1000).toFixed(1)} s</span>
-                      <span className={cn('ml-auto', a.ok ? 'text-ok' : 'text-bad')}>{a.ok ? 'accepted' : a.error ? 'no answer' : a.behaviour ? 'type-checks, but prints different output: sent back' : `type checker: ${a.diagnostics.length} error${a.diagnostics.length === 1 ? '' : 's'} sent back`}</span>
+                      <span className={cn('ml-auto', a.ok ? 'text-ok' : 'text-bad')}>{a.ok ? 'accepted' : a.error ? 'no answer' : a.behaviour ? 'compiled, it prints different output: sent back' : `type checker: ${a.diagnostics.length} error${a.diagnostics.length === 1 ? '' : 's'} sent back`}</span>
                     </div>
                     {!a.ok && (a.error || a.diagnostics.length > 0) && (
                       <ul className="mt-1 space-y-0.5 pl-5 text-fg3">

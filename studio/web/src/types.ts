@@ -405,6 +405,7 @@ export interface PlaygroundConvert {
   model?: string | null
   blockers?: Blocker[]
   behaviour_checked?: boolean
+  limit?: boolean             // correct conversion, but a PySub limit (64-bit ints, ASCII) makes the compiled run differ
 }
 export interface ConvertStatus {
   enabled: boolean

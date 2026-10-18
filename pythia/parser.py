@@ -6,9 +6,36 @@ Recursive-descent parser for statements, Pratt (precedence-climbing)
 parser for expressions.  Panic-mode error recovery lets one run report
 several syntax errors instead of dying on the first.
 """
+import copy
 from typing import List, Optional
 from .lexer import LexError, Token, tokenize
 from . import ast_nodes as A
+
+
+def _chain_tail(e: A.Node) -> Optional[A.Compare]:
+    """The last comparison of an unparenthesised comparison chain ending at `e`, else None."""
+    if getattr(e, "paren", False):
+        return None
+    if isinstance(e, A.Compare):
+        return e
+    if isinstance(e, A.BoolOp) and getattr(e, "chain", False):
+        return e.values[1]
+    return None
+
+
+def _pure(e: A.Node) -> bool:
+    """Safe to evaluate twice: no calls (side effects), just names, literals, fields and subscripts of those."""
+    if isinstance(e, (A.Name, A.IntLit, A.FloatLit, A.StrLit, A.BoolLit)):
+        return True
+    if isinstance(e, A.UnaryOp) and e.op == "-":
+        return _pure(e.operand)
+    if isinstance(e, A.Attribute):
+        return _pure(e.value)
+    if isinstance(e, A.Subscript):
+        return _pure(e.value) and _pure(e.index)
+    if isinstance(e, A.BinOp):
+        return _pure(e.left) and _pure(e.right)
+    return False
 
 # Pratt binding powers. Higher binds tighter.
 BP = {
@@ -407,7 +434,18 @@ class Parser:
             if op in ("and", "or"):
                 left = A.BoolOp(t.line, t.col, op=op, values=[left, right])
             elif op in ("==", "!=", "<", "<=", ">", ">=", "in", "not in"):
-                left = A.Compare(t.line, t.col, op=op, left=left, right=right)
+                cmp_left = _chain_tail(left)
+                if cmp_left is None:
+                    left = A.Compare(t.line, t.col, op=op, left=left, right=right)
+                else:                                   # a < b < c  ==  a < b and b < c  (b evaluated once)
+                    mid = cmp_left.right
+                    if not _pure(mid):
+                        self.errors.append(Diagnostic(
+                            "chained comparison with a computed middle operand: assign it to a variable first "
+                            "(PySub evaluates `a < b < c` as `a < b and b < c`)", mid.line, mid.col))
+                    nxt = A.Compare(t.line, t.col, op=op, left=copy.deepcopy(mid), right=right)
+                    left = A.BoolOp(t.line, t.col, op="and", values=[left, nxt])
+                    left.chain = True
             else:
                 left = A.BinOp(t.line, t.col, op=op, left=left, right=right)
         if min_bp == 0 and self.at_kw("if"):           # body if test else orelse (loosest; orelse may nest)
@@ -473,6 +511,7 @@ class Parser:
             self.next()
             e = self.parse_expr()
             self.expect("OP", ")")
+            e.paren = True                             # (a < b) < c is NOT a chain
             return e
         if self.at_op("["):
             self.next()
