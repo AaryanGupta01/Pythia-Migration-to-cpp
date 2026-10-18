@@ -243,6 +243,11 @@ template <class T> void pyl_sort(PyList<T> *l, bool rev) {   // CPython: stable;
     std::stable_sort(l->data.begin(), l->data.end(), [](const T &a, const T &b) { return pyl_lt(a, b); });
     if (rev) std::reverse(l->data.begin(), l->data.end());
 }
+template <class T> PyList<T> *pyl_repeat(PyList<T> *l, int64_t n) {   // [x] * n: shallow copies, n <= 0 -> []
+    auto *r = pyl_new<T>();
+    for (int64_t k = 0; k < n; ++k) r->data.insert(r->data.end(), l->data.begin(), l->data.end());
+    return r;
+}
 template <class T> PyList<T> *pyl_sorted(PyList<T> *l, bool rev) { auto *r = pyl_copy(l); pyl_sort(r, rev); return r; }
 // list(s) / sorted(s): one-character strings; list(d) / sorted(d): the keys in insertion order
 inline PyListStr *pyl_chars(PyStr *s) {

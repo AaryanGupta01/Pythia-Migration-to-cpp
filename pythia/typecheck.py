@@ -817,6 +817,10 @@ class TypeChecker:
         if op == "*" and ((lt == STR and rt.name in ("int", "bool")) or
                           (rt == STR and lt.name in ("int", "bool"))):
             return STR
+        if op == "*" and lt.name == "list" and lt.elem is not None and rt.name in ("int", "bool"):
+            return lt                            # [0] * n (shallow, like Python: [[0]] * 3 shares the inner list)
+        if op == "*" and rt.name == "list" and rt.elem is not None and lt.name in ("int", "bool"):
+            return rt
         if lt.name in NUMERIC and rt.name in NUMERIC:
             if op == "/":
                 return FLOAT                       # true division is always float

@@ -865,6 +865,8 @@ class Emitter:
         if op == "*" and t == STR:
             return (f"pystr_repeat({l}, {r})" if lt == STR
                     else f"pystr_repeat({r}, {l})")
+        if op == "*" and t.name == "list":
+            return f"pyl_repeat({l}, {r})" if lt.name == "list" else f"pyl_repeat({r}, {l})"
         if t == FLOAT or op == "/":
             fn = {"+": None, "-": None, "*": None,
                   "/": "py_truediv", "//": "py_floordiv_f64",
