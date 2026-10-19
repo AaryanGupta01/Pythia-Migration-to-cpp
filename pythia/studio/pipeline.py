@@ -153,6 +153,12 @@ class Pipeline:
                   f"{len(ws.skipped)} skipped")
         js.check()
 
+        # ---- script collections (no entry command, many standalone files): convert and verify whole files
+        from . import filemode
+        if filemode.applies(self):
+            filemode.run(self)
+            return
+
         # ---- scan
         self.stage("scan", "running", caption="Parsing every function and asking the PYTHIA typechecker what it accepts")
         self.step("scan", "Scanning functions", "running")

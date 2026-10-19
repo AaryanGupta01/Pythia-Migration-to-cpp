@@ -109,8 +109,9 @@ def _in_house(source: str, stdin: str, compile_fn, verify_fn):
     unverifiable = run is None or not run.get("ok") or (run.get("python") or {}).get("timed_out")
     if (unverifiable and not r.problems) or (not unverifiable and run.get("same")):
         att["ok"] = True
+        timing = {"python_ms": run["python"]["time_ms"], "cpp_ms": run["cpp"]["time_ms"]} if not unverifiable else None
         return att, {"ok": True, "already": False, "source": r.source, "attempts": [att], "changes": r.changes,
-                     "behaviour_checked": not unverifiable, **INHOUSE}
+                     "behaviour_checked": not unverifiable, "timing": timing, **INHOUSE}
     if not unverifiable:
         att["behaviour"] = _out_diff(run["python"], run["cpp"])
         if run.get("explain"):                     # a PySub limit (64-bit ints, ASCII): no rewrite fixes it

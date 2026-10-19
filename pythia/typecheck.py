@@ -55,6 +55,8 @@ def widens_to(src: Ty, dst: Ty) -> bool:
     """Implicit-conversion lattice.  bool -> int -> float."""
     if src == dst or src is ERR or dst is ERR:
         return True
+    if src is None or dst is None:             # an unresolved type (e.g. the element of an untyped empty list)
+        return False
     if _cls.sub_widens(src, dst):              # Sub -> Base upcast (classes_ext)
         return True
     ext = _x.widens(src, dst)                 # Optional / nullable objects (types_ext)
