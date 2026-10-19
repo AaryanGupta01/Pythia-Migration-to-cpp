@@ -647,7 +647,8 @@ class TypeChecker:
         """Checking mode: pushes `expected` inward where it helps inference."""
         if isinstance(e, A.TupleLit) and e.ty is None:
             return _tup.check_lit(self, e, expected)
-        if expected.name == "optional" and expected.elem is not None and expected.elem.name in ("list", "dict") \
+        if expected is not None and expected.name == "optional" and expected.elem is not None \
+                and expected.elem.name in ("list", "dict") \
                 and isinstance(e, (A.ListLit, A.DictLit)) and not getattr(e, "elts", getattr(e, "keys", None)):
             return self.check_expr(e, expected.elem)      # `seen = []` into an Optional[list[T]] variable
         if isinstance(e, A.ListLit) and expected.name == "list":

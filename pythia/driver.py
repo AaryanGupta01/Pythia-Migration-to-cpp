@@ -286,6 +286,24 @@ def gen(spec, rng: random.Random, i: int, ctx: List[str]) -> str:
     return "None"
 
 
+def ann_of(spec) -> str:
+    """The annotation text for a spec, for inputs that are literally None (a bare `x = None` has no type)."""
+    if spec in ("int", "float", "str", "bool"):
+        return spec
+    if spec == "tree":
+        return "TreeNode | None"
+    if spec == "llist":
+        return "ListNode | None"
+    if isinstance(spec, tuple):
+        if spec[0] == "list":
+            return f"list[{ann_of(spec[1])}]"
+        if spec[0] == "dict":
+            return f"dict[{ann_of(spec[1])}, {ann_of(spec[2])}]"
+        if spec[0] == "opt":
+            return f"{ann_of(spec[1])} | None"
+    return "int | None"
+
+
 def _is_mutable(spec) -> bool:
     return isinstance(spec, tuple) and spec[0] in ("list", "dict")
 
@@ -364,14 +382,16 @@ def _driver_for(entries: List[Entry], seed_key: str) -> Tuple[str, int]:
                     lit = f"len(_a{tag}_{j - 1})"
                 else:
                     lit = gen(spec, rng, i, ctx)
-                lines.append(f"_a{tag}_{j} = {lit}")
+                if lit == "None":
+                    lines.append(f"_a{tag}_{j}: {ann_of(spec)} = None")
+                else:
+                    lines.append(f"_a{tag}_{j} = {lit}")
                 args.append(f"_a{tag}_{j}")
             call = f"_s{tag}.{e.name}({', '.join(args)})" if e.cls else f"{e.name}({', '.join(args)})"
             body = list(lines)
             if e.cls:
                 body.insert(0, f"_s{tag} = {e.cls}()")
-            body.append(f"_r{tag} = {call}")
-            body.append(f"print({printer}(_r{tag}))" if printer else f"print(_r{tag})")
+            body.append(f"print({printer}({call}))" if printer else f"print({call})")
             for j, spec in enumerate(e.specs):
                 if _is_mutable(spec):
                     body.append(f"print(_a{tag}_{j})")

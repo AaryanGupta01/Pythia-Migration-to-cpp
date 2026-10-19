@@ -328,6 +328,8 @@ def all_have(tc, cls: str, resolver) -> Optional[str]:
 # =============================================================================================== type checker
 def sub_widens(src: Ty, dst: Ty) -> bool:
     """Implicit upcast Sub -> Base (hooked into typecheck.widens_to)."""
+    if src is None or dst is None:
+        return False
     tc = _cur()
     cx = ctx(tc) if tc is not None else None
     return cx is not None and src.name != dst.name and src.name in cx.base and cx.is_sub(src.name, dst.name)
