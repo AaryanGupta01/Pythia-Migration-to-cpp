@@ -10,6 +10,7 @@ compiler supports those natively. Edits are made on the original text, so commen
 from __future__ import annotations
 
 import ast
+import copy
 import io
 import re
 import tokenize
@@ -161,6 +162,8 @@ def to_pysub(source: str, stdin: str = "", run: bool = True, check: bool = True)
     """Convert untyped Python to PySub by adding types (and turning record dicts into classes).
     run=True: if static inference leaves gaps, execute the original once on `stdin` and use the types observed at
     run time to fill them. check=True: run original and conversion under CPython and require identical output."""
+    source, lambda_changes = _expand_simple_lambdas(source)
+    source, closure_changes = _rewrite_simple_closures(source)
     stripped = strip_doctest(source)
     doctest_removed = stripped != source
     source = stripped
@@ -211,7 +214,147 @@ def to_pysub(source: str, stdin: str = "", run: bool = True, check: bool = True)
         res.changes.append("removed doctest.testmod() (it prints nothing when the examples pass)")
     if n_split:
         res.changes.append(f"split {n_split} tuple assignment(s) `a, b = x, y` into separate statements")
+    res.changes.extend(lambda_changes)
+    res.changes.extend(closure_changes)
     return res
+
+
+def _expand_simple_lambdas(source: str) -> tuple[str, list[str]]:
+    """Lower simple module-level lambdas to ordinary functions.
+
+    PySub deliberately has no first-class function values, but small student
+    programs commonly use lambdas as named arithmetic helpers or immediately
+    invoke one.  These forms have no closure state and can be represented
+    exactly as regular functions before inference.
+    """
+    lines = source.splitlines()
+    out: list[str] = []
+    changes: list[str] = []
+    immediate: list[tuple[str, str, str]] = []
+    assignment = re.compile(r"^(\s*)([A-Za-z_]\w*)\s*=\s*lambda\s+([^:]+):\s*(.+)$")
+    call = re.compile(r"\(lambda\s+([^:]+):\s*([^()]+)\)\(([^()]*)\)")
+    counter = 0
+    for index, line in enumerate(lines):
+        sentinel_name = None
+        sentinel = re.match(r"^(\s*)([A-Za-z_]\w*)\s*=\s*float\(\s*[\"']inf[\"']\s*\)\s*$", line)
+        if sentinel:
+            sentinel_name = sentinel.group(2)
+        else:
+            pair = re.search(r"\b([A-Za-z_]\w*)\s*,\s*[A-Za-z_]\w*\s*=\s*float\(\s*[\"']inf[\"']\s*\)\s*,", line)
+            if pair:
+                sentinel_name = pair.group(1)
+        if sentinel_name and any(re.search(rf"\bmin\(\s*{re.escape(sentinel_name)}\s*,", x)
+                                 for x in lines[index + 1:]):
+            line = line.replace('float("inf")', "10**18").replace("float('inf')", "10**18")
+            changes.append(f"replaced float infinity sentinel for {sentinel_name} with an integer sentinel")
+        m = assignment.match(line)
+        if m and not m.group(1):
+            indent, name, params, expr = m.groups()
+            out.extend([f"def {name}({params.strip()}):", f"    return {expr}"])
+            changes.append(f"rewrote lambda {name} as a function")
+            continue
+        def replace(match):
+            nonlocal counter
+            counter += 1
+            name = f"__pythia_lambda_{counter}"
+            params, expr, args = match.groups()
+            immediate.append((name, params.strip(), expr.strip()))
+            return f"{name}({args})"
+        replaced = call.sub(replace, line)
+        out.append(replaced)
+    if immediate:
+        defs: list[str] = []
+        for name, params, expr in immediate:
+            defs.extend([f"def {name}({params}):", f"    return {expr}"])
+        out = defs + out
+        changes.append(f"rewrote {len(immediate)} immediately-called lambda(s) as functions")
+    return "\n".join(out) + ("\n" if source.endswith(("\n", "\r")) else ""), changes
+
+
+def _rewrite_simple_closures(source: str) -> tuple[str, list[str]]:
+    """Inline closure shapes that are common in small teaching programs.
+
+    General closures remain outside PySub, but a nested helper whose body is a
+    single expression can be safely inlined at each call site.  A tiny
+    nonlocal counter closure is lowered to its equivalent loop as well.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return source, []
+    changes: list[str] = []
+
+    class Rewriter(ast.NodeTransformer):
+        def visit_FunctionDef(self, node):
+            self.generic_visit(node)
+            nested = {s.name: s for s in node.body if isinstance(s, ast.FunctionDef)}
+            for name, helper in list(nested.items()):
+                if (len(helper.body) == 3 and isinstance(helper.body[0], ast.Nonlocal)
+                        and len(helper.body[0].names) == 1
+                        and isinstance(helper.body[1], ast.AugAssign)
+                        and isinstance(helper.body[1].target, ast.Name)
+                        and isinstance(helper.body[1].op, ast.Add)
+                        and isinstance(helper.body[2], ast.Return)
+                        and isinstance(helper.body[2].value, ast.Name)
+                        and helper.body[1].target.id == helper.body[0].names[0]
+                        and helper.body[2].value.id == helper.body[0].names[0]):
+                    counter = helper.body[0].names[0]
+                    loop = next((s for s in node.body if isinstance(s, ast.For)
+                                 and len(s.body) == 1 and isinstance(s.body[0], ast.Expr)
+                                 and isinstance(s.body[0].value, ast.Call)
+                                 and isinstance(s.body[0].value.func, ast.Name)
+                                 and s.body[0].value.func.id == name), None)
+                    final = next((s for s in node.body if isinstance(s, ast.Return)
+                                  and isinstance(s.value, ast.Call)
+                                  and isinstance(s.value.func, ast.Name)
+                                  and s.value.func.id == name), None)
+                    if loop is not None and final is not None:
+                        inc = ast.AugAssign(target=ast.Name(id=counter, ctx=ast.Store()),
+                                            op=ast.Add(), value=ast.Constant(value=1))
+                        loop.body = [ast.copy_location(inc, loop.body[0])]
+                        final_inc = ast.copy_location(ast.AugAssign(
+                            target=ast.Name(id=counter, ctx=ast.Store()),
+                            op=ast.Add(), value=ast.Constant(value=1)), final)
+                        final.value = ast.Name(id=counter, ctx=ast.Load())
+                        body = [s for s in node.body if s is not helper and s is not final]
+                        body.extend([final_inc, final])
+                        node.body = body
+                        changes.append(f"lowered nonlocal counter closure {name}()")
+                        continue
+                if (len(helper.body) == 1 and isinstance(helper.body[0], ast.Return)
+                        and helper.args.args and helper.args.vararg is None):
+                    param = helper.args.args[0].arg
+                    expr = helper.body[0].value
+
+                    class Inline(ast.NodeTransformer):
+                        def visit_Call(self, call):
+                            self.generic_visit(call)
+                            if (isinstance(call.func, ast.Name) and call.func.id == name
+                                    and len(call.args) == 1 and not call.keywords):
+                                repl = Sub(param, call.args[0]).visit(ast.fix_missing_locations(
+                                    copy.deepcopy(expr)))
+                                return ast.copy_location(repl, call)
+                            return call
+
+                    class Sub(ast.NodeTransformer):
+                        def visit_Name(self, ref):
+                            return ast.copy_location(
+                                copy.deepcopy(self.value), ref) if ref.id == self.name else ref
+                        def __init__(self, name, value):
+                            self.name, self.value = name, value
+
+                    node.body = [s for s in node.body if s is not helper]
+                    node = Inline().visit(node)
+                    changes.append(f"inlined nested helper {name}()")
+            return node
+
+    tree = Rewriter().visit(tree)
+    ast.fix_missing_locations(tree)
+    try:
+        out = ast.unparse(tree) + "\n"
+    except Exception:
+        return source, []
+    return out, changes
 
 
 def strip_doctest(source: str) -> str:

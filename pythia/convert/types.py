@@ -140,7 +140,7 @@ def render(t, rec_name: Callable[[object], str] = lambda r: "Record", optional: 
     """Annotation text, or None if the type can't be written down."""
     if t is None:
         return None
-    if t == "num":
+    if t in ("num", "float_sentinel"):
         return "float"
     if isinstance(t, str):
         return t
@@ -170,6 +170,8 @@ def show(t) -> str:
         return "unknown"
     if t == "num":
         return "int or float"
+    if t == "float_sentinel":
+        return "float"
     if isinstance(t, tuple):
         if t[0] == "bad":
             return "conflicting types"

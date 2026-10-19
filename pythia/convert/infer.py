@@ -318,6 +318,13 @@ class Engine:
         if t is None or key in self.fixed:
             return
         old = self.slots.get(key)
+        # A float infinity used only to initialise a running integer minimum
+        # is a sentinel; once an integer value is assigned, the variable has
+        # the integer type in Python.
+        if old == "float_sentinel" and t == "int":
+            t = "int"
+        elif old == "int" and t == "float_sentinel":
+            return
         new = join(old, t)
         if new != old:
             self.slots[key] = new
@@ -356,6 +363,14 @@ class Engine:
             return self.slots.get(key)
         if name in self.top_funcs:
             return ("fn", name)
+        # A nested function is a local binding in its enclosing function.  Keep
+        # its qualified name so calls from comprehensions can infer its return
+        # type and captured variables can be resolved through the parent scope.
+        if self.scope is not None:
+            prefix = self.scope.qual + ".<locals>."
+            nested = prefix + name
+            if nested in self.funcs:
+                return ("fn", nested)
         if name in self.classes:
             return ("clsref", name)
         if name in self.imports:
@@ -656,6 +671,10 @@ class Engine:
         return self.binop(n.op, self.ty(n.left), self.ty(n.right))
 
     def binop(self, op, a, b):
+        if a == "float_sentinel":
+            a = "float"
+        if b == "float_sentinel":
+            b = "float"
         if isinstance(a, tuple) and a[0] == "opt":
             a = a[1]
         if isinstance(b, tuple) and b[0] == "opt":
@@ -848,10 +867,16 @@ class Engine:
     # ------------------------------------------------------------------ calls
     def ex_Call(self, n):
         f = n.func
-        if isinstance(f, ast.Name) and not self.in_env(f.id) and self.load_key(f.id) is None:
+        if isinstance(f, ast.Name):
             name = f.id
-            if name in self.top_funcs:
-                return self.call_user(self.top_funcs[name], n, False)
+            target = self.top_funcs.get(name)
+            if target is None and self.scope is not None:
+                target = self.funcs.get(self.scope.qual + ".<locals>." + name)
+            if target is not None:
+                return self.call_user(target, n, False)
+            if self.in_env(name) or self.load_key(name) is not None:
+                self._args(n)
+                return None
             if name in self.classes:
                 init = self.find_method(name, "__init__")
                 if init is not None:
@@ -1027,6 +1052,9 @@ class Engine:
         if name in ("len", "ord", "hash", "id", "int"):
             return "int"
         if name == "float":
+            if (n.args and isinstance(n.args[0], ast.Constant)
+                    and n.args[0].value in ("inf", "-inf")):
+                return "float_sentinel"
             return "float"
         if name in ("str", "repr", "chr", "hex", "bin", "oct", "ascii", "format", "input"):
             return "str"
@@ -1044,7 +1072,13 @@ class Engine:
             r = elem(A(0)) if len(args) == 1 else None
             if len(args) > 1:
                 for t in args:
-                    r = join(r, t)
+                    # `lo = float("inf"); lo = min(lo, integer)` is the
+                    # standard Python sentinel idiom.  The result is an int
+                    # once the real integer value is selected, not a float.
+                    if r in ("float", "float_sentinel") and t == "int":
+                        r = t
+                    else:
+                        r = join(r, t)
             if "default" in kw:
                 r = join(r, self.types.get(kw["default"]))
             return r
