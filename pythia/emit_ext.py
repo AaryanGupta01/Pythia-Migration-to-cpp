@@ -347,6 +347,11 @@ def print_call(em, a, value: Optional[str]) -> Optional[str]:
     t = a.ty
     if t is None:
         return None
+    if isinstance(a, A.IfExp) and getattr(a, "print_arg", False) and value is None             and a.body.ty is not None and a.orelse.ty is not None and a.body.ty != a.orelse.ty             and a.body.ty.name != "optional" and a.orelse.ty.name != "optional":
+        return (f"[&]() {{ if ({em.cond(a.test)}) {{ {em.print_call(a.body)}; }} "
+                f"else {{ {em.print_call(a.orelse)}; }} }}()")
+    if t == NONE:                                         # print(None) / print(f()) of a function returning nothing
+        return f"((void)({value if value is not None else em.ex(a)}), py_print_none())"
     e = value if value is not None else em.ex(a)
     if t.name == "optional":
         inner = em.print_call(_typed_var("_o", t), "(*_o)" if opt_scalar(t) else "_o")

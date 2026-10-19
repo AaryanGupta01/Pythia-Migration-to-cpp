@@ -139,11 +139,40 @@ def subscript(tc, e: A.Subscript, base: Ty) -> Ty:
     return base.elts[e.tuple_index]
 
 
+def _in_tuple_rewrite(tc, e: A.Compare, lt: Ty, rt: Ty) -> Ty:
+    """`x in t` for a tuple of mixed element types: x == t[0] or x == t[1] ... (elements whose type can never equal x are
+    skipped, as CPython's == would say False), exactly CPython's membership test."""
+    if not (is_pure_expr(e.left) and is_pure_expr(e.right)):
+        return tc.err(e, "`in` on a tuple of mixed types needs plain names or literals on both sides "
+                         "(each side is read once per element): assign them to variables first")
+    ln, cl = e.line, e.col
+    num = ("bool", "int", "float")
+    tests = [A.Compare(ln, cl, op="==", left=e.left,
+                       right=A.Subscript(ln, cl, value=e.right, index=A.IntLit(ln, cl, value=i)))
+             for i, el in enumerate(rt.elts)
+             if (lt.name in num and el.name in num) or (lt == el and lt.name in ("str", "tuple", "list"))]
+    if not tests:
+        node = A.BoolLit(ln, cl, value=False)
+    else:
+        node = tests[0]
+        for t in tests[1:]:
+            node = A.BoolOp(ln, cl, op="or", values=[node, t])
+    if e.op == "not in":
+        node = A.UnaryOp(ln, cl, op="not", operand=node)
+    e.__class__ = type(node)
+    e.__dict__.clear()
+    e.__dict__.update(node.__dict__)
+    e.ty = None
+    return tc.synth(e)
+
+
 def compare(tc, e: A.Compare, lt: Ty, rt: Ty) -> Ty:
     if lt is ERR or rt is ERR:
         return BOOL
     if e.op in ("in", "not in"):
         el = homogeneous(rt)
+        if (el is None or el != lt or not orderable(el)) and rt.name == "tuple":
+            return _in_tuple_rewrite(tc, e, lt, rt)
         if el is None or el != lt or not orderable(el):
             return tc.err(e, f"`{e.op}` on a tuple needs all its elements to have the type of the left operand "
                              f"(int, float, bool, str or tuples of those); found {lt} {e.op} {rt}")
@@ -275,3 +304,16 @@ def emit_call(em, e: A.Call) -> Optional[str]:
     if n == "str" and a.ty.name == "tuple":
         return f"py_repr_pystr({em.ex(a)})"
     return None
+
+
+def is_pure_expr(e) -> bool:
+    """Safe to evaluate twice: names, literals, fields and subscripts of those (no calls)."""
+    if isinstance(e, (A.Name, A.IntLit, A.FloatLit, A.StrLit, A.BoolLit, A.NoneLit)):
+        return True
+    if isinstance(e, A.Attribute):
+        return is_pure_expr(e.value)
+    if isinstance(e, A.Subscript):
+        return is_pure_expr(e.value) and is_pure_expr(e.index)
+    if isinstance(e, A.UnaryOp) and e.op == "-":
+        return is_pure_expr(e.operand)
+    return False

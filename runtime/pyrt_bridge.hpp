@@ -51,6 +51,7 @@ struct Arena {
     else if (n == "AttributeError") c = PyExc_AttributeError;
     else if (n == "NameError") c = PyExc_NameError;
     else if (n == "PythiaSemanticError" && SemanticError) c = SemanticError;
+    else if (n == "RecursionError" && FallbackError) c = FallbackError;   // let CPython decide where it overflows
     fail(c, e.message().c_str());
 }
 

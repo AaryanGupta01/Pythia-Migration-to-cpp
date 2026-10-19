@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -24,6 +25,9 @@ MAX_OUTPUT = 1_000_000        # bytes kept per stream
 RUN_TIMEOUT = 10              # seconds, CPython and compiled binary
 BUILD_TIMEOUT = 120
 EXC_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Exit)):", re.M)
+
+
+_RT_LOCK = threading.Lock()
 
 
 class PlaygroundError(Exception):
@@ -129,15 +133,20 @@ def _runtime_object(tmp_cache: Path) -> Path:
         h.update((RUNTIME / f).read_bytes())
     h.update(b"c++17-O2" + (toolchain.find_cxx()[1] or "").encode())
     obj = tmp_cache / f"pyrt-{h.hexdigest()[:16]}.o"
-    if not obj.exists():
-        tmp_cache.mkdir(parents=True, exist_ok=True)
-        part = obj.with_suffix(f".{os.getpid()}.part")
-        cxx = toolchain.find_cxx()[0]
-        r = subprocess.run([cxx, "-std=c++17", "-O2", "-c", "-I", str(RUNTIME), str(RUNTIME / "pyrt.cpp"), "-o", str(part)],
-                           capture_output=True, text=True, timeout=BUILD_TIMEOUT, env=toolchain.env_for(cxx))
-        if r.returncode != 0:
-            raise PlaygroundError("runtime failed to compile: " + r.stderr[-800:], 500)
-        os.replace(part, obj)
+    with _RT_LOCK:                                   # several requests may need a missing runtime object at once
+        if not obj.exists():
+            tmp_cache.mkdir(parents=True, exist_ok=True)
+            part = obj.with_suffix(f".{os.getpid()}.{threading.get_ident()}.part")
+            cxx = toolchain.find_cxx()[0]
+            r = subprocess.run([cxx, "-std=c++17", "-O2", "-c", "-I", str(RUNTIME), str(RUNTIME / "pyrt.cpp"), "-o", str(part)],
+                               capture_output=True, text=True, timeout=BUILD_TIMEOUT, env=toolchain.env_for(cxx))
+            if r.returncode != 0:
+                raise PlaygroundError("runtime failed to compile: " + r.stderr[-800:], 500)
+            try:
+                os.replace(part, obj)
+            except OSError:                          # another process won the race (antivirus may hold the file briefly)
+                if not obj.exists():
+                    raise
     return obj
 
 

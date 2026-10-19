@@ -227,8 +227,20 @@ def _as_key_lambda(tc, k: A.Node) -> Optional[A.Lambda]:
     return None
 
 
+def _dict_get_key(tc, k: A.Node, elem: Ty) -> Optional[A.Lambda]:
+    """key=d.get over the keys of d (max(d, key=d.get), sorted(d, key=d.get)): the key always exists, so d[k] is
+    the same value. (If the iterable held keys absent from d, CPython would fail on None < int; PySub raises KeyError.)"""
+    if isinstance(k, A.Attribute) and k.attr == "get" and isinstance(k.value, A.Name):
+        t = tc.scope.lookup(k.value.id)
+        if t is not None and t.name == "dict" and t.key == elem:
+            v = A.Name(k.line, k.col, id="_k")
+            return A.Lambda(k.line, k.col, params=["_k"],
+                            body=A.Subscript(k.line, k.col, value=A.Name(k.line, k.col, id=k.value.id), index=v))
+    return None
+
+
 def check_key(tc, kw: A.Keyword, elem: Ty) -> Ty:
-    lam = _as_key_lambda(tc, kw.value)
+    lam = _dict_get_key(tc, kw.value, elem) or _as_key_lambda(tc, kw.value)
     if lam is None:
         return ERR
     kw.value = lam

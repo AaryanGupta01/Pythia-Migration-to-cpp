@@ -2,6 +2,9 @@
 #define PYRT_HPP
 
 #include <algorithm>
+#include <cstdlib>
+#include <iostream>
+#include <iterator>
 #include <cerrno>
 #include <cmath>
 #include <cstdint>
@@ -787,6 +790,18 @@ template <class T> PyList<T> *px_slice(PyList<T> *l, bool hl, int64_t lo, bool h
     for (int64_t k = 0, i = s.start; k < s.count; ++k, i += s.step) r->data.push_back(l->data[static_cast<size_t>(i)]);
     return r;
 }
+template <class T> void px_slice_assign(PyList<T> *l, bool hl, int64_t lo, bool hh, int64_t hi, PyList<T> *src) {
+    std::vector<T> items = src->data;                    // a[1:3] = a must see the right-hand side as it was
+    PxSlice s = px_slice_calc(l->size(), hl, lo, hh, hi, false, 0);
+    auto at = l->data.begin() + s.start;
+    l->data.erase(at, at + s.count);
+    l->data.insert(l->data.begin() + s.start, items.begin(), items.end());
+}
+template <class T> void px_del_index(PyList<T> *l, int64_t i) {
+    int64_t n = l->size(), j = i < 0 ? i + n : i;
+    if (j < 0 || j >= n) throw IndexError("list assignment index out of range");
+    l->data.erase(l->data.begin() + j);
+}
 inline PyStr *px_str_slice(PyStr *a, bool hl, int64_t lo, bool hh, int64_t hi, bool hs, int64_t st) {
     PxSlice s = px_slice_calc(static_cast<int64_t>(a->data.size()), hl, lo, hh, hi, hs, st);
     std::string r;
@@ -1006,6 +1021,9 @@ template <class D> void px_dupdate(D *d, D *o) {
     }
 }
 template <class D> D *px_dcopy(D *d) { return arena_new<D>(*d); }
+template <class D> auto px_unmode(D *r, int) -> decltype(r->mode = 0, void()) { r->mode = 0; }
+template <class D> void px_unmode(D *, long) {}
+template <class D> D *px_dict_plain(D *d) { D *r = arena_new<D>(*d); px_unmode(r, 0); return r; }   // dict(defaultdict/Counter)
 template <class D> void px_dclear(D *d) { d->keys.clear(); d->vals.clear(); }
 template <class D, class L, class V> D *px_dfromkeys(L *ks, const V &v) {
     D *d = arena_new<D>();
@@ -1016,6 +1034,81 @@ template <class D, class L, class V> D *px_dfromkeys(L *ks, const V &v) {
     return d;
 }
 
+// ---- recursion depth (CPython parity), sys.exit, sys.stdin, big-stack main ------------------------------------
+inline int64_t py_depth = 1;                  // the module-level frame counts as 1, as in CPython
+inline int64_t py_recursion_limit = 1000;
+struct PyDepth {                              // one per call of a function in a program that has recursion
+    PyDepth() {
+        if (++py_depth > py_recursion_limit) {
+            --py_depth;
+            throw PythonException("RecursionError", std::string("maximum recursion depth exceeded"));
+        }
+    }
+    ~PyDepth() { --py_depth; }
+};
+inline void py_set_recursion_limit(int64_t n) {
+    if (n < 1) throw ValueError("recursion limit must be greater or equal than 1");
+    if (n <= py_depth)
+        throw PythonException("RecursionError", "cannot set the recursion limit to " + std::to_string(n) +
+                                                    " at the recursion depth " + std::to_string(py_depth) +
+                                                    ": the limit is too low");
+    py_recursion_limit = n;
+}
+[[noreturn]] inline void py_sys_exit_i(int64_t code) { std::cout.flush(); std::exit(static_cast<int>(code)); }
+[[noreturn]] inline void py_sys_exit_s(PyStr *msg) {
+    std::cout.flush();
+    std::cerr << msg->data << std::endl;
+    std::exit(1);
+}
+inline PyStr *py_stdin_readline() {           // like sys.stdin.readline(): keeps the newline, "" at end of input
+    std::string line;
+    if (!std::getline(std::cin, line)) return pystr_lit("");
+    if (!std::cin.eof()) line += '\n';          // the last line may have no newline
+    return pystr_new(line.data(), static_cast<int64_t>(line.size()));
+}
+inline PyStr *py_stdin_read() {
+    std::string all((std::istreambuf_iterator<char>(std::cin)), std::istreambuf_iterator<char>());
+    return pystr_new(all.data(), static_cast<int64_t>(all.size()));
+}
+#if !defined(_WIN32)
+extern "C" {
+#include <pthread.h>
+}
+struct PyMainCtx { int (*f)(); int rc; };
+inline void *py_main_thread(void *p) { auto *c = static_cast<PyMainCtx *>(p); c->rc = c->f(); return nullptr; }
+#endif
+inline int py_run_main(int (*f)()) {          // deep legal recursion must not overflow the C++ stack
+#if !defined(_WIN32)
+    pthread_attr_t a;
+    pthread_attr_init(&a);
+    pthread_attr_setstacksize(&a, static_cast<size_t>(1) << 30);
+    PyMainCtx c{f, 0};
+    pthread_t t;
+    if (pthread_create(&t, &a, py_main_thread, &c) == 0) { pthread_join(t, nullptr); return c.rc; }
+#endif
+    return f();                                // Windows: the linker reserves a big main-thread stack (--stack)
+}
+inline PyListStr *px_stdin_readlines() {
+    auto *r = pyl_new<PyStr *>();
+    for (;;) { PyStr *l = py_stdin_readline(); if (l->data.empty()) break; r->data.push_back(l); }
+    return r;
+}
+// ---- exceptions: builtin hierarchy matching, finally guard ---------------------------------------------------
+inline bool py_exc_isa(const std::string &n, const char *base) {
+    std::string b = base;
+    if (n == b) return true;
+    if (n == "PythiaSemanticError") return false;          // an internal "not reproducible" stop: user code never catches it
+    if (b == "Exception" || b == "BaseException") return true;
+    if (b == "LookupError") return n == "IndexError" || n == "KeyError";
+    if (b == "ArithmeticError") return n == "ZeroDivisionError" || n == "OverflowError";
+    if (b == "RuntimeError") return n == "RecursionError" || n == "NotImplementedError";
+    return false;
+}
+template <class F> struct PyFinally {                        // try/finally: runs on every way out (return/break/raise)
+    F f;
+    explicit PyFinally(F g) : f(std::move(g)) {}
+    ~PyFinally() noexcept(false) { f(); }
+};
 template <class D> auto *pyl_keys(D *d) {
     auto *r = pyl_new<typename decltype(d->keys)::value_type>(); r->data = d->keys; return r;
 }

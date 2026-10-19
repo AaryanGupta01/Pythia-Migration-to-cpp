@@ -52,7 +52,7 @@ SYS_CONSTS = {"maxsize": 9223372036854775807}
 MODULES = {
     "math": set(MATH_FUNCS) | set(MATH_FLOAT_CONSTS) | MATH_CALL_CONSTS,
     "string": set(STRING_CONSTS),
-    "sys": set(SYS_CONSTS) | {"setrecursionlimit"},
+    "sys": set(SYS_CONSTS) | {"setrecursionlimit", "getrecursionlimit", "exit", "stdin"},
     "copy": {"copy", "deepcopy"},
     "heapq": {"heappush", "heappop", "heapify", "heappushpop", "heapreplace", "nlargest", "nsmallest"},
     "bisect": {"bisect", "bisect_left", "bisect_right", "insort", "insort_left", "insort_right"},
@@ -97,12 +97,17 @@ def _const_or_call(p, mod: str, attr: str, tok, allow_call_args: bool = True) ->
             p.next()
             p._call_args()
             return A.IntLit(line, col, value=0)
-    if mod == "sys" and attr == "setrecursionlimit":
+    if mod == "sys" and attr in ("setrecursionlimit", "getrecursionlimit", "exit"):
         if p.at_op("("):
             p.next()
-            p._call_args()
-            return A.NoneLit(line, col)
-        return A.NoneLit(line, col)
+            args, _ = p._call_args()
+            return A.Call(line, col, func={"setrecursionlimit": "__setrecursionlimit",
+                                           "getrecursionlimit": "__getrecursionlimit", "exit": "__sys_exit"}[attr],
+                          args=args, kwargs=[])
+        p.error(f"sys.{attr} is a function: call it")
+        raise _panic()
+    if mod == "sys" and attr == "stdin":
+        return _sys_stdin(p, line, col)
     if mod == "enum" and attr == "auto":
         if p.at_op("("):
             p.next()
@@ -130,11 +135,39 @@ def _const_or_call(p, mod: str, attr: str, tok, allow_call_args: bool = True) ->
     if p.at_op("("):
         p.next()
         args, kwargs = p._call_args()
+        if mod == "heapq" and attr in ("nlargest", "nsmallest") and len(args) == 2:
+            # documented as equivalent to sorted(xs, key=key, reverse=(attr == "nlargest"))[:n]
+            kw = [k for k in kwargs if k.name == "key"]
+            if attr == "nlargest":
+                kw.append(A.Keyword(line, col, name="reverse", value=A.BoolLit(line, col, value=True)))
+            srt = A.Call(line, col, func="sorted", args=[args[1]], kwargs=kw)
+            return A.Call(line, col, func="__slice", args=[srt, A.NoneLit(line, col), args[0], A.NoneLit(line, col)],
+                          kwargs=[])
         return A.Call(line, col, func=f"{mod}.{attr}", args=args, kwargs=kwargs)
     if attr in MATH_CALL_CONSTS:
         return A.Call(line, col, func=f"{mod}.{attr}", args=[], kwargs=[])
     p.error(f"{mod}.{attr} is a function; PySub has no first-class functions (call it: {mod}.{attr}(...))")
     raise _panic()
+
+
+def _sys_stdin(p, line, col) -> A.Node:
+    """sys.stdin.readline() / .read() / .readlines() and `for x in sys.stdin`; `sys.stdin.readline` as a value is the
+    competitive-programming idiom `input = sys.stdin.readline` (recorded on the parser, see parse_iter)."""
+    if p.at_op("."):
+        p.next()
+        meth = p.expect("NAME").value
+        if meth not in ("readline", "read", "readlines"):
+            p.error(f"sys.stdin.{meth} is outside the PySub subset (readline, read, readlines are supported)")
+            raise _panic()
+        if p.at_op("("):
+            p.next()
+            p._call_args()
+            return A.Call(line, col, func="__stdin_" + meth, args=[], kwargs=[])
+        if meth == "readline":
+            return A.Name(line, col, id="__stdin_readline_fn")
+        p.error(f"sys.stdin.{meth} is a function: call it")
+        raise _panic()
+    return A.Call(line, col, func="__stdin_readlines", args=[], kwargs=[])          # for line in sys.stdin
 
 
 def _panic():

@@ -164,6 +164,8 @@ def to_pysub(source: str, stdin: str = "", run: bool = True, check: bool = True)
     stripped = strip_doctest(source)
     doctest_removed = stripped != source
     source = stripped
+    from .prep import split_tuple_assigns
+    source, n_split = split_tuple_assigns(source)
     try:
         tree = ast.parse(source)
     except SyntaxError as e:
@@ -207,6 +209,8 @@ def to_pysub(source: str, stdin: str = "", run: bool = True, check: bool = True)
                                     "please report this program")
     if doctest_removed:
         res.changes.append("removed doctest.testmod() (it prints nothing when the examples pass)")
+    if n_split:
+        res.changes.append(f"split {n_split} tuple assignment(s) `a, b = x, y` into separate statements")
     return res
 
 
@@ -309,8 +313,10 @@ class _Plan:
             return None
         if "Optional[" in s:
             self.need_optional = True
-        for name, line in ((k.name, k.node.lineno) for k in self.eng.classes.values()):
-            if where_line and line > where_line and re.search(rf"\b{re.escape(name)}\b", s):
+        # a class is only defined once its whole body has run: an annotation inside it (or before it) naming it
+        # needs `from __future__ import annotations`
+        for name, end in ((k.name, k.node.end_lineno) for k in self.eng.classes.values()):
+            if where_line and end > where_line and re.search(rf"\b{re.escape(name)}\b", s):
                 self.late_class_ref = True
         return s
 
@@ -431,6 +437,12 @@ class _Plan:
                 self.problem(fn.lineno, f"{pretty} is a generator function (yield); it is left as it is")
                 continue
             rt = self.eng.slots.get(("ret", f.qual))
+            if rt in (None, "None") and fn.name != "__init__" and any(
+                    isinstance(r, ast.Return) and r.value is not None
+                    and not (isinstance(r.value, ast.Constant) and r.value.value is None)
+                    for r in _func_own(fn)):
+                rt = "int"          # it `return`s a value, but nothing in the program ever produces one (e.g. endless
+                #                    recursion): any type is as good as another, so pick int
             if rt in (None, "None"):
                 s = "None" if fn.name == "__init__" else None
             else:

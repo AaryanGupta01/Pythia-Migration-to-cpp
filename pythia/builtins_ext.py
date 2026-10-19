@@ -81,6 +81,53 @@ def synth_call(tc, e: A.Call) -> Optional[Ty]:
         return None
     if f == "__slice":
         return _slice(tc, e)
+    if f == "dict" and len(e.args) == 1 and not getattr(e, "kwargs", None):          # dict(d): a shallow copy
+        t = tc.synth(e.args[0])
+        if t is not ERR and t.name == "dict":
+            return t
+        return tc.err(e.args[0], f"dict() takes a dict here, found {t}; write d: dict[K, V] = {{}} for an empty one")
+    if f == "__setrecursionlimit":
+        if len(e.args) != 1:
+            return tc.err(e, "sys.setrecursionlimit() takes exactly one argument")
+        _need(tc, e.args[0], _intlike, "the recursion limit must be an int")
+        return NONE
+    if f == "__getrecursionlimit":
+        return INT
+    if f == "__sys_exit":
+        if len(e.args) > 1:
+            return tc.err(e, "sys.exit() takes at most one argument")
+        if e.args:
+            t = tc.synth(e.args[0])
+            if t is not ERR and not (_intlike(t) or t == STR):
+                return tc.err(e.args[0], f"sys.exit() takes an int or a str here, found {t}")
+        return NONE
+    if f in ("__stdin_readline", "__stdin_read"):
+        return STR
+    if f == "__stdin_readlines":
+        return Ty("list", STR)
+    if f == "__slice_assign":                         # a[i:j] = ys
+        base = tc.synth(e.args[0])
+        for a in e.args[1:4]:
+            if not isinstance(a, A.NoneLit):
+                _need(tc, a, _intlike, "slice indices must be integers or None")
+        if not isinstance(e.args[3], A.NoneLit):
+            return tc.err(e, "assignment to an extended slice a[i:j:k] = ... is outside the PySub subset")
+        if base is ERR:
+            return ERR
+        if base.name != "list":
+            return tc.err(e, f"{base} does not support slice assignment in PySub (only lists do)")
+        val = tc.check_expr(e.args[4], base)
+        if val is not ERR and val != base:
+            return tc.err(e.args[4], f"slice assignment needs a {base} on the right, found {val}")
+        return NONE
+    if f == "__del_index":                            # del a[i]
+        base = tc.synth(e.args[0])
+        if base is ERR:
+            return ERR
+        if base.name != "list":
+            return tc.err(e, f"del a[i] works on lists in PySub, found {base}")
+        _need(tc, e.args[1], _intlike, "list index must be an integer")
+        return NONE
     if f.startswith("math."):
         return _math(tc, e)
     if f.startswith("copy."):
@@ -205,8 +252,35 @@ def synth_call(tc, e: A.Call) -> Optional[Ty]:
     return None
 
 
+def _tuple_slice(tc, e, base) -> Ty:
+    """t[i:j:k] with constant bounds: the size is known statically, so it becomes a tuple of subscripts."""
+    from .tuples import is_pure_expr
+    consts = []
+    for a in e.args[1:]:
+        if isinstance(a, A.NoneLit):
+            consts.append(None)
+        elif isinstance(a, A.IntLit):
+            consts.append(a.value)
+        elif isinstance(a, A.UnaryOp) and a.op == "-" and isinstance(a.operand, A.IntLit):
+            consts.append(-a.operand.value)
+        else:
+            return tc.err(a, "slicing a tuple needs constant bounds (its size must be known at compile time)")
+    if not is_pure_expr(e.args[0]):
+        return tc.err(e, "slice a tuple held in a plain variable (the tuple is read once per element)")
+    if consts[2] == 0:
+        return tc.err(e, "slice step cannot be zero")
+    idx = list(range(len(base.elts)))[slice(*consts)]
+    ln, cl, b = e.line, e.col, e.args[0]
+    e.__class__ = A.TupleLit
+    e.elts = [A.Subscript(ln, cl, value=b, index=A.IntLit(ln, cl, value=i)) for i in idx]
+    e.ty = None
+    return tc.synth(e)
+
+
 def _slice(tc, e) -> Ty:
     base = tc.synth(e.args[0])
+    if base is not ERR and base.name == "tuple":
+        return _tuple_slice(tc, e, base)
     for a in e.args[1:]:
         if not isinstance(a, A.NoneLit):
             _need(tc, a, _intlike, "slice indices must be integers or None")
@@ -432,10 +506,32 @@ def emit_call(em, e: A.Call) -> Optional[str]:
     if n in em.tc.funcs or n in em.tc.classes:
         return None
     a = e.args
+    if n == "dict" and len(a) == 1:
+        return f"px_dict_plain({em.ex(a[0])})"
+    if n == "__setrecursionlimit":
+        return f"(py_set_recursion_limit({_i(em, a[0])}), 0)"
+    if n == "__getrecursionlimit":
+        return "py_recursion_limit"
+    if n == "__sys_exit":
+        if not a:
+            return "(py_sys_exit_i(0), 0)"
+        return f"(py_sys_exit_s({em.ex(a[0])}), 0)" if a[0].ty == STR else f"(py_sys_exit_i({_i(em, a[0])}), 0)"
+    if n == "__stdin_readline":
+        return "py_stdin_readline()"
+    if n == "__stdin_read":
+        return "py_stdin_read()"
+    if n == "__stdin_readlines":
+        return "px_stdin_readlines()"
     if n == "__slice":
         base = a[0]
         fn = "px_str_slice" if base.ty == STR else "px_slice"
         return f"{fn}({em.ex(base)}, {_slice_args(em, e)})"
+    if n == "__slice_assign":
+        lo, hi = a[1], a[2]
+        return (f"(px_slice_assign({em.ex(a[0])}, {'false, 0' if isinstance(lo, A.NoneLit) else 'true, ' + _i(em, lo)}, "
+                f"{'false, 0' if isinstance(hi, A.NoneLit) else 'true, ' + _i(em, hi)}, {em.ex(a[4])}), 0)")
+    if n == "__del_index":
+        return f"(px_del_index({em.ex(a[0])}, {_i(em, a[1])}), 0)"
     if n.startswith("math."):
         return _emit_math(em, e)
     if n.startswith("copy."):

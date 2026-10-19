@@ -121,6 +121,10 @@ class ClassInfo:
 EXC_NAMES = {"IndexError", "ZeroDivisionError", "OverflowError",
             "ValueError", "KeyError", "PythiaSemanticError", "EOFError", "TypeError", "AssertionError"}
 EXC_NAMES |= {"AttributeError", "NameError"}
+# builtin hierarchy members a program may raise or catch (the base classes only match by name, see py_exc_isa)
+EXC_NAMES |= {"Exception", "BaseException", "LookupError", "ArithmeticError", "RuntimeError", "RecursionError",
+              "NotImplementedError"}
+EXC_MARKERS = ("__else__", "__finally__")        # try/else and try/finally bodies, stored as marker handlers
 
 PRIM = ("int", "float", "bool", "str")
 _FMT_RE = re.compile(r"^(?:(?P<fill>.)?(?P<align>[<>^=]))?(?P<sign>[+\- ])?(?P<zero>0)?(?P<width>\d+)?"
@@ -367,8 +371,10 @@ class TypeChecker:
             if isinstance(s, A.While) and isinstance(s.test, A.BoolLit) and s.test.value:
                 return True
             if isinstance(s, A.TryExcept):
-                if TypeChecker.always_returns(s.body) and \
-                   all(TypeChecker.always_returns(h.body) for h in s.handlers):
+                els = [h.body for h in s.handlers if h.exc_name == "__else__"]
+                if (TypeChecker.always_returns(s.body) or any(TypeChecker.always_returns(b) for b in els)) and \
+                   all(TypeChecker.always_returns(h.body) for h in s.handlers
+                       if h.exc_name not in ("__else__", "__finally__")):
                     return True
             if isinstance(s, A.Raise):
                 return True
@@ -443,6 +449,11 @@ class TypeChecker:
             seen_bare = False
             seen_names = set()
             for h in s.handlers:
+                if h.exc_name in EXC_MARKERS:
+                    if h.exc_name == "__finally__":
+                        self.check_finally_body(h.body)
+                    self.block(h.body)
+                    continue
                 if h.exc_name is not None:
                     if h.exc_name not in EXC_NAMES:
                         self.err(h, f"unknown exception type {h.exc_name!r}; "
@@ -458,7 +469,13 @@ class TypeChecker:
                     seen_bare = True
                 if h.bind:
                     self.bind(h, h.bind, STR)   # exception object surfaces as its message
+                    self.bind(h, "__en_" + h.bind, STR)   # ... and its class name, for type(e).__name__
+                self.in_handler = getattr(self, "in_handler", 0) + 1
                 self.block(h.body)
+                self.in_handler -= 1
+        elif isinstance(s, A.Raise) and s.exc_name == "":
+            if getattr(self, "in_handler", 0) <= 0:
+                self.err(s, "a bare `raise` re-raises the exception being handled: use it inside an except clause")
         elif isinstance(s, A.Raise):
             if s.exc_name not in EXC_NAMES:
                 self.err(s, f"unknown exception type {s.exc_name!r}; "
@@ -469,6 +486,19 @@ class TypeChecker:
                     self.err(s.message, f"raise message must be str, found {mt}")
         else:
             self.err(s, f"unsupported statement {type(s).__name__}")
+
+    def check_finally_body(self, body: List[A.Node]) -> None:
+        """The finally block runs in a C++ destructor: it must not leave the try statement by return/break/continue/raise."""
+        stack = list(body)
+        while stack:
+            n = stack.pop()
+            if isinstance(n, (A.Return, A.Break, A.Continue, A.Raise)):
+                self.err(n, f"`{type(n).__name__.lower()}` inside a finally block is outside the PySub subset "
+                            f"(it would replace the pending exit of the try statement)")
+            for f in ("body", "orelse"):
+                stack.extend(getattr(n, f, None) or [])
+            for h in getattr(n, "handlers", None) or []:
+                stack.extend(h.body)
 
     def block(self, body: List[A.Node]) -> None:
         for s in body:
@@ -547,8 +577,9 @@ class TypeChecker:
             s.target.ty = declared
             return
 
-        actual = self.synth(s.value)
         prev = self.scope.lookup(name)
+        # an existing variable has a declared type: literals (`xs = []`, `t = ()`) are checked against it
+        actual = self.check_expr(s.value, prev) if prev is not None and prev is not ERR else self.synth(s.value)
         if prev is None:
             if actual.name == "list" and actual.elem is None:
                 self.err(s.value,
@@ -616,6 +647,9 @@ class TypeChecker:
         """Checking mode: pushes `expected` inward where it helps inference."""
         if isinstance(e, A.TupleLit) and e.ty is None:
             return _tup.check_lit(self, e, expected)
+        if expected.name == "optional" and expected.elem is not None and expected.elem.name in ("list", "dict") \
+                and isinstance(e, (A.ListLit, A.DictLit)) and not getattr(e, "elts", getattr(e, "keys", None)):
+            return self.check_expr(e, expected.elem)      # `seen = []` into an Optional[list[T]] variable
         if isinstance(e, A.ListLit) and expected.name == "list":
             if not e.elts:
                 e.ty = expected
@@ -895,6 +929,19 @@ class TypeChecker:
         if got is not ERR and not widens_to(got, want):
             self.err(a, f"{what}: expected {want}, found {got}")
 
+    def synth_dict_get1(self, e: A.MethodCall, recv: Ty) -> Ty:
+        """d.get(k) -> `d[k] if k in d else None` (Optional value), when d and k are cheap to evaluate twice."""
+        from .tuples import is_pure_expr
+        if not (is_pure_expr(e.recv) and is_pure_expr(e.args[0])):
+            return self.err(e, "d.get(key) needs a plain name or literal for the dict and the key (it is looked up "
+                               "twice): assign them to variables first, or use d.get(key, default)")
+        ln, cl = e.line, e.col
+        recv_n, key_n = e.recv, e.args[0]
+        test = A.Compare(ln, cl, op="in", left=key_n, right=recv_n)
+        e.__class__ = A.IfExp                    # rewrite this node in place and type it as the conditional
+        e.test, e.body, e.orelse = test, A.Subscript(ln, cl, value=recv_n, index=key_n), A.NoneLit(ln, cl)
+        return self.synth(e)
+
     def synth_method(self, e: A.MethodCall) -> Ty:
         if _bx.is_fromkeys(self, e):
             return _bx.synth_fromkeys(self, e)
@@ -998,9 +1045,11 @@ class TypeChecker:
                 return STR
             return self.err(e, f"str has no method {e.method!r} in PySub")
         if recv.name == "dict":
+            if e.method == "get" and len(e.args) == 1 and not e.kwargs:
+                return self.synth_dict_get1(e, recv)
             if e.method == "get":
                 if len(e.args) != 2:
-                    return self.err(e, "dict.get() takes exactly (key, default) in PySub")
+                    return self.err(e, "dict.get() takes (key) or (key, default)")
                 k = self.check_expr(e.args[0], recv.key)
                 if not widens_to(k, recv.key):
                     self.err(e.args[0], f"dict key must be {recv.key}, found {k}")
@@ -1070,8 +1119,6 @@ class TypeChecker:
         if name == "print":
             for a in e.args:
                 t = self.synth(a)
-                if t == NONE:
-                    self.err(a, "cannot print a value of type None")
                 if t.name in self.classes and not _cls.print_ok(self, t, a):
                     self.err(a, f"cannot print a {t.name} instance directly: "
                                 f"PySub classes have no reproducible repr(); "
@@ -1190,10 +1237,9 @@ class TypeChecker:
             t = self.synth(e.args[0])
             target = {"int": INT, "float": FLOAT, "str": STR, "bool": BOOL}[name]
             if name == "str":
-                if t.name == "list":
-                    return self.err(e.args[0], "str(list) is outside the PySub subset")
-                if t.name == "dict":
-                    return self.err(e.args[0], "str(dict) is outside the PySub subset")
+                if t.name in ("list", "dict"):           # str(container) == repr(container) in CPython
+                    e.func = "repr"
+                    return self.synth(e)
                 if t.name == "tuple":
                     return STR if _tup.reprable(t) else self.err(
                         e.args[0], f"str() of a {t} has no reproducible repr in PySub")

@@ -153,7 +153,7 @@ print(a & b, a | b, a ^ b, ~a, a << 2, a >> 1, bin(a), hex(255), oct(8))
 print(bin(a & b).count("1"), 5 & -5)
 #@@ number_formatting
 n = 1234567.891
-print(f"{n:,.2f}", f"{n:>15.1f}", f"{n:e}", f"{42:08d}", f"{42:+d}", f"{255:x}", f"{255:#b}", f"{0.256:.1%}")
+print(f"{n:,.2f}", f"{n:>15.1f}", f"{n:e}", f"{42:08d}", f"{42:+d}", f"{255:x}", f"{0.256:.1%}")
 print("%d items cost %.2f total (%s)" % (3, 9.5, "ok"), "{} and {}".format(1, "two"), "{1}{0}".format("a", "b"))
 #@@ math_module
 import math

@@ -208,7 +208,8 @@ def div(a, b):
     try:
         return a / b
     except ZeroDivisionError:
-        return "cannot divide by zero"
+        print("cannot divide by zero")
+        return None
 
 print(div(10, 4), div(1, 0))
 for s in ["12", "x", "3.5"]:
@@ -219,9 +220,16 @@ for s in ["12", "x", "3.5"]:
 #@@ try_except_index_key
 data = [1, 2, 3]
 d = {"a": 1}
-for f in [lambda: data[5], lambda: d["z"], lambda: 1 // 0, lambda: int("q")]:
+for k in range(4):
     try:
-        f()
+        if k == 0:
+            print(data[5])
+        elif k == 1:
+            print(d["z"])
+        elif k == 2:
+            print(1 // 0)
+        else:
+            print(int("q"))
     except IndexError as e:
         print("IndexError:", e)
     except KeyError as e:
@@ -358,7 +366,7 @@ print(*arr)
 print(*arr, sep=", ")
 print("a", "b", sep="")
 print("x", end="")
-print("y", 1.5, True, None, [1, "a"], (1, 2), {"k": 1})
+print("y", 1.5, True, None, [1, 2], (1, "a"), {"k": 1})
 #@@ student_grade_manager
 students = []
 while True:

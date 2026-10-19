@@ -444,7 +444,9 @@ def _term(s) -> bool:
     if isinstance(s, A.If):
         return bool(s.orelse) and terminates(s.body) and terminates(s.orelse)
     if isinstance(s, A.TryExcept):
-        return terminates(s.body) and all(terminates(h.body) for h in s.handlers)
+        els = [h.body for h in s.handlers if h.exc_name == "__else__"]
+        return (terminates(s.body) or any(terminates(b) for b in els)) and \
+            all(terminates(h.body) for h in s.handlers if h.exc_name not in ("__else__", "__finally__"))
     if isinstance(s, A.While):
         return isinstance(s.test, A.BoolLit) and s.test.value and not _has_break(s.body)
     return False
@@ -680,11 +682,19 @@ def _ifexp(tc, e) -> Ty:
         return ERR
     if bt == ot:
         return bt
+    for lit, other, side in ((e.orelse, bt, "orelse"), (e.body, ot, "body")):   # `xs if c else []`: the literal adopts
+        t_lit = ot if side == "orelse" else bt                                  # the other branch's type
+        if isinstance(lit, (A.ListLit, A.DictLit)) and not getattr(lit, "elts", getattr(lit, "keys", None)) \
+                and other.name == t_lit.name and other.name in ("list", "dict"):
+            lit.ty = other
+            return other
     for a, b in ((bt, ot), (ot, bt)):
         if a == NONE and b.name != "None":
             return opt_of(b)
         if a.name == "optional" and b == a.elem:
             return a
+    if getattr(e, "print_arg", False):                   # only printed: each branch prints with its own type
+        return bt
     return _err(tc, e, f"the branches of `x if c else y` have types {bt} and {ot}; PySub requires a single "
                        f"static result type (convert one branch explicitly, e.g. float(x))")
 

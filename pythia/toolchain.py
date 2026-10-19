@@ -108,7 +108,7 @@ def exe_link_args() -> List[str]:
     we pass it here as an ordinary argument instead."""
     if not IS_WIN:
         return []
-    args = ["-static"]
+    args = ["-static", "-Wl,--stack,536870912"]       # 512 MB main-thread stack: legal deep recursion must work
     cc = find_cxx()[0]
     if cc:
         m = Path(cc).resolve().parent.parent / "x86_64-w64-mingw32" / "lib" / "pythia-default-manifest.o"

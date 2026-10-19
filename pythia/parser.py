@@ -11,6 +11,7 @@ from typing import List, Optional
 from .lexer import LexError, Token, tokenize
 from . import ast_nodes as A
 from . import parse_ext as PX
+from . import parse_iter as PI
 
 
 def _chain_tail(e: A.Node) -> Optional[A.Compare]:
@@ -298,24 +299,51 @@ class Parser:
         handlers: List[A.ExceptHandler] = []
         while self.at_kw("except"):
             ht = self.next()
-            exc_name = None
+            names = [None]
             bind = None
             if not self.at_op(":"):
-                exc_name = self.expect("NAME").value
+                if self.at_op("("):                       # except (A, B) as e:  ->  one handler per name, same body
+                    self.next()
+                    names = [self.expect("NAME").value]
+                    while self.at_op(","):
+                        self.next()
+                        names.append(self.expect("NAME").value)
+                    self.expect("OP", ")")
+                else:
+                    names = [self.expect("NAME").value]
                 if self.cur.kind == "NAME" and self.cur.value == "as":
                     self.next()
                     bind = self.expect("NAME").value
             self.expect("OP", ":")
+            self.exc_binds = getattr(self, "exc_binds", []) + ([bind] if bind else [])
             hbody = self.parse_block()
-            handlers.append(A.ExceptHandler(line=ht.line, col=ht.col,
-                                            exc_name=exc_name, bind=bind, body=hbody))
+            if bind:
+                self.exc_binds.pop()
+            for k, nm in enumerate(names):
+                handlers.append(A.ExceptHandler(line=ht.line, col=ht.col, exc_name=nm, bind=bind,
+                                                body=hbody if k == 0 else copy.deepcopy(hbody)))
+        # `else:` / `finally:` bodies ride along as marker handlers, so every statement walker visits them
+        if self.at_kw("else"):
+            et = self.next()
+            self.expect("OP", ":")
+            if not handlers:
+                self.error("'try' with 'else' requires an 'except' clause")
+                raise _Panic()
+            handlers.append(A.ExceptHandler(line=et.line, col=et.col, exc_name="__else__", body=self.parse_block()))
+        if self.at("NAME") and self.cur.value == "finally":
+            ft = self.next()
+            self.expect("OP", ":")
+            handlers.append(A.ExceptHandler(line=ft.line, col=ft.col, exc_name="__finally__", body=self.parse_block()))
         if not handlers:
-            self.error("'try' block requires at least one 'except' clause")
+            self.error("'try' block requires an 'except' or 'finally' clause")
             raise _Panic()
         return A.TryExcept(line=t.line, col=t.col, body=body, handlers=handlers)
 
     def parse_raise(self) -> A.Raise:
         t = self.expect("KEYWORD", "raise")
+        if self.at("NEWLINE"):                         # bare `raise` inside an except clause: re-raise
+            self.next()
+            return A.Raise(line=t.line, col=t.col, exc_name="", message=None)
         name = self.expect("NAME").value
         msg = None
         if self.at_op("("):
@@ -389,8 +417,8 @@ class Parser:
                               start=start, stop=stop, step=step, body=body)
         it = self.parse_expr()
         self.expect("OP", ":")
-        return A.ForEach(line=t.line, col=t.col, var=var, iter=it,
-                         body=self.parse_block())
+        return PI.fuse_for(A.ForEach(line=t.line, col=t.col, var=var, iter=it,
+                                     body=self.parse_block()))
 
     def parse_simple(self) -> A.Node:
         t = self.cur
@@ -407,6 +435,8 @@ class Parser:
                             target=A.Name(nm.line, nm.col, id=nm.value),
                             ann=ann, value=val)
 
+        if self.at("NAME") and self.cur.value == "del" and self.toks[self.i + 1].kind != "OP":
+            return PI.parse_del(self)
         first = self.parse_exprlist()
         if self.at_op(":") and isinstance(first, A.Attribute):     # self.x: T = v (classes_ext)
             return _cls().parse_attr_ann(self, t, first)
@@ -434,11 +464,17 @@ class Parser:
                         raise _Panic()
                 return out
             self.expect("NEWLINE")
+            if isinstance(first, A.Call) and first.func == "__slice":      # a[i:j] = ys
+                return A.ExprStmt(line=t.line, col=t.col,
+                                  value=A.Call(t.line, t.col, func="__slice_assign", args=first.args + [val], kwargs=[]))
             if isinstance(first, A.TupleLit):          # a, b = ...  ->  tmp = ...; a = tmp[0]; b = tmp[1]
                 return self._unpack_stmts(first, val, t.line, t.col)
             if not isinstance(first, (A.Name, A.Subscript, A.Attribute)):
                 self.error("invalid assignment target")
                 raise _Panic()
+            if isinstance(first, A.Name) and isinstance(val, A.Name) and val.id == "__stdin_readline_fn":
+                self.readline_aliases = getattr(self, "readline_aliases", set()) | {first.id}   # input = sys.stdin.readline
+                return A.Pass(line=t.line, col=t.col)
             return A.Assign(line=t.line, col=t.col, target=first, value=val)
 
         if self.cur.kind == "OP" and self.cur.value in AUG_OPS:
@@ -539,10 +575,14 @@ class Parser:
                 if self.at_op("("):
                     self.next()
                     args, kwargs = self._call_args()
+                    args = PI.check_method_star(self, t, args)
                     if m == "format" and isinstance(node, A.StrLit):
                         node = PX.desugar_format(self, node, args, kwargs, t)
                     else:
                         node = A.MethodCall(t.line, t.col, recv=node, method=m, args=args, kwargs=kwargs)
+                elif m == "__name__" and isinstance(node, A.Call) and node.func == "type" and len(node.args) == 1 \
+                        and isinstance(node.args[0], A.Name) and node.args[0].id in getattr(self, "exc_binds", ()):
+                    node = A.Name(t.line, t.col, id="__en_" + node.args[0].id)     # type(e).__name__ in an except clause
                 else:
                     node = A.Attribute(t.line, t.col, value=node, attr=m)
             else:
@@ -574,7 +614,7 @@ class Parser:
             if self.at_op("("):
                 self.next()
                 args, kwargs = self._call_args()
-                return A.Call(t.line, t.col, func=t.value, args=args, kwargs=kwargs)
+                return PI.make_call(self, t, args, kwargs)   # map/filter/print(*xs) desugaring, star-arg checks
             return A.Name(t.line, t.col, id=t.value)
         if self.at_op("("):
             return self._paren(t)
@@ -644,6 +684,9 @@ def _call_args(self):
             kt = self.next()
             self.next()
             kwargs.append(A.Keyword(kt.line, kt.col, name=kt.value, value=self.parse_expr()))
+        elif self.at_op("*"):                          # f(*xs): only print(*xs) is accepted (see parse_iter)
+            st = self.next()
+            args.append(PI.StarArg(st.line, st.col, value=self.parse_expr()))
         else:
             if kwargs:
                 self.error("positional argument follows keyword argument")
@@ -954,6 +997,7 @@ def _unpack_stmts(self, target, value, line, col):
     """a, (b, c) = v  ->  u1 = __pythia_unpack(v, 2); a = u1[0]; u2 = __pythia_unpack(u1[1], 2); b = u2[0]; c = u2[1]
     The right-hand side is evaluated (and its length checked) before any target is assigned, as in CPython."""
     tmp = self._fresh_unpack()
+    value = PI.eager(value)                      # a, b = map(int, ...): the generator is consumed at once
     call = A.Call(line, col, func="__pythia_unpack", args=[value, A.IntLit(line, col, value=len(target.elts))])
     out = [A.Assign(line, col, target=A.Name(line, col, id=tmp), value=call)]
     for i, tg in enumerate(target.elts):
@@ -980,7 +1024,7 @@ def _for_unpack(self, t, target):
     body = self.parse_block()
     tmp = self._fresh_unpack()
     body = self._unpack_stmts(target, A.Name(t.line, t.col, id=tmp), t.line, t.col) + body
-    return A.ForEach(line=t.line, col=t.col, var=tmp, iter=it, body=body)
+    return PI.fuse_for(A.ForEach(line=t.line, col=t.col, var=tmp, iter=it, body=body))
 
 
 Parser._paren = _paren

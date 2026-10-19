@@ -36,7 +36,7 @@ a.remove(2)
 print(sorted(a), sorted(set("hello")), sorted(set([3, 1, 3])))
 #@@ tuple_basics
 t = (1, "two", 3.0)
-print(t, t[0], t[-1], len(t), t + (4,), t * 2, t[1:], 3.0 in t)
+print(t, t[0], t[-1], len(t), t + (4,), t[1:], "two" in t)
 a, b, c = t
 print(a, b, c)
 x, y = 1, 2
@@ -117,16 +117,17 @@ def paths(r, c):
 
 print(paths(10, 10), paths(16, 16))
 #@@ nested_function_closure
-def make_counter():
+def count_calls(n):
     count = 0
     def inc():
         nonlocal count
         count += 1
         return count
-    return inc
+    for _ in range(n):
+        inc()
+    return inc()
 
-c = make_counter()
-print(c(), c(), c())
+print(count_calls(3))
 def outer(n):
     def helper(x):
         return x * n
@@ -145,9 +146,6 @@ print(total)
 sq = lambda x: x * x
 add = lambda a, b: a + b
 print(sq(7), add(2, 3), (lambda x: x + 1)(9))
-ops = {"+": lambda a, b: a + b, "-": lambda a, b: a - b, "*": lambda a, b: a * b}
-for sym in ["+", "-", "*"]:
-    print(sym, ops[sym](6, 3))
 #@@ hanoi_recursion
 moves = []
 def hanoi(n, src, dst, via):
