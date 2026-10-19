@@ -285,10 +285,76 @@ def _rewrite_simple_closures(source: str) -> tuple[str, list[str]]:
     changes: list[str] = []
 
     class Rewriter(ast.NodeTransformer):
+        hoisted: list[ast.FunctionDef] = []
+        generated = 0
+
+        @staticmethod
+        def _names(node: ast.AST, ctx: ast.expr_context | None = None) -> set[str]:
+            return {n.id for n in ast.walk(node)
+                    if isinstance(n, ast.Name) and (ctx is None or isinstance(n.ctx, ctx))}
+
+        def _hoist_recursive(self, node: ast.FunctionDef, helper: ast.FunctionDef) -> bool:
+            """Lower a recursive nested helper by making captured locals explicit parameters."""
+            if not any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                       and n.func.id == helper.name for n in ast.walk(helper)):
+                return False
+            if any(isinstance(n, (ast.Nonlocal, ast.Global, ast.Lambda)) for n in ast.walk(helper)):
+                return False
+            local = self._names(helper, ast.Store)
+            local.update(a.arg for a in helper.args.args)
+            local.update(a.arg for a in helper.args.posonlyargs)
+            local.update(a.arg for a in helper.args.kwonlyargs)
+            local.discard(helper.name)
+            available = self._names(node, ast.Store)
+            available.update(a.arg for a in node.args.args)
+            available.update(a.arg for a in node.args.posonlyargs)
+            available.update(a.arg for a in node.args.kwonlyargs)
+            loads = self._names(helper, ast.Load)
+            captures = sorted(loads - local - {"True", "False", "None"})
+            captures = [name for name in captures if name in available]
+            if not captures:
+                return False
+            original_name = helper.name
+            self.generated += 1
+            generated = f"__pythia_nested_{original_name}_{self.generated}"
+            helper = copy.deepcopy(helper)
+            helper.name = generated
+            helper.args.args.extend(ast.arg(arg=name) for name in captures)
+
+            class Calls(ast.NodeTransformer):
+                def visit_Call(inner, call):
+                    inner.generic_visit(call)
+                    if isinstance(call.func, ast.Name) and call.func.id == original_name:
+                        call.func.id = generated
+                        call.args.extend(ast.Name(id=name, ctx=ast.Load()) for name in captures)
+                    return call
+
+            helper = Calls().visit(helper)
+            self.hoisted.append(helper)
+
+            class ParentCalls(ast.NodeTransformer):
+                def visit_Call(inner, call):
+                    inner.generic_visit(call)
+                    if isinstance(call.func, ast.Name) and call.func.id == original_name:
+                        call.func.id = generated
+                        call.args.extend(ast.Name(id=name, ctx=ast.Load()) for name in captures)
+                    return call
+
+            node.body = [statement for statement in node.body
+                         if not (isinstance(statement, ast.FunctionDef) and statement.name == original_name)]
+            ParentCalls().visit(node)
+            changes.append(f"hoisted recursive nested helper {original_name}()")
+            return True
+
         def visit_FunctionDef(self, node):
             self.generic_visit(node)
             nested = {s.name: s for s in node.body if isinstance(s, ast.FunctionDef)}
             for name, helper in list(nested.items()):
+                helper_node = helper
+                # Recursive helpers cannot be inlined; pass their captured state
+                # explicitly to a generated module-level helper instead.
+                if self._hoist_recursive(node, helper):
+                    continue
                 if (len(helper.body) == 3 and isinstance(helper.body[0], ast.Nonlocal)
                         and len(helper.body[0].names) == 1
                         and isinstance(helper.body[1], ast.AugAssign)
@@ -348,7 +414,10 @@ def _rewrite_simple_closures(source: str) -> tuple[str, list[str]]:
                     changes.append(f"inlined nested helper {name}()")
             return node
 
-    tree = Rewriter().visit(tree)
+    rewriter = Rewriter()
+    tree = rewriter.visit(tree)
+    if rewriter.hoisted:
+        tree.body = rewriter.hoisted + tree.body
     ast.fix_missing_locations(tree)
     try:
         out = ast.unparse(tree) + "\n"
