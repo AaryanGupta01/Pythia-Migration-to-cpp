@@ -162,6 +162,7 @@ def to_pysub(source: str, stdin: str = "", run: bool = True, check: bool = True)
     """Convert untyped Python to PySub by adding types (and turning record dicts into classes).
     run=True: if static inference leaves gaps, execute the original once on `stdin` and use the types observed at
     run time to fill them. check=True: run original and conversion under CPython and require identical output."""
+    source = source.expandtabs(4)
     source, lambda_changes = _expand_simple_lambdas(source)
     source, closure_changes = _rewrite_simple_closures(source)
     stripped = strip_doctest(source)
