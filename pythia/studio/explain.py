@@ -88,7 +88,7 @@ def syntax_error(source: str) -> Optional[str]:
         ast.parse(source)
         return None
     except SyntaxError as e:
-        return f"This is not valid Python yet: line {e.lineno}: {e.msg}. Fix it first (the AI converts working programs)."
+        return f"This is not valid Python yet: line {e.lineno}: {e.msg}. Fix the syntax first."
 
 
 def runtime(python: Optional[dict], cpp: Optional[dict]) -> Optional[str]:

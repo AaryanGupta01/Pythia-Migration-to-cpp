@@ -193,7 +193,7 @@ export function Playground() {
         </span>
         {reference && (
           <span className="flex items-center gap-1 rounded-full border border-ok/30 bg-ok/10 px-2 py-0.5 text-2xs text-ok" title="Run executes your ORIGINAL program under CPython and this converted program as compiled C++, on the same input.">
-            <ShieldCheck size={11} /> AI conversion: Run checks it against your original
+            <ShieldCheck size={11} /> In-house conversion: Run checks it against your original
             <button onClick={() => setReference(null)} className="ml-0.5 rounded hover:text-fg" aria-label="Stop comparing with the original"><X size={11} /></button>
           </span>
         )}
@@ -217,12 +217,9 @@ export function Playground() {
           <Sparkles size={15} className="flex-none text-accent" />
           <div className="min-w-0 flex-1">
             <span className="font-medium text-fg">This is regular Python, not PySub yet.</span>{' '}
-            <span className="text-fg2">PySub needs type annotations and minor rewrites. PYTHIA infers types in-house{cstat?.llm_enabled ? ' with AI fallback' : ''}; the type checker verifies every answer.</span>
+            <span className="text-fg2">PySub needs type annotations and minor rewrites. PYTHIA infers types in-house and the type checker verifies the result.</span>
           </div>
-          <Btn kind="primary" onClick={doConvert} className="flex-none"><Wand2 size={13} /> {cstat?.llm_enabled ? "Convert to PySub" : "Convert to PySub (In-house)"}</Btn>
-          {!cstat?.llm_enabled && (
-            <Btn onClick={() => openSpecial('settings')} className="flex-none text-xs" title={cstat?.hint ?? 'Add a free API key for AI fallback'}><KeyRound size={12} /> Add API key</Btn>
-          )}
+          <Btn kind="primary" onClick={doConvert} className="flex-none"><Wand2 size={13} /> Convert to PySub (In-house)</Btn>
         </div>
       )}
       <div className="grid min-h-0 flex-1 grid-cols-2">
@@ -241,12 +238,12 @@ export function Playground() {
         </div>
         <div className="flex min-h-0 flex-col">
           {conv.state !== 'idle' ? (
-            <ConvertPanel conv={conv} provider={cstat} onApply={applyConversion} onRetry={doConvert} onClose={() => setConv({ state: 'idle' })} />
+            <ConvertPanel conv={conv} onApply={applyConversion} onRetry={doConvert} onClose={() => setConv({ state: 'idle' })} />
           ) : (
             <>
               <PaneTitle l="Generated C++17" r={compiling ? 'updating…' : 'live'} />
               <div className="min-h-0 flex-1">
-                {cerr ? <Empty title="Compile request failed">{cerr}</Empty> : comp?.ok ? <CodeView path="playground.cpp" value={comp.cpp} language="cpp" notes={cN} syncLines={sync} /> : <Empty title={comp ? 'Nothing to compile yet' : 'Compiling'}>{comp ? (cstat?.enabled ? 'Fix the errors on the left, or let the AI convert the program to PySub (button above).' : 'Fix the typechecker errors on the left and the C++ appears here.') : ''}</Empty>}
+                {cerr ? <Empty title="Compile request failed">{cerr}</Empty> : comp?.ok ? <CodeView path="playground.cpp" value={comp.cpp} language="cpp" notes={cN} syncLines={sync} /> : <Empty title={comp ? 'Nothing to compile yet' : 'Compiling'}>{comp ? 'Fix the typechecker errors on the left, or use the in-house converter above.' : ''}</Empty>}
               </div>
             </>
           )}
@@ -260,7 +257,7 @@ const PaneTitle = ({ l, r }: { l: string; r: string }) => (
   <div className="flex h-7 flex-none items-center justify-between border-b border-line bg-panel px-3 text-xs"><span className="font-medium text-fg2">{l}</span><span className="text-fg3">{r}</span></div>
 )
 
-function ConvertPanel({ conv, provider, onApply, onRetry, onClose }: { conv: ConvState; provider: ConvertStatus | null; onApply: () => void; onRetry: () => void; onClose: () => void }) {
+function ConvertPanel({ conv, onApply, onRetry, onClose }: { conv: ConvState; onApply: () => void; onRetry: () => void; onClose: () => void }) {
   const r = conv.result
   const [secs, setSecs] = useState(0)
   useEffect(() => {
@@ -268,20 +265,18 @@ function ConvertPanel({ conv, provider, onApply, onRetry, onClose }: { conv: Con
     const t = setInterval(() => setSecs(Math.round((Date.now() - (conv.started ?? Date.now())) / 1000)), 500)
     return () => clearInterval(t)
   }, [conv.state, conv.started])
-  const model = (r?.model ?? provider?.model ?? '').replace(/^openai\//, '')
-  const who = `${r?.provider ?? provider?.provider ?? 'LLM'}${model ? ' · ' + model : ''}`
   const last = r?.attempts?.[r.attempts.length - 1]
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex h-7 flex-none items-center justify-between border-b border-line bg-panel px-3 text-xs">
-        <span className="flex items-center gap-1.5 font-medium text-fg2"><Wand2 size={12} className="text-accent" /> AI conversion to PySub</span>
+        <span className="flex items-center gap-1.5 font-medium text-fg2"><Wand2 size={12} className="text-accent" /> In-house conversion to PySub</span>
         <button onClick={onClose} className="rounded p-0.5 text-fg3 hover:bg-hover hover:text-fg" aria-label="Close"><X size={13} /></button>
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-auto p-3">
         {conv.state === 'running' && (
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm text-fg2"><span className="h-2 w-2 animate-pulse rounded-full bg-accent" /> Asking {who} for a PySub version… {secs}s</div>
-            <p className="text-xs text-fg3">Each answer goes straight to the PySub type checker, then is compiled to C++ and run next to your original on the same input. A type error or any difference in the output goes back to the model (up to 4 rounds). Nothing is accepted on the model's word.</p>
+            <div className="flex items-center gap-2 text-sm text-fg2"><span className="h-2 w-2 animate-pulse rounded-full bg-accent" /> Inferring a PySub version in-house… {secs}s</div>
+            <p className="text-xs text-fg3">The deterministic in-house converter infers types, checks the result, then compiles it to C++ and compares it with your original on the same input.</p>
             <Skeleton className="h-4 w-2/3" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-3/5" />
           </div>
         )}
@@ -289,7 +284,7 @@ function ConvertPanel({ conv, provider, onApply, onRetry, onClose }: { conv: Con
           <>
             <div className={cn('rounded-lg border px-3 py-2 text-sm', r.ok ? 'border-ok/30 bg-ok/10 text-ok' : 'border-bad/30 bg-bad/10 text-bad')}>
               {r.ok
-                ? (r.already ? 'This program is already valid PySub; nothing to convert.' : `Converted on attempt ${r.attempts.length} (${who}): it passes the PySub type checker${r.behaviour_checked ? ' and, compiled to C++, prints exactly what your original prints on the current input' : ''}. Use it, then press Run: your original runs under CPython, the conversion as compiled C++, on the same input.`)
+                ? (r.already ? 'This program is already valid PySub; nothing to convert.' : `Converted in-house on attempt ${r.attempts.length}: it passes the PySub type checker${r.behaviour_checked ? ' and, compiled to C++, prints exactly what your original prints on the current input' : ''}. Use it, then press Run: your original runs under CPython, the conversion as compiled C++, on the same input.`)
                 : (r.error ?? 'The conversion failed.')}
             </div>
             {r.blockers && r.blockers.length > 0 && (

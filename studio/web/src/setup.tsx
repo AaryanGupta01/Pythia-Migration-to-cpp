@@ -1,4 +1,4 @@
-// First-run setup: check the computer, connect an AI model (free Groq key, tested live), then pick a start.
+// First-run setup: check the computer, explain local conversion, then pick a start.
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowRight, Braces, Check, ExternalLink, KeyRound, Play, RotateCcw, ShieldCheck, Sparkles, X } from 'lucide-react'
@@ -95,7 +95,7 @@ export function SetupWizard() {
             <div className="text-xs text-fg3">Takes a minute. You can change everything later in Settings.</div>
           </div>
           <ol className="ml-auto flex items-center gap-2 text-xs">
-            {['Check', 'AI model', 'Start'].map((t, i) => (
+            {['Check', 'In-house', 'Start'].map((t, i) => (
               <li key={t} className={cn('flex items-center gap-1.5 rounded-full px-2 py-0.5', i === step ? 'bg-accent/15 text-fg' : i < step ? 'text-ok' : 'text-fg3')}>
                 <span className={cn('flex h-4 w-4 items-center justify-center rounded-full border text-[10px]', i < step ? 'border-ok bg-ok/20' : i === step ? 'border-accent' : 'border-line2')}>{i < step ? <Check size={10} /> : i + 1}</span>
                 {t}
@@ -127,39 +127,14 @@ export function SetupWizard() {
 
           {step === 1 && (
             <div>
-              <h2 className="flex items-center gap-2 text-lg font-semibold"><Sparkles size={17} className="text-accent" /> Connect an AI model <span className="text-sm font-normal text-fg3">(optional)</span></h2>
+              <h2 className="flex items-center gap-2 text-lg font-semibold"><Braces size={17} className="text-accent" /> In-house conversion</h2>
               <p className="mt-1 text-sm text-fg2">
-                Ordinary Python often needs small rewrites before it can be compiled: dictionaries become classes, shared state becomes parameters, lambdas become loops. An AI model proposes the rewrite; the PYTHIA type checker and a side-by-side run check every answer, so a wrong answer cannot slip through.
+                PYTHIA converts ordinary Python using its deterministic type inference and compiler rules. No API key, network model, or external service is used.
               </p>
-              {llmOn && !keyMsg?.ok && (
-                <div className="mt-3 flex items-center gap-2 rounded-lg border border-ok/30 bg-ok/10 px-3 py-2 text-sm text-ok">
-                  <ShieldCheck size={15} /> Already connected: {env?.llm.provider} · {env?.llm.model.replace(/^openai\//, '')}. You can keep it or paste a different key.
-                </div>
-              )}
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                {(Object.keys(PROVIDERS) as Provider[]).map((k) => (
-                  <button key={k} onClick={() => { setProvider(k); setKeyMsg(null) }}
-                    className={cn('rounded-lg border px-3 py-2 text-left transition-colors', provider === k ? 'border-accent bg-accent/10' : 'border-line hover:border-line2 hover:bg-hover/50')}>
-                    <div className="text-sm font-medium">{PROVIDERS[k].name}</div>
-                    <div className="text-xs text-fg3">{PROVIDERS[k].blurb}</div>
-                  </button>
-                ))}
+              <div className="mt-4 rounded-lg border border-ok/30 bg-ok/10 px-3 py-3 text-sm text-ok">
+                <ShieldCheck size={15} className="mr-2 inline" /> Every conversion is checked by the local PySub type checker and compiled locally to C++17.
               </div>
-              <ol className="mt-3 list-decimal space-y-0.5 pl-5 text-sm text-fg2">
-                {p.steps.map((t) => <li key={t}>{t}</li>)}
-              </ol>
-              <a href={p.url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline">{p.url.replace('https://', '')} <ExternalLink size={12} /></a>
-              <div className="mt-3 flex items-center gap-2">
-                <div className="relative flex-1">
-                  <KeyRound size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg3" />
-                  <input type="password" value={key} onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && key.trim() && testAndSave()}
-                    placeholder={`${p.prefix}…`} autoComplete="off" spellCheck={false} aria-label="API key"
-                    className="mono h-9 w-full rounded-md border border-line2 bg-bg pl-8 pr-2 text-sm outline-none transition-colors placeholder:text-fg3 focus:border-accent" />
-                </div>
-                <Btn kind="primary" onClick={testAndSave} disabled={!key.trim() || testing} className="h-9">{testing ? 'Testing…' : 'Test & save'}</Btn>
-              </div>
-              {keyMsg && <p className={cn('mt-2 text-sm', keyMsg.ok ? 'text-ok' : 'text-bad')}>{keyMsg.text}</p>}
-              <p className="mt-3 text-xs text-fg3">The key is saved only on this computer ({'~/.pythia-studio/settings.json'}) and sent only to the provider you picked. Without a key everything else works; AI conversion stays off.</p>
+              <p className="mt-3 text-xs text-fg3">Programs outside the supported typed subset are reported clearly instead of being sent anywhere.</p>
             </div>
           )}
 
@@ -174,7 +149,7 @@ export function SetupWizard() {
                 )}
                 <StartCard icon={<Play size={17} />} title="Analyse the demo project for real" text="Traces, compiles and verifies a 3,800-line Python project on this computer (a few minutes the first time)."
                   onClick={() => finish(() => startJob({ kind: 'demo' }))} primary={!sample} />
-                <StartCard icon={<Braces size={17} />} title="Open the Playground" text="Paste any Python program. If it is not PySub yet, convert it with AI, then run the original and the compiled version side by side."
+                <StartCard icon={<Braces size={17} />} title="Open the Playground" text="Paste any Python program. PYTHIA converts supported code in-house, then runs the original and compiled versions side by side."
                   onClick={() => finish(() => openSpecial('playground'))} />
               </div>
             </div>
