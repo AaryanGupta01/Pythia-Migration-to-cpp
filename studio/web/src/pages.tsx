@@ -94,6 +94,7 @@ export function Playground() {
   const [conv, setConv] = useState<ConvState>({ state: 'idle' })
   const [cstat, setCstat] = useState<ConvertStatus | null>(null)
   const seq = useRef(0)
+  const autoConverted = useRef<string | null>(null)
 
   useEffect(() => { LS('pythia:playground', src) }, [src])
   useEffect(() => { LS('pythia:playground:stdin', stdin) }, [stdin])
@@ -104,8 +105,32 @@ export function Playground() {
   useEffect(() => {
     const id = ++seq.current
     setCompiling(true)
-    api.pgCompile(dsrc).then((r) => id === seq.current && (setComp(r), setCerr(null), setCompiling(false))).catch((e) => id === seq.current && (setCerr(errMsg(e)), setCompiling(false)))
-  }, [dsrc])
+    api.pgCompile(dsrc).then(async (r) => {
+      if (id !== seq.current) return
+      setComp(r)
+      setCerr(null)
+      setCompiling(false)
+      if (r.ok || !dsrc.trim() || autoConverted.current === dsrc) return
+      autoConverted.current = dsrc
+      setConv({ state: 'running', original: dsrc, started: Date.now() })
+      try {
+        const converted = await api.pgConvert(dsrc, stdin)
+        if (id !== seq.current) return
+        if (converted.ok && converted.source && converted.source !== dsrc) {
+          setReference(dsrc)
+          setSrc(converted.source)
+          setRun(null)
+          setConv({ state: 'idle' })
+        } else {
+          setConv({ state: 'failed', result: converted, original: dsrc })
+        }
+      } catch (e) {
+        if (id === seq.current) {
+          setConv({ state: 'failed', result: { ok: false, error: errMsg(e), attempts: [] }, original: dsrc })
+        }
+      }
+    }).catch((e) => id === seq.current && (setCerr(errMsg(e)), setCompiling(false)))
+  }, [dsrc, stdin])
 
   const doRun = useCallback(async () => {
     setRunning(true)
@@ -149,6 +174,7 @@ export function Playground() {
     setReference(null)
     setRun(null)
     setConv({ state: 'idle' })
+    autoConverted.current = null
   }
 
   const pyN = useMemo(() => (comp ? pyNotes(comp.fidelity) : []), [comp])
