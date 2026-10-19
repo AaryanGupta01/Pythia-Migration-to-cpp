@@ -113,9 +113,15 @@ def run(home: Optional[Path] = None) -> dict:
     c.append(_check("cache", "Build cache", True, f"{human(size)} in {cache}" + ("  (delete it to reclaim space)" if size > (1 << 30) else ""),
                     required=False))
 
-    c.append(_check("converter", "In-house converter", True,
-                    "deterministic local type inference and PySub conversion",
-                    "No external AI provider is used."))
+    from . import llm
+    try:
+        offline = os.environ.get("PYTHIA_OFFLINE") == "1" and (paths.OFFLINE_DIR / "llm").is_dir()
+        st = llm.llm_status(None, offline, paths.OFFLINE_DIR / "llm")
+    except Exception as e:
+        st = {"enabled": False, "provider": None, "hint": str(e)}
+    c.append(_check("llm", "LLM fixer", st.get("enabled"),
+                    f"{st.get('provider')} ({st.get('model')})" if st.get("enabled") else "disabled (compile/verify still work; use --offline for the demo)",
+                    st.get("hint") or "Set GROQ_API_KEY (free) or ANTHROPIC_API_KEY, or run with --offline", required=False))
 
     wsl = False
     try:

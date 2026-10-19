@@ -69,13 +69,14 @@ def _out_diff(a: Dict[str, Any], b: Dict[str, Any]) -> str:
 
 
 def status(settings: Optional[dict]) -> Dict[str, Any]:
+    st = llm.llm_status((settings or {}).get("model"), False, None, settings=settings or {})
     return {
         "enabled": True,
-        "llm_enabled": False,
+        "llm_enabled": bool(st.get("enabled")),
         "in_house": True,
-        "provider": "pythia",
-        "model": "in-house",
-        "hint": "Only the deterministic in-house converter is enabled.",
+        "provider": st.get("provider") if st.get("enabled") else "pythia",
+        "model": st.get("model") if st.get("enabled") else "in-house",
+        "hint": st.get("hint"),
     }
 
 
@@ -228,6 +229,68 @@ def convert(source: str, settings: Optional[dict], compile_fn, stdin: str = "", 
         return done
     if driver_fail is not None and not mine.get("ok") and driver_fail.get("error"):
         mine = {**mine, "problems": (mine.get("problems") or []) + [driver_fail["error"]]}
-    return {"ok": False, "attempts": [mine], **INHOUSE, "problems": mine.get("problems", []),
-            "error": "The in-house converter could not finish this program: " + _in_house_reason(mine)
-                     + ". The program can still run under CPython."}
+    client = llm.make_client((settings or {}).get("model"), None, settings=settings or {})
+    st = status(settings)
+    if client is None:
+        return {"ok": False, "attempts": [mine], **INHOUSE, "problems": mine.get("problems", []),
+                "error": "The in-house converter could not finish this program: " + _in_house_reason(mine)
+                         + ". The AI converter can try: add a free Groq API key in Settings (console.groq.com) "
+                           "or set ANTHROPIC_API_KEY."}
+    who = lambda: {**st, "model": getattr(client, "last_model", None) or st.get("model")}  # noqa: E731
+    system = GUIDE.format(rules=rules_text())
+    messages = [{"role": "user", "content": (
+        "Convert this Python program to PySub.\n\n```python\n" + source.rstrip() + "\n```\n\n"
+        "The PySub type checker reports these problems with it as written:\n" + _diag_text(first["diagnostics"]))}]
+    attempts: List[Dict[str, Any]] = [mine]          # the in-house attempt first, then the model's
+    for n in range(1, MAX_ATTEMPTS + 1):
+        if n == 3:                       # two rounds of fixes didn't land: a fresh start beats a conversation in a rut
+            messages = messages[:1]
+        t0 = time.perf_counter()
+        try:
+            reply = client.complete(system, messages, function_source=source + "\n#program", attempt=n)
+        except llm.LLMError as ex:
+            attempts.append({"attempt": n + 1, "ok": False, "source": None, "diagnostics": [],
+                             "error": str(ex), "latency_ms": round((time.perf_counter() - t0) * 1000)})
+            return {"ok": False, "error": str(ex), "attempts": attempts, **who()}
+        latency = round((time.perf_counter() - t0) * 1000)
+        code = _code(reply)
+        if code is None:
+            attempts.append({"attempt": n + 1, "ok": False, "source": None, "diagnostics": [], "latency_ms": latency,
+                             "error": "the model did not return a ```python block"})
+            messages += [{"role": "assistant", "content": reply},
+                         {"role": "user", "content": "Return the complete program in one ```python block only."}]
+            continue
+        res = compile_fn(code)
+        att = {"attempt": n + 1, "ok": bool(res.get("ok")), "source": code,
+               "diagnostics": res.get("diagnostics") or [], "latency_ms": latency, "error": None}
+        attempts.append(att)
+        if res.get("ok"):
+            run = verify_fn(code, stdin, source) if verify_fn else None
+            unverifiable = run is None or not run.get("ok") or (run.get("python") or {}).get("timed_out")
+            if unverifiable or run.get("same"):
+                return {"ok": True, "already": False, "source": code, "attempts": attempts,
+                        "behaviour_checked": not unverifiable, **who()}
+            if run.get("explain"):           # a PySub limit (64-bit ints, ASCII): no rewrite of this program fixes it
+                att["ok"], att["behaviour"] = False, _out_diff(run["python"], run["cpp"])
+                return {"ok": False, "limit": True, "attempts": attempts, **who(),
+                        "error": "The conversion is correct Python, but compiled it can't match your program: "
+                                 + run["explain"]}
+            diff = _out_diff(run["python"], run["cpp"])
+            att["ok"], att["behaviour"] = False, diff
+            messages += [{"role": "assistant", "content": reply},
+                         {"role": "user", "content": "That version type-checks, but compiled and run on the same input "
+                                                     "it prints something different from the original program:\n" + diff +
+                                                     "\nRemember PySub semantics: a float variable prints 83.0 where "
+                                                     "Python printed the int 83. Fix the behaviour (keep it valid PySub) "
+                                                     "and return the complete program again in one ```python block."}]
+            continue
+        messages += [{"role": "assistant", "content": reply},
+                     {"role": "user", "content": "The PySub type checker rejected that version:\n"
+                                                 + _diag_text(res["diagnostics"])
+                                                 + "\nFix exactly these problems (keep everything else) and return the "
+                                                   "complete program again in one ```python block."}]
+    behaved = any(a.get("behaviour") for a in attempts)
+    return {"ok": False, "attempts": attempts, **who(),
+            "error": (f"No conversion that behaves exactly like your program after {MAX_ATTEMPTS} attempts"
+                      if behaved else f"No valid PySub after {MAX_ATTEMPTS} attempts")
+                     + "; the last problems are shown. Your program still runs under Python (press Run), or try again."}

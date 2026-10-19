@@ -180,8 +180,9 @@ def create_app(engine=None, home: Optional[str] = None) -> FastAPI:
 
     @app.post("/api/settings/test-key")
     async def test_key(request: Request):
-        return JSONResponse({"ok": False, "error": "External AI providers are disabled; PYTHIA uses in-house conversion."},
-                            status_code=410)
+        from pythia.studio import llm as llm_mod
+        b = await body(request)
+        return await asyncio.to_thread(llm_mod.test_key, b.get("provider"), b.get("api_key"))
 
     @app.get("/api/doctor")
     def doctor():
