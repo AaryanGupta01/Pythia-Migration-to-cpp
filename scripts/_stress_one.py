@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
-"""Worker for scripts/stress.py: one source file through the Playground path, no LLM.
+"""Worker for scripts/stress.py: one source file through the app's conversion path, no LLM.
 Prints one JSON line {file, stage, detail, ...}.  stage:
+  skip      unreadable / not Python 3 / too long
   blocked   uses something with no compiled equivalent (random, files, libraries, ...)  [out of scope]
-  convert   the in-house converter crashed
-  typecheck PySub rejected the (converted) program                                        [a gap]
-  build     the generated C++ failed to compile                                           [a BUG]
-  differs   compiled output != CPython output                                             [a BUG]
-  same      identical output                                                              [success]
-  pyfail    the original itself fails under CPython (needs input/args)                    [skipped]
+  typecheck the converter could not produce valid PySub                                    [a gap]
+  build     the generated C++ failed to compile                                            [a BUG]
+  differs   compiled output != CPython output                                              [a BUG]
+  limit     identical logic, but a documented PySub limit (64-bit ints, ASCII ...) shows
+  same      identical output on the program's own run                                      [success]
+  driven    entry-less code verified on generated inputs                                   [success]
 """
 import json
-import re
+import os
 import sys
 import tempfile
 import traceback
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, ROOT.as_posix())
+os.environ["GROQ_API_KEY"] = ""
+os.environ["ANTHROPIC_API_KEY"] = ""
 f, base = Path(sys.argv[1]), Path(sys.argv[2])
 rel = f.relative_to(base).as_posix()
 out = {"file": rel}
@@ -35,46 +38,34 @@ except Exception as e:
     done("skip", f"unreadable: {e}")
 if src.count("\n") > 450:
     done("skip", "longer than 450 lines")
-from pythia.studio import explain  # noqa: E402
+from pythia import driver  # noqa: E402
+from pythia.studio import converter, explain  # noqa: E402
 from pythia.studio.server import playground  # noqa: E402
 
-syn = explain.syntax_error(src)
-if syn:
+src = driver.normalize(src)
+if explain.syntax_error(src):
     done("skip", "not valid Python 3")
 blocks = explain.blockers(src)
 if blocks:
     done("blocked", "; ".join(b["what"] for b in blocks)[:200])
+cache = Path(tempfile.gettempdir()) / "pythia-stress-cache"
+verify = lambda code, sin, orig: playground.run_snippet(code, cache, sin, orig)  # noqa: E731
 try:
-    from pythia.convert import to_pysub
-    r = to_pysub(src, "", run=False, check=False)
-    conv = r.source
-    out["problems"] = r.problems[:3]
+    res = converter.convert(src, {}, playground.compile_snippet, "", verify)
 except Exception as e:
     done("convert", f"{type(e).__name__}: {e}", tb=traceback.format_exc()[-400:])
-c = playground.compile_snippet(conv)
-if not c["ok"]:
-    d = c["diagnostics"][0]
-    from pythia.studio.reasons import explain as why
-    try:
-        msg = why(c["diagnostics"], conv)[1] or d["msg"]
-    except Exception:
-        msg = d["msg"]
-    done("typecheck", f"line {d['line']}: {d['msg']}", reason=str(msg)[:200], line=d["line"],
-         srcline=(conv.splitlines()[d["line"] - 1].strip()[:120] if 0 < d["line"] <= len(conv.splitlines()) else ""))
-try:
-    run = playground.run_snippet(conv, Path(tempfile.gettempdir()) / "pythia-stress-cache", "", reference=src)
-except Exception as e:
-    done("build", f"{type(e).__name__}: {e}")
-if not run.get("ok"):
-    err = run.get("error") or ""
-    done("build" if "internal error" in err else "convert", err[:300])
-py, cp = run["python"], run["cpp"]
-if py.get("exception") and py["exception"] != "TimeoutError" and (cp or {}).get("exception") == py["exception"] \
-        and py["stdout"] == cp["stdout"]:
-    done("same", f"both raise {py['exception']}", py_ms=py["time_ms"], cpp_ms=cp["time_ms"])
-if run["same"]:
-    done("same", "", py_ms=py["time_ms"], cpp_ms=cp["time_ms"])
-if py.get("timed_out"):
-    done("skip", "original timed out")
-done("differs", (run.get("explain") or "")[:200], py_out=py["stdout"][:150], cpp_out=cp["stdout"][:150],
-     py_exc=py.get("exception"), cpp_exc=cp.get("exception"))
+if res.get("ok"):
+    v = res.get("verified")
+    if v:
+        done("driven", v["note"], calls=v["calls"], functions=v["functions"], skipped=v.get("skipped"))
+    done("same", "already PySub" if res.get("already") else "")
+err = res.get("error") or ""
+if res.get("limit"):
+    done("limit", err)
+if "failed to compile (internal error)" in err:
+    done("build", err)
+if "prints different" in err or "different results" in err or "prints something different" in err:
+    done("differs", err)
+err = err.replace("The in-house converter could not finish this program: ", "")
+err = err.replace("the PySub type checker still reports ", "")
+done("typecheck", err.split(". The AI converter")[0], reason=err.split(". The AI converter")[0])

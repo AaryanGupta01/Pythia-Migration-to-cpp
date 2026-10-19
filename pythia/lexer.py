@@ -121,6 +121,13 @@ class Lexer:
                 self._lex_string()
                 continue
 
+            if ch == ";" and self.paren_depth == 0:        # `a = 1; b = 2`: a statement separator, like a line break
+                ln, cl = self.line, self.col
+                self._advance()
+                if self.tokens and self.tokens[-1].kind != "NEWLINE":
+                    self._emit("NEWLINE", ";", ln, cl)
+                continue
+
             if not self._lex_operator():
                 raise LexError(f"unexpected character {ch!r}", self.line, self.col)
 

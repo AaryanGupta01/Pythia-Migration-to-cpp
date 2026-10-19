@@ -80,8 +80,8 @@ for spec in a.repos:
     by = collections.Counter(r["stage"] for r in rows)
     attempted = len(rows) - by["skip"] - by["blocked"]
     print("  stages:", dict(by))
-    print(f"  attempted (not skipped/blocked): {attempted}; compiled and identical: {by['same']} "
-          f"({100 * by['same'] / max(attempted, 1):.0f}%)")
+    print(f"  attempted (not skipped/blocked): {attempted}; compiled and identical: {by["same"] + by["driven"]} "
+          f"({100 * (by["same"] + by["driven"]) / max(attempted, 1):.0f}%; own-run {by["same"]}, generated-input {by["driven"]})")
     bugs = [r for r in rows if r["stage"] in ("build", "differs", "convert")]
     if bugs:
         print(f"  BUGS ({len(bugs)}):")

@@ -120,6 +120,84 @@ def _in_house(source: str, stdin: str, compile_fn, verify_fn):
     return att, None
 
 
+def _sections(stdout: str) -> Dict[str, str]:
+    out, cur = {}, None
+    for line in (stdout or "").split("\n"):
+        if line.startswith("@@ "):
+            cur = line[3:]
+            out[cur] = ""
+        elif cur is not None:
+            out[cur] += line + "\n"
+    return out
+
+
+def _convert_with_driver(source: str, compile_fn, verify_fn) -> Optional[Dict[str, Any]]:
+    """Entry-less code (LeetCode `class Solution`, GfG functions): add the judge prelude and a generated test driver,
+    convert, and verify the compiled program against CPython on the generated inputs. None: not applicable."""
+    from .. import driver
+    from .server import playground
+    try:
+        plan = driver.build(source, run_python=playground.run_python)
+    except Exception:
+        return None
+    if plan is None or not plan.entries:
+        return None
+    t0 = time.perf_counter()
+    # keep the functions that convert and type-check on their own; say why the others were left out
+    ok_entries, skipped = [], {}
+    for e in plan.entries:
+        drv, _n = driver._driver_for([e], plan.original[:40])
+        prog = plan.prelude + plan.original.rstrip("\n") + "\n\n\n" + drv
+        try:
+            r = to_pysub(prog, "", check=False)
+            res = compile_fn(r.source)
+        except Exception as ex:
+            skipped[e.name] = f"in-house converter error: {ex!r}"
+            continue
+        if res.get("ok"):
+            ok_entries.append(e)
+        else:
+            d = (res.get("diagnostics") or [{}])[0]
+            skipped[e.name] = f"line {d.get('line')}: {d.get('msg')}" if d else "does not type-check"
+    if not ok_entries:
+        first = next(iter(skipped.values()), "nothing could be converted")
+        return {"ok": False, "attempts": [], **INHOUSE, "skipped": skipped,
+                "error": "The in-house converter could not finish this program: " + first}
+    drv, n_calls = driver._driver_for(ok_entries, plan.original[:40])
+    program = plan.prelude + plan.original.rstrip("\n") + "\n\n\n" + drv
+    r = to_pysub(program, "", check=False)
+    res = compile_fn(r.source)
+    att = {"attempt": 1, "ok": False, "source": r.source, "diagnostics": res.get("diagnostics") or [], "error": None,
+           "latency_ms": round((time.perf_counter() - t0) * 1000), **INHOUSE, "changes": r.changes,
+           "problems": r.problems}
+    if not res.get("ok"):
+        return {"ok": False, "attempts": [att], **INHOUSE, "skipped": skipped,
+                "error": "The in-house converter could not finish this program: " + _in_house_reason(att)}
+    run = verify_fn(r.source, "", program)
+    py = (run or {}).get("python") or {}
+    if run is None or not run.get("ok") or py.get("timed_out") or py.get("exception"):
+        why = (run or {}).get("error") or py.get("exception") or "the generated test run did not finish"
+        return {"ok": False, "attempts": [att], **INHOUSE, "skipped": skipped,
+                "error": "The generated tests could not run to completion, so the conversion is not verified: " + str(why)}
+    clean = plan.clean(r.source)
+    if not run.get("same"):
+        a, b = _sections(py.get("stdout")), _sections(run["cpp"].get("stdout"))
+        bad = [k for k in a if a[k] != b.get(k)]
+        att["behaviour"] = _out_diff(run["python"], run["cpp"])
+        return {"ok": False, "attempts": [att], **INHOUSE, "skipped": skipped,
+                "limit": bool(run.get("explain")),
+                "error": ("The conversion prints different results than your code for: " + ", ".join(bad or ["?"])
+                          + (". " + run["explain"] if run.get("explain") else "."))}
+    if not compile_fn(clean).get("ok"):
+        return None
+    att["ok"], att["source"] = True, clean
+    return {"ok": True, "already": False, "source": clean, "attempts": [att], "changes": r.changes,
+            "behaviour_checked": True, **INHOUSE,
+            "verified": {"calls": n_calls, "functions": [e.name for e in ok_entries], "skipped": skipped,
+                         "driver": drv, "note": "verified on %d generated inputs (compiled C++ vs CPython, identical "
+                                                "output and exceptions)" % n_calls}}
+
+
 def _in_house_reason(att: Dict[str, Any]) -> str:
     if att.get("problems"):
         return "; ".join(att["problems"][:3])
@@ -135,6 +213,8 @@ def convert(source: str, settings: Optional[dict], compile_fn, stdin: str = "", 
     """compile_fn(source) -> {ok, diagnostics, ...} (the Playground's compile).
     verify_fn(code, stdin, original) -> the Playground's Run result {ok, same, python, cpp, explain}: the ORIGINAL
     under CPython against the conversion COMPILED to C++, so compiler-level differences count too."""
+    from .. import driver as _driver
+    source = _driver.normalize(source)                 # tabs mixed with spaces, as LeetCode's editor allows
     first = compile_fn(source)
     if first.get("ok"):
         return {"ok": True, "already": True, "source": source, "attempts": [], "provider": None, "model": None}
@@ -146,9 +226,18 @@ def convert(source: str, settings: Optional[dict], compile_fn, stdin: str = "", 
         return {"ok": False, "blockers": blocks, "attempts": [], "provider": None, "model": None,
                 "error": "This program can't be compiled to C++ as a whole: " + "; ".join(str(b["what"]) for b in blocks)
                          + ". It still runs under Python (press Run)."}
+    if verify_fn is not None:
+        viaprobe = _convert_with_driver(source, compile_fn, verify_fn)
+        if viaprobe is not None and viaprobe.get("ok"):
+            return viaprobe
+        driver_fail = viaprobe
+    else:
+        driver_fail = None
     mine, done = _in_house(source, stdin, compile_fn, verify_fn)
     if done is not None:
         return done
+    if driver_fail is not None and not mine.get("ok") and driver_fail.get("error"):
+        mine = {**mine, "problems": (mine.get("problems") or []) + [driver_fail["error"]]}
     client = llm.make_client((settings or {}).get("model"), None, settings=settings or {})
     st = status(settings)
     if client is None:

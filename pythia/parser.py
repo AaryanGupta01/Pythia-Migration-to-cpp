@@ -165,10 +165,14 @@ class Parser:
         name = self.expect("NAME").value
         bases = _cls().parse_bases(self)              # class C(Base): (classes_ext)
         self.expect("OP", ":")
-        self.expect("NEWLINE")
-        self.expect("INDENT")
         cd = A.ClassDef(line=kw.line, col=kw.col, name=name)
         cd.bases = bases
+        if not self.at("NEWLINE"):                       # `class C: pass`
+            self.expect("KEYWORD", "pass")
+            self.expect("NEWLINE")
+            return cd
+        self.expect("NEWLINE")
+        self.expect("INDENT")
         while not self.at("DEDENT") and not self.at("EOF"):
             guard = self.i
             if self.at("NEWLINE"):
@@ -230,7 +234,21 @@ class Parser:
     def parse_type(self) -> A.TypeExpr:
         return self._parse_type_ext()        # parse_types.py: dotted names, T[A, B], A | B, "Forward"
 
+    def _inline_suite(self) -> List[A.Node]:
+        """`if x: a; b` / `else: return y`: the statements on the rest of the line are the whole body."""
+        stmts: List[A.Node] = []
+        while True:
+            st = self.parse_statement()
+            stmts.extend(st if isinstance(st, list) else [st])
+            last = self.toks[self.i - 1]
+            if last.kind == "NEWLINE" and last.value == ";" and not self.at("NEWLINE") and not self.at("EOF"):
+                continue
+            break
+        return stmts or [A.Pass()]
+
     def parse_block(self) -> List[A.Node]:
+        if not self.at("NEWLINE"):                    # a one-line suite
+            return self._inline_suite()
         self.expect("NEWLINE")
         self.expect("INDENT")
         stmts: List[A.Node] = []
