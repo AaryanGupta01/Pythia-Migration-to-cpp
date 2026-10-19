@@ -45,8 +45,9 @@ def seed(home: Path) -> None:
             meta = json.loads((dest / "job.json").read_text(encoding="utf-8"))
             if not any(i.get("job_id") == jd.name for i in recent):
                 recent.append({"workspace_id": meta.get("workspace_id"), "ws_id": meta.get("workspace_id"),
-                               "name": (meta.get("name") or "demo") + " (sample run)", "input_kind": "demo",
-                               "origin": "", "job_id": jd.name, "py_files": 0, "ts": time.time() - 86400})
+                               "name": meta.get("name") or "demo", "input_kind": "demo",
+                               "origin": f"demo/{meta.get('name') or 'demo'}", "job_id": jd.name,
+                               "py_files": len(meta.get("py_files") or []), "ts": time.time() - 86400})
         (home / "recent.json").write_text(json.dumps(recent[:20], indent=1), encoding="utf-8")
     except Exception:
         pass                                                  # a damaged sample must never stop the app

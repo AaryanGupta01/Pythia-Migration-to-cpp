@@ -1,0 +1,63 @@
+{
+ "ws_id": "1143afb2",
+ "name": "textlab",
+ "root": "/home/visha/.pythia-studio/workspaces/1143afb2",
+ "py_files": [
+  "main.py",
+  "textlab/__init__.py",
+  "textlab/features/__init__.py",
+  "textlab/features/collatz.py",
+  "textlab/features/primes.py",
+  "textlab/ml/__init__.py",
+  "textlab/ml/embed.py",
+  "textlab/ml/kmeans.py",
+  "textlab/ml/knn.py",
+  "textlab/ml/schedule.py",
+  "textlab/signal/__init__.py",
+  "textlab/signal/window.py",
+  "textlab/sim/__init__.py",
+  "textlab/sim/life.py",
+  "textlab/sim/montecarlo.py",
+  "textlab/sim/nbody.py",
+  "textlab/text/__init__.py",
+  "textlab/text/bpe.py",
+  "textlab/text/corpus.py",
+  "textlab/text/distance.py",
+  "textlab/text/vocab.py",
+  "textlab/util/__init__.py",
+  "textlab/util/parse.py",
+  "textlab/util/rng.py"
+ ],
+ "skipped": [
+  {
+   "path": "textlab/__pycache__/",
+   "reason": "excluded directory"
+  },
+  {
+   "path": "textlab/features/__pycache__/",
+   "reason": "excluded directory"
+  },
+  {
+   "path": "textlab/ml/__pycache__/",
+   "reason": "excluded directory"
+  },
+  {
+   "path": "textlab/signal/__pycache__/",
+   "reason": "excluded directory"
+  },
+  {
+   "path": "textlab/sim/__pycache__/",
+   "reason": "excluded directory"
+  },
+  {
+   "path": "textlab/text/__pycache__/",
+   "reason": "excluded directory"
+  },
+  {
+   "path": "textlab/util/__pycache__/",
+   "reason": "excluded directory"
+  }
+ ],
+ "input_kind": "demo",
+ "origin": "demo/textlab"
+}

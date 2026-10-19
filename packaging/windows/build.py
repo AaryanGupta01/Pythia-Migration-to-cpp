@@ -177,6 +177,10 @@ def write_extras() -> None:
         "Command line (from this folder): pythia prog.py --run      pythia-studio --doctor\r\n"
         "Your data and settings live in %USERPROFILE%\\.pythia-studio (log: logs\\studio.log).\r\n"
         "User guide: https://github.com/Vishalvivek2007/Pythia/blob/main/USER_GUIDE.md\r\n", encoding="utf-8")
+    demo_dst = STAGE / "demo"
+    shutil.rmtree(demo_dst, ignore_errors=True)
+    shutil.copytree(ROOT / "demo", demo_dst)
+    log("bundled demo projects into STAGE / demo")
 
 
 def smoke(py: Path) -> None:
@@ -280,11 +284,31 @@ def iscc() -> Path:
 
 
 def installer() -> Path:
+    tmp_out = DEV / "out"
+    tmp_out.mkdir(parents=True, exist_ok=True)
     out = ROOT / "dist"
     out.mkdir(exist_ok=True)
-    run([iscc(), f"/DStageDir={STAGE}", f"/DOutDir={out}", f"/DAppVersion={VERSION}", f"/DIconFile={WORK / 'pythia.ico'}",
+    setup_name = f"PYTHIA-Studio-Setup-{VERSION}.exe"
+    for f in (tmp_out / setup_name, out / setup_name):
+        if f.exists():
+            try:
+                f.unlink()
+            except OSError:
+                pass
+    run([iscc(), f"/DStageDir={STAGE}", f"/DOutDir={tmp_out}", f"/DAppVersion={VERSION}", f"/DIconFile={WORK / 'pythia.ico'}",
          f"/DLicenseFile={ROOT / 'LICENSE'}", "/Q", HERE / "pythia-studio.iss"])
-    return out / f"PYTHIA-Studio-Setup-{VERSION}.exe"
+    dest_exe = out / setup_name
+    shutil.copy2(tmp_out / setup_name, dest_exe)
+    return dest_exe
+
+
+def make_portable_zip() -> Path:
+    out = ROOT / "dist"
+    out.mkdir(exist_ok=True)
+    zip_base = out / f"PYTHIA-Studio-{VERSION}-portable"
+    log(f"creating portable zip: {zip_base}.zip")
+    shutil.make_archive(str(zip_base), "zip", STAGE.parent, STAGE.name)
+    return out / f"PYTHIA-Studio-{VERSION}-portable.zip"
 
 
 def main() -> None:
@@ -292,9 +316,16 @@ def main() -> None:
     ap.add_argument("--no-prebuild", action="store_true", help="skip shipping prebuilt demo modules")
     ap.add_argument("--no-installer", action="store_true", help="stop after staging (no Inno Setup)")
     ap.add_argument("--reuse-prebuilt", action="store_true", help="ship the demo modules from the last build instead of rebuilding")
+    ap.add_argument("--only-installer", action="store_true", help="only build the installer from existing STAGE")
     a = ap.parse_args()
     if os.name != "nt":
         raise SystemExit("build the Windows app on Windows")
+    if a.only_installer:
+        if not STAGE.is_dir():
+            raise SystemExit(f"STAGE directory not found: {STAGE}")
+        exe = installer()
+        log(f"installer: {exe} ({exe.stat().st_size / 1e6:.0f} MB)")
+        return
     t0 = time.time()
     shutil.rmtree(STAGE, ignore_errors=True)
     STAGE.mkdir(parents=True)
@@ -307,6 +338,8 @@ def main() -> None:
         prebuild_demo(py, a.reuse_prebuilt)
     size = sum(f.stat().st_size for f in STAGE.rglob("*") if f.is_file())
     log(f"staged app: {STAGE} ({size / 1e6:.0f} MB)")
+    port_zip = make_portable_zip()
+    log(f"portable zip: {port_zip} ({port_zip.stat().st_size / 1e6:.0f} MB)")
     if not a.no_installer:
         exe = installer()
         log(f"installer: {exe} ({exe.stat().st_size / 1e6:.0f} MB)")

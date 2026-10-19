@@ -1,0 +1,40 @@
+{
+ "job_id": "aa47115e",
+ "workspace_id": "1143afb2",
+ "name": "textlab",
+ "state": "done",
+ "options": {
+  "trace_cmd": "python main.py --small",
+  "trace_timeout_s": 120.0,
+  "offline": false,
+  "llm": true,
+  "model": null,
+  "pace_ms": 0
+ },
+ "input": {
+  "kind": "demo",
+  "name": "textlab"
+ },
+ "started": 1792318534.9404445,
+ "finished": 1792318694.1112895,
+ "summary": {
+  "functions": 35,
+  "verified": 2,
+  "guarded": 8,
+  "fixable": 0,
+  "not_eligible": 24,
+  "failed": 0,
+  "declined": 1,
+  "e2e_speedup": 6.046696303932094,
+  "geomean_speedup": 9.898378114514202
+ },
+ "e2e": {
+  "cmd": "python main.py --small",
+  "before_s": 11.849160697001935,
+  "after_s": 1.9596090330014704,
+  "speedup": 6.046696303932094,
+  "output_match": true,
+  "ok": true
+ },
+ "sample": false
+}
