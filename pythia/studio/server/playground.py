@@ -43,7 +43,7 @@ def _check(source: Any) -> str:
         raise PlaygroundError("body must be {\"source\": \"<code>\"}", 422)
     if len(source.encode("utf-8")) > MAX_SOURCE:
         raise PlaygroundError(f"source larger than {MAX_SOURCE // 1000} KB", 413)
-    return source
+    return source.expandtabs(4)
 
 
 def _compile_source():

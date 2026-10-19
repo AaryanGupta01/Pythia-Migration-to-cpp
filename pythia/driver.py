@@ -57,19 +57,20 @@ LIST_STR = '''def _list_str(head):
 
 # ------------------------------------------------------------------------------------------------ normalisation
 def normalize(source: str) -> str:
-    """Make the text something CPython can parse when the only problem is tabs mixed with spaces (LeetCode's editor
-    allows it): tabs expand to 8 columns, the reading the author saw."""
+    """Make the text something CPython can parse when the only problem is tabs mixed with spaces."""
     try:
         ast.parse(source)
         return source
     except SyntaxError:
         pass
-    alt = "\n".join(l.expandtabs(8) for l in source.replace("\r\n", "\n").split("\n"))
-    try:
-        ast.parse(alt)
-        return alt
-    except SyntaxError:
-        return source
+    for tab_size in (4, 8, 2):
+        alt = "\n".join(l.expandtabs(tab_size) for l in source.replace("\r\n", "\n").split("\n"))
+        try:
+            ast.parse(alt)
+            return alt
+        except SyntaxError:
+            continue
+    return source
 
 
 # ------------------------------------------------------------------------------------------------ analysis
@@ -204,6 +205,8 @@ def guess_specs(entry: Entry, i: int, file_text: str) -> List[object]:
         out += ["str", L("str")]
     if h.get("list", 0) or h.get("seq", 0):
         out += [L("int"), "str", L(L("int")), L("str")]
+    if name in ("s", "s1", "s2", "s3", "word", "word1", "word2", "text", "pattern", "needle", "haystack") or (name in ("p", "q") and "TreeNode" not in file_text):
+        out.append("str")
     if name in ("n", "k", "m", "x", "target", "num", "size", "i", "j", "amount", "sum", "val", "idx", "capacity", "W"):
         out.append("int")
     out += ["int", L("int"), "str", "float", L(L("int")), "bool"]
