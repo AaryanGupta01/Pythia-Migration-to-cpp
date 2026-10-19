@@ -911,8 +911,17 @@ class _Plan:
     def _header(self):
         head = []
         names = {a.asname or a.name for s in self.tree.body if isinstance(s, ast.ImportFrom) for a in s.names}
-        if self.need_optional and "Optional" not in names:
-            head.append("from typing import Optional\n\n\n")
+        used_typing = set()
+        TYPING_NAMES = {"List", "Dict", "Tuple", "Set", "Optional", "Union"}
+        for node in ast.walk(self.tree):
+            if isinstance(node, ast.Name) and node.id in TYPING_NAMES:
+                used_typing.add(node.id)
+        if self.need_optional:
+            used_typing.add("Optional")
+        missing_typing = sorted(used_typing - names)
+        if missing_typing:
+            head.append(f"from typing import {', '.join(missing_typing)}\n\n\n")
+            self.changes.append(f"from typing import {', '.join(missing_typing)}")
         for c in getattr(self, "rec_classes", []):
             head.append(c)
         body = self.tree.body
