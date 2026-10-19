@@ -46,9 +46,12 @@ def exc_of(stderr: str):
     return m[-1] if m else None
 
 
+STDIN_DATA = "alpha\nbeta  \ngamma\ndelta\n"
+
+
 def run_cpython(path):
     t = time.perf_counter()
-    r = subprocess.run([sys.executable, path], capture_output=True, text=True,
+    r = subprocess.run([sys.executable, path], input=STDIN_DATA, capture_output=True, text=True,
                        timeout=60)
     return r.stdout, exc_of(r.stderr), r.returncode, time.perf_counter() - t
 
@@ -73,7 +76,7 @@ def build_and_run(path, keep=False):
     if cc.returncode != 0:
         return None, None, None, None, [("cc", cc.stderr)], notes
     t = time.perf_counter()
-    r = subprocess.run([binp], capture_output=True, text=True, timeout=60)
+    r = subprocess.run([binp], input=STDIN_DATA, capture_output=True, text=True, timeout=60)
     return (r.stdout, exc_of(r.stderr), r.returncode,
             time.perf_counter() - t, [], notes)
 

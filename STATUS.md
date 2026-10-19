@@ -83,7 +83,12 @@ wsl -e bash -lc 'cd /mnt/c/Users/visha/OneDrive/Desktop/Documents/programming/py
   - `enum`: `Enum`, `IntEnum`, `auto`
   - `sys`: `sys.maxsize`, `sys.setrecursionlimit`
 - Language constructs: `assert [cond] [, msg]` (`AssertionError`), classes (fields, methods, inheritance, nested `__init__` constructor inference), f-strings incl. `{x=}`, `!r`, adjacent literals, `%`/`.format`, conditional expressions, chained comparisons, chained assignment, list repetition `[x]*n`, comprehensions (list/dict/set), generators in sum/min/max/any/all/sorted/list/join, `key=` lambdas, enumerate/zip/reversed, slicing, bitwise ops, `math`/`string`/`ord`/`chr`, defaults + kwargs, `global`/module constants, `isinstance` (static), library mode.
-- **Oracle Status**: **72/72 positive tests (100.0%)** match CPython byte-for-byte; **89/89 negative tests (100.0%)** properly rejected. Median speedup: **12.7x** over CPython.
+- **Oracle Status**: **78/78 positive tests (100.0%)** match CPython byte-for-byte; **88/88 negative tests (100.0%)** properly rejected. Median speedup: **8.6x** over CPython (up to 36.4x).
+- **Untyped Basics Suite (`scripts/check_basics.py`)**: **91/91 programs (100.0%)** convert in-house, compile with MinGW GCC 16 C++17, and match CPython byte-for-byte on Windows.
+- **Snippet Pass Rate (`scripts/check_snippets.py`)**: **22/22 (100.0%) snippets compile and match CPython.**
+- **Property-Based Testing (`scripts/property_test.py`)**: 10 distinct algorithmic categories with randomized inputs and automated differential oracle checks against CPython (100% passing).
+- **Dual Compilation Modes**: Pythia CLI provides `--mode standalone` (full binary with C++ `main()`) and `--mode leetcode` (clean submission-ready C++ classes/methods without `main()`).
+- **Packaged Standalone Installer**: `dist/PYTHIA-Studio-Setup-1.1.0.exe` (88 MB) bundles portable MinGW GCC 16, CPython 3.13, Pythia compiler, Studio UI, and demo modules.
 
 **In-House Converter (`to_pysub`):**
 - Inlines module-level literal constants used as parameter defaults.
@@ -93,10 +98,6 @@ wsl -e bash -lc 'cd /mnt/c/Users/visha/OneDrive/Desktop/Documents/programming/py
 - Solved type collision bug in `types_ext.py:resolve_type` where user class names collided with `TYPING_ALIAS`.
 - Robust boolean error propagation in resolvers preventing boolean evaluation crashes.
 - **Zero converter crashes** across all tested repositories and benchmarks!
-
-**Snippet Pass Rate (`scripts/check_snippets.py`):**
-- **22/22 (100.0%) snippets compile and match CPython.**
-- Includes: Two Sum, Palindrome, Kadane's Max Subarray, Fib DP, LCS, 0/1 Knapsack, Binary Search, Merge Intervals, Valid Parentheses, Coin Change, Sieve Count Primes, Group Anagrams, Rotate Matrix, GfG GCD, GfG Input, Linked List, Bank Class Driver, BFS Queue, K Largest Heap, Bisect Search, Prefix Sum Accumulate, Climb Stairs Memoized.
 
 **Whole-file stress (no LLM, full pipeline, files compile AND print identically to CPython):**
 

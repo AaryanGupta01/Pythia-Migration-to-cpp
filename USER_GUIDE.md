@@ -195,8 +195,16 @@ The compiler is also a plain tool:
 python -m pythia.cli prog.py --run
 # show the fidelity report
 python -m pythia.cli prog.py --fidelity
+# emit C++ code in LeetCode mode (clean solution class without main())
+python -m pythia.cli solution.py --mode leetcode --emit-only
 # build an importable Python extension exposing chosen functions
 python -m pythia.cli mymodule.py --lib fn1,fn2 --out build/lib
+# run property-based randomized differential testing across 10 algorithmic categories
+python scripts/property_test.py --count 5 --seed 42
+# run untyped baseline suite (91 programs)
+python scripts/check_basics.py
+# run LeetCode/DSA snippet suite (22 snippets)
+python scripts/check_snippets.py
 # the whole analysis pipeline headlessly (what scripts/smoke.sh does)
 ./scripts/smoke.sh
 ```

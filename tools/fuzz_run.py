@@ -42,14 +42,16 @@ def build_and_run(path, workdir, timeout=10):
     code, notes, errs, _ = compile_source(src, path)
     if errs:
         return None, [str(e) for e in errs], None, "reject"
-    cpath = os.path.join(d, stem + ".c")
-    open(cpath, "w").write(code)
-    for fn in ("pyrt.c", "pyrt.h"):
+    cpath = os.path.join(d, stem + ".cpp")
+    open(cpath, "w", encoding="utf-8").write(code)
+    for fn in ("pyrt.cpp", "pyrt.hpp"):
         shutil.copy(os.path.join(RUNTIME, fn), d)
     binp = os.path.join(d, stem)
-    cc = subprocess.run(["cc", "-std=gnu11", "-O1", "-I", d, cpath,
-                         os.path.join(d, "pyrt.c"), "-o", binp, "-lm"],
-                        capture_output=True, text=True)
+    from pythia import toolchain
+    cxx = toolchain.find_cxx()[0] or ("g++.exe" if os.name == "nt" else "c++")
+    cmd = [cxx, "-std=c++17", "-O2", "-flto", "-I", d, cpath,
+           os.path.join(d, "pyrt.cpp"), *toolchain.exe_link_args(), "-o", binp]
+    cc = subprocess.run(cmd, capture_output=True, text=True, env=toolchain.env_for(cxx))
     if cc.returncode != 0:
         return None, [cc.stderr], None, "ccfail"
     try:

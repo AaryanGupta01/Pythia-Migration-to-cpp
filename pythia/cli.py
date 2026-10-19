@@ -34,7 +34,7 @@ def render(diags, src_lines, path):
     return "\n".join(out)
 
 
-def compile_source(src: str, path: str):
+def compile_source(src: str, path: str, mode: str = "standalone"):
     """Returns (c_code, fidelity_notes, diagnostics, opt_stats)."""
     try:
         mod, syn_errs = parse(src, path)
@@ -48,7 +48,8 @@ def compile_source(src: str, path: str):
         return None, [], ty_errs, None
     notes = lower(mod, tc)
     opt_stats = elide_guards(mod)
-    code = emit(mod, tc, os.path.basename(path))
+    library = (mode == "leetcode")
+    code = emit(mod, tc, os.path.basename(path), library=library)
     return code, notes, [], opt_stats
 
 
@@ -94,6 +95,8 @@ def main(argv=None) -> int:
                     help="print the Semantic Fidelity Report")
     ap.add_argument("--build", action="store_true", help="compile with c++17")
     ap.add_argument("--run", action="store_true", help="compile and execute")
+    ap.add_argument("--mode", choices=["standalone", "leetcode"], default="standalone",
+                    help="compilation mode: 'standalone' (with main) or 'leetcode' (solution only)")
     ap.add_argument("--emit-only", action="store_true", help="print C to stdout")
     ap.add_argument("--lib", help="library mode: comma-separated functions to expose "
                     "to Python (with --out <dir>)")
@@ -105,7 +108,7 @@ def main(argv=None) -> int:
     src = open(a.source, encoding="utf-8").read()
     if a.lib is not None:
         return lib_main(a, src)
-    code, notes, errs, opt_stats = compile_source(src, a.source)
+    code, notes, errs, opt_stats = compile_source(src, a.source, mode=a.mode)
 
     if errs:
         print(render(errs, src.splitlines(), a.source), file=sys.stderr)
