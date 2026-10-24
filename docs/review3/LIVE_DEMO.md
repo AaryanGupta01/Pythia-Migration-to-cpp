@@ -3,6 +3,12 @@
 Everything below was run on 2026-10-24 on the team laptop (see report Table 5.1), zero-LLM path (no API key). Times are from that run; expect
 the same shape, not the same digits.
 
+> **Update after a second, wider hunt (2026-10-24).** About 310 small public Python repositories came back from GitHub search; 45 passed a static filter (pure Python, no numpy/pygame/input(), several loop-heavy functions) and
+> only a handful run standalone for more than a second. None gave several verified functions: most are CLI wrappers, class-based, use generators or sympy, or are tiny toy scripts. A hand-built driver on `transmogrifier/eulerlib`
+> (Apache-2.0) accelerated **nothing**: its functions are tiny, so Studio correctly declined `gcd` (0.59x) and `is_palindrome` (0.44x) and rejected generator-based ones. That is Studio working as designed, but it is not a showpiece.
+> **Recommendation:** show **TextLab** (10 functions accelerated, 2.6x end to end, output identical) as the main walkthrough, then `dayyass/project-euler` (problem 14) as the "real third-party repository" proof point.
+> TextLab is our own bundled project, so say so. Quanta (47 functions accelerated, 5.0x end to end) is the biggest showpiece and also bundled.
+
 ## Picks
 
 | | Project | Pinned commit | Entry command (type it in the *Entry command* box) | What it shows |
