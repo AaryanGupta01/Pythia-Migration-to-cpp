@@ -14,7 +14,7 @@ def cover(d, F):
             ["Project ID and title", "A15 – Typed Source-to-Source Transpiler"],
             ["Team number", "Team 2"],
             ["Review", "Review 3 (final), October 2026"],
-            ["Faculty", "______________________________________"],
+            ["Faculty", "Shalini L"],
             ["Repository state", f"branch `main`, commit `{F['git']['head']}` ({F['git']['commits']} commits)"]]
     _plain_table(d, ["Item", "Details"], rows, [4.2, 12.4])
     d.p("", after=6)

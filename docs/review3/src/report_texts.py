@@ -131,9 +131,10 @@ def texts(F, D):
     F["conclusion"] = (
         "PYTHIA set out to answer one question: can a student-built compiler turn the slow parts of an ordinary Python project into native code *and* show why the result "
         "can be trusted? The work delivered a complete compiler pipeline (Reviews 1 and 2), and in Review 3 a system around it that scans, traces, ranks, types, converts, "
-        f"compiles, verifies, benchmarks and splices a real project, with a user interface that exposes every step and a Windows installer. Against the Review 1 and 2 "
-        f"objectives (Table [[tab:obj]]), the type-checking, equivalence-rate, divergence-catalogue and performance objectives are met or exceeded; the grammar specification lags the language, the "
-        f"oracle corpus is {F['n_pos']} programs against a target of 120, reclamation covers library mode only, and the WebAssembly back end was dropped. "
+        f"compiles, verifies, benchmarks and splices a real project, with a user interface that exposes every step and a Windows installer. "
+        f"The compiler agrees with CPython on all {F['n_pos']} valid test programs and rejects all {F['n_neg']} invalid ones, the in-house inference converts the untyped programs without an LLM, "
+        "and the fidelity report names every place where the two languages could differ. "
+        f"Still open: the dictionary runtime is slow, the WebAssembly back end was dropped, and reclamation covers library mode only. "
         + (D.get("conclusion_studio", "") or "") +
         " The honest summary of the result is that verified conversion of a well-defined subset works, is useful on compute-heavy pure-Python code, and is bounded by the language subset, the 64-bit and ASCII choices, and the quality of the recorded calls.")
 

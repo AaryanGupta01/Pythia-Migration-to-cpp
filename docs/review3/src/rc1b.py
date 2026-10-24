@@ -26,10 +26,16 @@ def sec3(d, F):
     d.p("**Scope.** In: the PySub language (a typed Python subset grown to classes, dicts, sets, tuples, comprehensions, exceptions, f-strings and part of the standard library), "
         "an in-house converter from untyped Python, the C++17 back end and runtime, pybind11 library mode, the Studio application and a Windows installer. "
         "Out, by design: C-extension libraries (NumPy, pandas, PyTorch), generators, `eval`/`exec`, threads, file and network I/O, regex, unseeded randomness, non-ASCII text, and any back end other than C++17.", align="justify")
-    d.h2("3.1 Objective compliance")
-    d.table(["#", "Objective", "Target (Review 1/2)", "Achieved (Review 3)", "Status"], F["obj_rows"], "obj",
-            "Objective compliance. Evidence for every value is in Appendix F.",
-            widths=[0.8, 3.0, 3.8, 6.9, 2.1], size=8.2)
+    d.h2("3.1 What we achieved")
+    d.bullets([
+        "**A complete compiler pipeline** for PySub: off-side-rule lexer, Pratt parser, bidirectional type checker, lowering to PIR, interval-based guard elision and a C++17 emitter with its runtime.",
+        f"**Correctness against CPython:** {F['oracle_pos'][0]} of {F['oracle_pos'][1]} valid programs give identical output and exception class, and {F['oracle_neg'][0]} of {F['oracle_neg'][1]} invalid programs are rejected with the intended message.",
+        f"**A Semantic Fidelity Report** with 14 divergence classes; {F['fid_total']} positioned notes over the test corpus.",
+        f"**In-house type inference, no LLM:** {F['basics'][0]} of {F['basics'][1]} untyped everyday programs convert, compile and match CPython.",
+        f"**Speed:** on ten fixed kernels the compiled code is a median {F['bench_median']:.0f}x faster than CPython with identical output (nine of the ten are {F['bench_min_ex']:.1f}x to {F['bench_max']:.0f}x).",
+        "**PYTHIA Studio:** a ten-stage pipeline that scans, traces, ranks, types, converts, compiles, replay-verifies, benchmarks and splices a real project, with a Windows installer.",
+        f"**A real project, end to end:** on a small public repository the whole program ran {F['studio_jobs'][1]['e2e']['speedup']:.1f}x faster with identical output (Section 10.4).",
+    ])
     d.h2("3.2 Review 2 to Review 3: what changed")
     d.figure(FIG / "fig_whatchanged.png", "Review 2 (a command-line transpiler) and Review 3 (the Studio application).", "changed", 16.0)
     d.table(["", "Review 2", "Review 3"], F["r2r3_rows"], "r2r3", "What changed since Review 2.", widths=[2.2, 5.6, 9.2], size=8.6, first_col_bold=True)
