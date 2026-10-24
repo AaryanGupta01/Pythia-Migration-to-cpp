@@ -14,6 +14,23 @@ the same shape, not the same digits.
 > **Recommendation:** show **TextLab** (10 functions accelerated, 2.6x end to end, output identical) as the main walkthrough, then `dayyass/project-euler` (problem 14) as the "real third-party repository" proof point.
 > TextLab is our own bundled project, so say so. Quanta (47 functions accelerated, 5.0x end to end) is the biggest showpiece and also bundled.
 
+## Recommended live flow: GitHub, clone, run (verified through the real URL path, 2026-10-24)
+
+This was run on the installed app against the live GitHub URL: `https://github.com/dayyass/project-euler` (7 stars, small, public). The app fetched it as a zip of the default branch (no git needed), took 54 s end to end, and the output was identical.
+
+1. **Show the repo on GitHub in the browser** (`github.com/dayyass/project-euler`): small, unknown, plain Python solutions to Project Euler problems. Open `solutions/utils.py` and point at `collatz_sequence_len`: *"an ordinary while loop, no annotations, nothing written for us"*.
+2. Open PYTHIA Studio. On the welcome screen choose **Clone repository** and paste the URL.
+3. In **Entry command** type `python solutions/problem_014.py`. Press **Ctrl+Enter**.
+4. Narrate the stepper (Ingest, Scan, Trace, Rank, Compile, Verify, Benchmark, Splice). Scan finds 102 functions.
+5. Show `collatz_sequence_len` (about 19 to 21x, 500/500 replays) and the **Diff** (one decorator line).
+6. Show the end-to-end card and *"Output identical"*.
+
+**The numbers move with machine load, so do not promise one.** Same command, same repo, two runs on this laptop:
+- Quiet machine (via the GitHub URL): `problem_014` measured **2.0x** and was accepted, so the whole program ran **18.2 s to 0.3 s (59x)**, output identical.
+- Busy machine (local folder): `problem_014` measured **0.81x** and was **declined**, so only `collatz_sequence_len` was compiled and the whole program ran **8.9 s to 0.8 s (11.6x)**, output identical.
+
+Either way the story holds: a hot function found, compiled, checked against CPython, and the result identical. Close other programs before the demo. If `problem_014` shows as Declined, use that as the "careful, not reckless" moment; if it shows as accepted, say the whole loop got compiled. The saved runs in `demo/saved_runs` contain the 11.6x version.
+
 ## Picks
 
 | | Project | Pinned commit | Entry command (type it in the *Entry command* box) | What it shows |
@@ -27,7 +44,7 @@ the same shape, not the same digits.
 unknown, pure-Python project that ran end to end with identical output, but its main demo compiles **one** function and it has **no licence file**, so it is a weaker showpiece
 than the bundled demos. A repository with several verified functions and a permissive licence was not found in the time available. Two other candidates produced nothing
 worth compiling (`landsgevaer/euler.py`: generators and a global prime cache; `AshrithSagar/projecteuler`: its one hot function was correctly rejected by replay).
-The GitHub-URL ingest path was **not** exercised on this repository; the demo used the local folder. Try "Clone repository" with the URL once before the review.
+The GitHub-URL ingest path **was** exercised on this repository (see the section above).
 
 ## Exact clicks (main demo, 2 to 3 minutes)
 
