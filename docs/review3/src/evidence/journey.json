@@ -1,0 +1,1645 @@
+{
+ "repo": "dayyass/project-euler",
+ "url": "https://github.com/dayyass/project-euler",
+ "sha": "ad501f8",
+ "cmd": "python solutions/problem_014.py",
+ "job": "c45cc4b3",
+ "fn": "solutions/utils.py::collatz_sequence_len",
+ "rec": {
+  "id": "solutions/utils.py::collatz_sequence_len",
+  "file": "solutions/utils.py",
+  "name": "collatz_sequence_len",
+  "line": 132,
+  "status": "guarded",
+  "reason": null,
+  "share": 0.8476960186649113,
+  "calls": 999999,
+  "speedup": 21.292670948003764,
+  "trace": {
+   "calls": 999999,
+   "cum_s": 9.6259183,
+   "self_s": 9.6259183,
+   "share": 0.8476960186649113,
+   "arg_types": [
+    "int"
+   ],
+   "ret_type": "int",
+   "samples": 500,
+   "avg_arg_elems": 1.0,
+   "avg_ret_elems": 1.0
+  },
+  "build": {
+   "ok": true,
+   "module": "pythia_9c9bf9bd",
+   "so": "C:\\Users\\visha\\AppData\\Local\\pythia-dev\\home-r3b\\workspaces\\4624d684\\build\\5b757e379e6c\\pythia_9c9bf9bd.cp313-win_amd64.pyd",
+   "cached": false,
+   "compile_s": 5.501,
+   "log": "lto-wrapper.exe: warning: using serial compilation of 2 LTRANS jobs\nlto-wrapper.exe: note: see the '-flto' option documentation for more information",
+   "exposed": [
+    {
+     "name": "collatz_sequence_len",
+     "params": [
+      "int"
+     ],
+     "ret": "int",
+     "param_names": [
+      "n"
+     ],
+     "mutates": []
+    }
+   ],
+   "cpp_path": "C:\\Users\\visha\\AppData\\Local\\pythia-dev\\home-r3b\\workspaces\\4624d684\\build\\5b757e379e6c\\pythia_9c9bf9bd.cpp",
+   "error": null
+  },
+  "replay": {
+   "total": 500,
+   "matched": 500,
+   "exc_matches": 0,
+   "first_mismatch": null,
+   "skipped": 0,
+   "source": "trace",
+   "status": "guarded"
+  },
+  "bench": {
+   "py_ms": 0.854795774650586,
+   "cpp_ms": 0.04014507042061461,
+   "speedup": 21.292670948003764,
+   "calls_timed": 200,
+   "repeats": 5,
+   "loops": 71
+  },
+  "splice": {
+   "applied": true,
+   "diff": "--- a/solutions/utils.py\n+++ b/solutions/utils.py\n@@ -1,194 +1,200 @@\n-from typing import Set, Iterable\n-\n-\n-def is_prime(n: int) -> bool:\n-    \"\"\"\n-    Check if the number is prime using Trial division algorithm.\n-\n-    - O(sqrt(n)) time-complexity\n-    - O(1) space-complexity\n-    \"\"\"\n-    if n <= 1:\n-        return False\n-\n-    for i in range(2, int(n ** 0.5) + 1):\n-        if n % i == 0:\n-            return False\n-    return True\n-\n-\n-def is_palindromic(n: int) -> bool:\n-    \"\"\"\n-    Check if the number is palindromic.\n-\n-    - O(1) time-complexity\n-    - O(1) space-complexity\n-    \"\"\"\n-    str_n = str(n)\n-    if str_n == str_n[::-1]:\n-        return True\n-    return False\n-\n-\n-def is_pandigital(n: int) -> bool:\n-    \"\"\"\n-    Check if the number is pandigital.\n-\n-    - O(n) time-complexity\n-    - O(1) space-complexity\n-    \"\"\"\n-    str_n = str(n)\n-    for i in range(1, len(str_n) + 1):\n-        if str(i) not in str_n:\n-            return False\n-    return True\n-\n-\n-def is_leap_year(year: int) -> bool:\n-    \"\"\"\n-    Check if year is leap.\n-\n-    - O(1) time-complexity\n-    - O(1) space-complexity\n-    \"\"\"\n-    return (year % 4 == 0) and ((year % 100 != 0) or (year % 400 == 0))\n-\n-\n-def sum_of_digits_in_number(n: int) -> int:\n-    \"\"\"\n-    Calculate the sum of the digits in the number.\n-    \"\"\"\n-    return sum(int(digit) for digit in str(n))\n-\n-\n-def sum_of_digit_powers_in_number(n: int, power: int) -> int:\n-    \"\"\"\n-    Calculate the sum of the digits in the number.\n-    \"\"\"\n-    return sum(int(digit) ** power for digit in str(n))\n-\n-\n-def product(array: Iterable):\n-    \"\"\"\n-    Multiply all elements in array.\n-\n-    - O(n) time-complexity\n-    - O(1) space-complexity\n-    \"\"\"\n-    product = 1\n-    for i in array:\n-        product *= i\n-    return product\n-\n-\n-def factorial(n: int) -> int:\n-    \"\"\"\n-    Calculates the factorial of a number\n-    \"\"\"\n-    result = 1\n-    for i in range(1, n+1):\n-        result *= i\n-    return result\n-\n-\n-def find_divisors(n: int) -> Set[int]:\n-    \"\"\"\n-    Find all divisors of a number.\n-    - O(sqrt(n)) time-complexity\n-    - O(n) space-complexity\n-    \"\"\"\n-    divisors = {1, n}\n-    for i in range(2, int(n ** 0.5) + 1):\n-        if n % i == 0:\n-            divisors.add(i)\n-            divisors.add(n // i)\n-    return divisors\n-\n-\n-def find_proper_divisors(n: int) -> Set[int]:\n-    \"\"\"\n-    Find all proper divisors of a number.\n-    - O(sqrt(n)) time-complexity\n-    - O(n) space-complexity\n-    \"\"\"\n-\n-    divisors = find_divisors(n)\n-    return divisors - {n}  # without n\n-\n-\n-def check_divisible(n: int, divisors: Iterable) -> bool:\n-    \"\"\"\n-    Check if a number is divisible by all numbers in array.\n-\n-    - O(n) time-complexity\n-    - O(1) space-complexity\n-    \"\"\"\n-    for i in divisors:\n-        if n % i != 0:\n-            return False\n-    return True\n-\n-\n-def collatz_sequence_len(n: int) -> int:\n-    \"\"\"\n-    Compute len of Collatz sequence.\n-\n-    - O(1) space-complexity\n-    \"\"\"\n-    result = 1\n-    while n != 1:\n-        if n % 2 == 0:\n-            n //= 2\n-        else:\n-            n = 3 * n + 1\n-        result += 1\n-    return result\n-\n-\n-def fibonacci_generator():\n-    \"\"\"\n-    Fibonacci numbers generator that yields position of the number and number itself.\n-    \"\"\"\n-    fib_prev = 0  # prev fib number\n-    fib_cur = 1  # next fib number\n-    i = 1  # number position\n-    while True:\n-        yield i, fib_cur\n-        i += 1\n-        fib_prev, fib_cur = fib_cur, fib_prev + fib_cur\n-\n-\n-def prime_generator():\n-    \"\"\"\n-    Prime numbers generator that yields position of the number and number itself.\n-    \"\"\"\n-    i = 0  # prime numbers counter\n-    num = 0  # current number\n-    while True:\n-        num += 1\n-        if is_prime(num):\n-            i += 1\n-            yield i, num\n-\n-\n-def gcd(a: int, b: int) -> int:\n-    \"\"\"\n-    Euclidean algorithm for Greatest Common Divisor.\n-\n-    - O(1) space-complexity\n-    \"\"\"\n-    while a != b:\n-        if a > b:\n-            a -= b\n-        else:\n-            b -= a\n-    return a\n-\n-\n-def lcm(a: int, b: int) -> int:\n-    \"\"\"\n-    Least Common Multiple.\n-\n-    - O(1) space-complexity\n-    \"\"\"\n-    return a * b // gcd(a, b)\n+from typing import Set, Iterable\r\n+try:  # pythia-accel\r\n+    from _pythia_accel import accelerated as _pythia_accelerated\r\n+except ImportError:\r\n+    def _pythia_accelerated(*_a, **_k):\r\n+        return lambda f: f\r\n+\r\n+\r\n+def is_prime(n: int) -> bool:\r\n+    \"\"\"\r\n+    Check if the number is prime using Trial division algorithm.\r\n+\r\n+    - O(sqrt(n)) time-complexity\r\n+    - O(1) space-complexity\r\n+    \"\"\"\r\n+    if n <= 1:\r\n+        return False\r\n+\r\n+    for i in range(2, int(n ** 0.5) + 1):\r\n+        if n % i == 0:\r\n+            return False\r\n+    return True\r\n+\r\n+\r\n+def is_palindromic(n: int) -> bool:\r\n+    \"\"\"\r\n+    Check if the number is palindromic.\r\n+\r\n+    - O(1) time-complexity\r\n+    - O(1) space-complexity\r\n+    \"\"\"\r\n+    str_n = str(n)\r\n+    if str_n == str_n[::-1]:\r\n+        return True\r\n+    return False\r\n+\r\n+\r\n+def is_pandigital(n: int) -> bool:\r\n+    \"\"\"\r\n+    Check if the number is pandigital.\r\n+\r\n+    - O(n) time-complexity\r\n+    - O(1) space-complexity\r\n+    \"\"\"\r\n+    str_n = str(n)\r\n+    for i in range(1, len(str_n) + 1):\r\n+        if str(i) not in str_n:\r\n+            return False\r\n+    return True\r\n+\r\n+\r\n+def is_leap_year(year: int) -> bool:\r\n+    \"\"\"\r\n+    Check if year is leap.\r\n+\r\n+    - O(1) time-complexity\r\n+    - O(1) space-complexity\r\n+    \"\"\"\r\n+    return (year % 4 == 0) and ((year % 100 != 0) or (year % 400 == 0))\r\n+\r\n+\r\n+def sum_of_digits_in_number(n: int) -> int:\r\n+    \"\"\"\r\n+    Calculate the sum of the digits in the number.\r\n+    \"\"\"\r\n+    return sum(int(digit) for digit in str(n))\r\n+\r\n+\r\n+def sum_of_digit_powers_in_number(n: int, power: int) -> int:\r\n+    \"\"\"\r\n+    Calculate the sum of the digits in the number.\r\n+    \"\"\"\r\n+    return sum(int(digit) ** power for digit in str(n))\r\n+\r\n+\r\n+def product(array: Iterable):\r\n+    \"\"\"\r\n+    Multiply all elements in array.\r\n+\r\n+    - O(n) time-complexity\r\n+    - O(1) space-complexity\r\n+    \"\"\"\r\n+    product = 1\r\n+    for i in array:\r\n+        product *= i\r\n+    return product\r\n+\r\n+\r\n+def factorial(n: int) -> int:\r\n+    \"\"\"\r\n+    Calculates the factorial of a number\r\n+    \"\"\"\r\n+    result = 1\r\n+    for i in range(1, n+1):\r\n+        result *= i\r\n+    return result\r\n+\r\n+\r\n+def find_divisors(n: int) -> Set[int]:\r\n+    \"\"\"\r\n+    Find all divisors of a number.\r\n+    - O(sqrt(n)) time-complexity\r\n+    - O(n) space-complexity\r\n+    \"\"\"\r\n+    divisors = {1, n}\r\n+    for i in range(2, int(n ** 0.5) + 1):\r\n+        if n % i == 0:\r\n+            divisors.add(i)\r\n+            divisors.add(n // i)\r\n+    return divisors\r\n+\r\n+\r\n+def find_proper_divisors(n: int) -> Set[int]:\r\n+    \"\"\"\r\n+    Find all proper divisors of a number.\r\n+    - O(sqrt(n)) time-complexity\r\n+    - O(n) space-complexity\r\n+    \"\"\"\r\n+\r\n+    divisors = find_divisors(n)\r\n+    return divisors - {n}  # without n\r\n+\r\n+\r\n+def check_divisible(n: int, divisors: Iterable) -> bool:\r\n+    \"\"\"\r\n+    Check if a number is divisible by all numbers in array.\r\n+\r\n+    - O(n) time-complexity\r\n+    - O(1) space-complexity\r\n+    \"\"\"\r\n+    for i in divisors:\r\n+        if n % i != 0:\r\n+            return False\r\n+    return True\r\n+\r\n+\r\n+@_pythia_accelerated(\"pythia_9c9bf9bd\", \"collatz_sequence_len\")\r\n+def collatz_sequence_len(n: int) -> int:\r\n+    \"\"\"\r\n+    Compute len of Collatz sequence.\r\n+\r\n+    - O(1) space-complexity\r\n+    \"\"\"\r\n+    result = 1\r\n+    while n != 1:\r\n+        if n % 2 == 0:\r\n+            n //= 2\r\n+        else:\r\n+            n = 3 * n + 1\r\n+        result += 1\r\n+    return result\r\n+\r\n+\r\n+def fibonacci_generator():\r\n+    \"\"\"\r\n+    Fibonacci numbers generator that yields position of the number and number itself.\r\n+    \"\"\"\r\n+    fib_prev = 0  # prev fib number\r\n+    fib_cur = 1  # next fib number\r\n+    i = 1  # number position\r\n+    while True:\r\n+        yield i, fib_cur\r\n+        i += 1\r\n+        fib_prev, fib_cur = fib_cur, fib_prev + fib_cur\r\n+\r\n+\r\n+def prime_generator():\r\n+    \"\"\"\r\n+    Prime numbers generator that yields position of the number and number itself.\r\n+    \"\"\"\r\n+    i = 0  # prime numbers counter\r\n+    num = 0  # current number\r\n+    while True:\r\n+        num += 1\r\n+        if is_prime(num):\r\n+            i += 1\r\n+            yield i, num\r\n+\r\n+\r\n+def gcd(a: int, b: int) -> int:\r\n+    \"\"\"\r\n+    Euclidean algorithm for Greatest Common Divisor.\r\n+\r\n+    - O(1) space-complexity\r\n+    \"\"\"\r\n+    while a != b:\r\n+        if a > b:\r\n+            a -= b\r\n+        else:\r\n+            b -= a\r\n+    return a\r\n+\r\n+\r\n+def lcm(a: int, b: int) -> int:\r\n+    \"\"\"\r\n+    Least Common Multiple.\r\n+\r\n+    - O(1) space-complexity\r\n+    \"\"\"\r\n+    return a * b // gcd(a, b)\r\n"
+  },
+  "score": {
+   "total": 0.6229,
+   "trace_share": 0.8476960186649113,
+   "static_heuristic": 0.57,
+   "eligibility_factor": 1.0,
+   "expected_benefit": 23.44,
+   "boundary_penalty": 0.1406,
+   "basis": "trace",
+   "notes": [
+    "traced 999999 calls, 9.626s in Python; est. 23.4x on compute -> saves ~9.215s",
+    "boundary cost ~1.508s (999999 calls x ~2 elements marshalled)"
+   ]
+  },
+  "metrics": {
+   "size_lines": 14,
+   "loop_depth": 1,
+   "arith_density": 0.42,
+   "calls": [],
+   "imports": [],
+   "uses_globals": []
+  },
+  "fidelity": [
+   {
+    "line": 9,
+    "col": 14,
+    "cls": "D3 modulo sign convention",
+    "detail": "In Python the sign of % follows the divisor; in C it follows the dividend, so -7 % 2 is 1 in Python, -1 in C.",
+    "mitigation": "emitted as py_mod_i64/py_mod_f64; exact.",
+    "severity": "exact"
+   },
+   {
+    "line": 10,
+    "col": 13,
+    "cls": "D2 floor-division rounding direction",
+    "detail": "Python floors toward -inf; C truncates toward zero, so -7 // 2 is -4 in Python and -3 in C.",
+    "mitigation": "emitted as py_floordiv_i64/py_floordiv_f64, which reproduces Python exactly.",
+    "severity": "exact"
+   },
+   {
+    "line": 12,
+    "col": 19,
+    "cls": "D1 unbounded-int vs int64",
+    "detail": "CPython ints are arbitrary precision; the C image uses int64_t, so '*' can overflow where CPython cannot.",
+    "mitigation": "checked with __builtin_*_overflow; raises OverflowError instead of wrapping. Sound but not complete.",
+    "severity": "guarded"
+   },
+   {
+    "line": 12,
+    "col": 23,
+    "cls": "D1 unbounded-int vs int64",
+    "detail": "CPython ints are arbitrary precision; the C image uses int64_t, so '+' can overflow where CPython cannot.",
+    "mitigation": "checked with __builtin_*_overflow; raises OverflowError instead of wrapping. Sound but not complete.",
+    "severity": "guarded"
+   },
+   {
+    "line": 13,
+    "col": 9,
+    "cls": "D1 unbounded-int vs int64",
+    "detail": "CPython ints are arbitrary precision; the C image uses int64_t, so '+' can overflow where CPython cannot.",
+    "mitigation": "checked with __builtin_*_overflow; raises OverflowError instead of wrapping. Sound but not complete.",
+    "severity": "guarded"
+   },
+   {
+    "line": 0,
+    "col": 0,
+    "cls": "D7 object lifetime / reclamation",
+    "detail": "PySub objects (str, list, dict) are heap-allocated by the runtime and CPython reclaims them by reference counting.",
+    "mitigation": "library wrappers run each call inside a memory arena that frees every str/list/dict allocated during the call after the result has been copied back; nothing leaks across calls.",
+    "severity": "guarded"
+   },
+   {
+    "line": 0,
+    "col": 0,
+    "cls": "L1 copy semantics at the Python boundary",
+    "detail": "Arguments are copied into the compiled runtime and results copied back, so object identity, aliasing between arguments (the same list passed twice) and tuples are not preserved.",
+    "mitigation": "list/dict arguments the function may mutate are written back into the caller's object in place after the call (also when an exception is raised).",
+    "severity": "guarded"
+   }
+  ],
+  "sources": {
+   "original": "def collatz_sequence_len(n: int) -> int:\n    \"\"\"\n    Compute len of Collatz sequence.\n\n    - O(1) space-complexity\n    \"\"\"\n    result = 1\n    while n != 1:\n        if n % 2 == 0:\n            n //= 2\n        else:\n            n = 3 * n + 1\n        result += 1\n    return result",
+   "annotated": null,
+   "pysub": "def collatz_sequence_len(n: int) -> int:\n\n\n\n\n\n    result = 1\n    while n != 1:\n        if n % 2 == 0:\n            n //= 2\n        else:\n            n = 3 * n + 1\n        result += 1\n    return result\n",
+   "cpp": "/* ------------------------------------------------------------------\n * Generated by PYTHIA 0.1 from utils.py\n * Do not edit: regenerate with `python -m pythia.cli <source>.py`.\n * ---------------------------------------------------------------- */\n#include \"pyrt.hpp\"\n\n/* forward declarations (PySub allows mutual recursion) */\nstatic int64_t f_collatz_sequence_len(int64_t p_n);\n\nstatic int64_t f_collatz_sequence_len(int64_t p_n) {\n    int64_t p_result = 0;\n\n    p_result = INT64_C(1);\n    while ((((p_n) != (INT64_C(1))))) {\n        if ((((py_mod_i64(p_n, INT64_C(2))) == (INT64_C(0))))) {\n            p_n = py_floordiv_i64(p_n, INT64_C(2));\n        } else {\n            p_n = py_add_i64(py_mul_i64(INT64_C(3), p_n), INT64_C(1));\n        }\n        p_result = py_add_i64(p_result, INT64_C(1));\n    }\n    return p_result;\n    return 0;   /* unreachable unless the result is Optional */\n}\n\n",
+   "wrapper_cpp": "\n/* ------------------------------------------------------------------\n * pybind11 glue (generated).  Arguments are copied in, results copied\n * out; mutated list/dict arguments are written back in place.\n * ---------------------------------------------------------------- */\n#include \"pyrt_bridge.hpp\"\nnamespace py = pybind11;\n\n// collatz_sequence_len(n: int) -> int\nstatic py::object w_collatz_sequence_len(py::object a_n) {\n    pyb::Arena _arena;\n    using T0 = pyb::I64;\n    T0::C c_n = T0::in(a_n.ptr());\n    using TR = pyb::I64;\n    TR::C _r{};\n    try {\n        _r = f_collatz_sequence_len(c_n);\n    } catch (const pyrt::PythonException &_e) {\n        pyb::raise(_e);\n    }\n    return pyb::steal(TR::out(_r));\n}\n\nPYBIND11_MODULE(pythia_9c9bf9bd, m) {\n    m.doc() = \"PYTHIA-compiled module (library mode)\";\n    pyrt::pyrt_set_py_minor(PY_MINOR_VERSION);\n    pyb::FallbackError = PyErr_NewException(\"pythia_9c9bf9bd.FallbackError\", PyExc_Exception, nullptr);\n    m.attr(\"FallbackError\") = py::reinterpret_borrow<py::object>(pyb::FallbackError);\n    pyb::SemanticError = PyErr_NewException(\"pythia_9c9bf9bd.PythiaSemanticError\", PyExc_RuntimeError, nullptr);\n    m.attr(\"PythiaSemanticError\") = py::reinterpret_borrow<py::object>(pyb::SemanticError);\n    m.def(\"collatz_sequence_len\", &w_collatz_sequence_len, py::arg(\"n\"));\n}\n"
+  }
+ },
+ "stages": {
+  "ok": true,
+  "diagnostics": [],
+  "tokens": [
+   {
+    "kind": "KEYWORD",
+    "value": "def",
+    "line": 1,
+    "col": 1
+   },
+   {
+    "kind": "NAME",
+    "value": "collatz_sequence_len",
+    "line": 1,
+    "col": 5
+   },
+   {
+    "kind": "OP",
+    "value": "(",
+    "line": 1,
+    "col": 25
+   },
+   {
+    "kind": "NAME",
+    "value": "n",
+    "line": 1,
+    "col": 26
+   },
+   {
+    "kind": "OP",
+    "value": ":",
+    "line": 1,
+    "col": 27
+   },
+   {
+    "kind": "NAME",
+    "value": "int",
+    "line": 1,
+    "col": 29
+   },
+   {
+    "kind": "OP",
+    "value": ")",
+    "line": 1,
+    "col": 32
+   },
+   {
+    "kind": "OP",
+    "value": "->",
+    "line": 1,
+    "col": 34
+   },
+   {
+    "kind": "NAME",
+    "value": "int",
+    "line": 1,
+    "col": 37
+   },
+   {
+    "kind": "OP",
+    "value": ":",
+    "line": 1,
+    "col": 40
+   },
+   {
+    "kind": "NEWLINE",
+    "value": "\\n",
+    "line": 1,
+    "col": 41
+   },
+   {
+    "kind": "INDENT",
+    "value": "    ",
+    "line": 7,
+    "col": 1
+   },
+   {
+    "kind": "NAME",
+    "value": "result",
+    "line": 7,
+    "col": 5
+   },
+   {
+    "kind": "OP",
+    "value": "=",
+    "line": 7,
+    "col": 12
+   },
+   {
+    "kind": "INT",
+    "value": "1",
+    "line": 7,
+    "col": 14
+   },
+   {
+    "kind": "NEWLINE",
+    "value": "\\n",
+    "line": 7,
+    "col": 15
+   },
+   {
+    "kind": "KEYWORD",
+    "value": "while",
+    "line": 8,
+    "col": 5
+   },
+   {
+    "kind": "NAME",
+    "value": "n",
+    "line": 8,
+    "col": 11
+   },
+   {
+    "kind": "OP",
+    "value": "!=",
+    "line": 8,
+    "col": 13
+   },
+   {
+    "kind": "INT",
+    "value": "1",
+    "line": 8,
+    "col": 16
+   },
+   {
+    "kind": "OP",
+    "value": ":",
+    "line": 8,
+    "col": 17
+   },
+   {
+    "kind": "NEWLINE",
+    "value": "\\n",
+    "line": 8,
+    "col": 18
+   },
+   {
+    "kind": "INDENT",
+    "value": "        ",
+    "line": 9,
+    "col": 1
+   },
+   {
+    "kind": "KEYWORD",
+    "value": "if",
+    "line": 9,
+    "col": 9
+   },
+   {
+    "kind": "NAME",
+    "value": "n",
+    "line": 9,
+    "col": 12
+   },
+   {
+    "kind": "OP",
+    "value": "%",
+    "line": 9,
+    "col": 14
+   },
+   {
+    "kind": "INT",
+    "value": "2",
+    "line": 9,
+    "col": 16
+   },
+   {
+    "kind": "OP",
+    "value": "==",
+    "line": 9,
+    "col": 18
+   },
+   {
+    "kind": "INT",
+    "value": "0",
+    "line": 9,
+    "col": 21
+   },
+   {
+    "kind": "OP",
+    "value": ":",
+    "line": 9,
+    "col": 22
+   },
+   {
+    "kind": "NEWLINE",
+    "value": "\\n",
+    "line": 9,
+    "col": 23
+   },
+   {
+    "kind": "INDENT",
+    "value": "            ",
+    "line": 10,
+    "col": 1
+   },
+   {
+    "kind": "NAME",
+    "value": "n",
+    "line": 10,
+    "col": 13
+   },
+   {
+    "kind": "OP",
+    "value": "//=",
+    "line": 10,
+    "col": 15
+   },
+   {
+    "kind": "INT",
+    "value": "2",
+    "line": 10,
+    "col": 19
+   },
+   {
+    "kind": "NEWLINE",
+    "value": "\\n",
+    "line": 10,
+    "col": 20
+   },
+   {
+    "kind": "DEDENT",
+    "value": "",
+    "line": 11,
+    "col": 1
+   },
+   {
+    "kind": "KEYWORD",
+    "value": "else",
+    "line": 11,
+    "col": 9
+   },
+   {
+    "kind": "OP",
+    "value": ":",
+    "line": 11,
+    "col": 13
+   },
+   {
+    "kind": "NEWLINE",
+    "value": "\\n",
+    "line": 11,
+    "col": 14
+   },
+   {
+    "kind": "INDENT",
+    "value": "            ",
+    "line": 12,
+    "col": 1
+   },
+   {
+    "kind": "NAME",
+    "value": "n",
+    "line": 12,
+    "col": 13
+   },
+   {
+    "kind": "OP",
+    "value": "=",
+    "line": 12,
+    "col": 15
+   },
+   {
+    "kind": "INT",
+    "value": "3",
+    "line": 12,
+    "col": 17
+   },
+   {
+    "kind": "OP",
+    "value": "*",
+    "line": 12,
+    "col": 19
+   },
+   {
+    "kind": "NAME",
+    "value": "n",
+    "line": 12,
+    "col": 21
+   },
+   {
+    "kind": "OP",
+    "value": "+",
+    "line": 12,
+    "col": 23
+   },
+   {
+    "kind": "INT",
+    "value": "1",
+    "line": 12,
+    "col": 25
+   },
+   {
+    "kind": "NEWLINE",
+    "value": "\\n",
+    "line": 12,
+    "col": 26
+   },
+   {
+    "kind": "DEDENT",
+    "value": "",
+    "line": 13,
+    "col": 1
+   },
+   {
+    "kind": "NAME",
+    "value": "result",
+    "line": 13,
+    "col": 9
+   },
+   {
+    "kind": "OP",
+    "value": "+=",
+    "line": 13,
+    "col": 16
+   },
+   {
+    "kind": "INT",
+    "value": "1",
+    "line": 13,
+    "col": 19
+   },
+   {
+    "kind": "NEWLINE",
+    "value": "\\n",
+    "line": 13,
+    "col": 20
+   },
+   {
+    "kind": "DEDENT",
+    "value": "",
+    "line": 14,
+    "col": 1
+   },
+   {
+    "kind": "KEYWORD",
+    "value": "return",
+    "line": 14,
+    "col": 5
+   },
+   {
+    "kind": "NAME",
+    "value": "result",
+    "line": 14,
+    "col": 12
+   },
+   {
+    "kind": "NEWLINE",
+    "value": "\\n",
+    "line": 14,
+    "col": 18
+   },
+   {
+    "kind": "DEDENT",
+    "value": "",
+    "line": 15,
+    "col": 1
+   },
+   {
+    "kind": "EOF",
+    "value": "",
+    "line": 15,
+    "col": 1
+   }
+  ],
+  "ast": {
+   "t": "Module",
+   "line": 1,
+   "col": 1,
+   "ty": null,
+   "attrs": {},
+   "kids": {
+    "funcs": [
+     {
+      "t": "FuncDef",
+      "line": 1,
+      "col": 1,
+      "ty": null,
+      "attrs": {
+       "name": "collatz_sequence_len"
+      },
+      "kids": {
+       "params": [
+        {
+         "t": "Param",
+         "line": 1,
+         "col": 26,
+         "ty": null,
+         "attrs": {
+          "name": "n"
+         },
+         "kids": {
+          "ann": {
+           "t": "TypeExpr",
+           "line": 1,
+           "col": 29,
+           "ty": null,
+           "attrs": {
+            "name": "int"
+           },
+           "kids": {}
+          }
+         }
+        }
+       ],
+       "ret": {
+        "t": "TypeExpr",
+        "line": 1,
+        "col": 37,
+        "ty": null,
+        "attrs": {
+         "name": "int"
+        },
+        "kids": {}
+       },
+       "body": [
+        {
+         "t": "Assign",
+         "line": 7,
+         "col": 5,
+         "ty": null,
+         "attrs": {
+          "declares": false
+         },
+         "kids": {
+          "target": {
+           "t": "Name",
+           "line": 7,
+           "col": 5,
+           "ty": null,
+           "attrs": {
+            "id": "result"
+           },
+           "kids": {}
+          },
+          "value": {
+           "t": "IntLit",
+           "line": 7,
+           "col": 14,
+           "ty": null,
+           "attrs": {
+            "value": 1
+           },
+           "kids": {}
+          }
+         }
+        },
+        {
+         "t": "While",
+         "line": 8,
+         "col": 5,
+         "ty": null,
+         "attrs": {},
+         "kids": {
+          "test": {
+           "t": "Compare",
+           "line": 8,
+           "col": 13,
+           "ty": null,
+           "attrs": {
+            "op": "!="
+           },
+           "kids": {
+            "left": {
+             "t": "Name",
+             "line": 8,
+             "col": 11,
+             "ty": null,
+             "attrs": {
+              "id": "n"
+             },
+             "kids": {}
+            },
+            "right": {
+             "t": "IntLit",
+             "line": 8,
+             "col": 16,
+             "ty": null,
+             "attrs": {
+              "value": 1
+             },
+             "kids": {}
+            }
+           }
+          },
+          "body": [
+           {
+            "t": "If",
+            "line": 9,
+            "col": 9,
+            "ty": null,
+            "attrs": {},
+            "kids": {
+             "test": {
+              "t": "Compare",
+              "line": 9,
+              "col": 18,
+              "ty": null,
+              "attrs": {
+               "op": "=="
+              },
+              "kids": {
+               "left": {
+                "t": "BinOp",
+                "line": 9,
+                "col": 14,
+                "ty": null,
+                "attrs": {
+                 "op": "%",
+                 "no_guard": false
+                },
+                "kids": {
+                 "left": {
+                  "t": "Name",
+                  "line": 9,
+                  "col": 12,
+                  "ty": null,
+                  "attrs": {
+                   "id": "n"
+                  },
+                  "kids": {}
+                 },
+                 "right": {
+                  "t": "IntLit",
+                  "line": 9,
+                  "col": 16,
+                  "ty": null,
+                  "attrs": {
+                   "value": 2
+                  },
+                  "kids": {}
+                 }
+                }
+               },
+               "right": {
+                "t": "IntLit",
+                "line": 9,
+                "col": 21,
+                "ty": null,
+                "attrs": {
+                 "value": 0
+                },
+                "kids": {}
+               }
+              }
+             },
+             "body": [
+              {
+               "t": "AugAssign",
+               "line": 10,
+               "col": 13,
+               "ty": null,
+               "attrs": {
+                "op": "//"
+               },
+               "kids": {
+                "target": {
+                 "t": "Name",
+                 "line": 10,
+                 "col": 13,
+                 "ty": null,
+                 "attrs": {
+                  "id": "n"
+                 },
+                 "kids": {}
+                },
+                "value": {
+                 "t": "IntLit",
+                 "line": 10,
+                 "col": 19,
+                 "ty": null,
+                 "attrs": {
+                  "value": 2
+                 },
+                 "kids": {}
+                }
+               }
+              }
+             ],
+             "orelse": [
+              {
+               "t": "Assign",
+               "line": 12,
+               "col": 13,
+               "ty": null,
+               "attrs": {
+                "declares": false
+               },
+               "kids": {
+                "target": {
+                 "t": "Name",
+                 "line": 12,
+                 "col": 13,
+                 "ty": null,
+                 "attrs": {
+                  "id": "n"
+                 },
+                 "kids": {}
+                },
+                "value": {
+                 "t": "BinOp",
+                 "line": 12,
+                 "col": 23,
+                 "ty": null,
+                 "attrs": {
+                  "op": "+",
+                  "no_guard": false
+                 },
+                 "kids": {
+                  "left": {
+                   "t": "BinOp",
+                   "line": 12,
+                   "col": 19,
+                   "ty": null,
+                   "attrs": {
+                    "op": "*",
+                    "no_guard": false
+                   },
+                   "kids": {
+                    "left": {
+                     "t": "IntLit",
+                     "line": 12,
+                     "col": 17,
+                     "ty": null,
+                     "attrs": {
+                      "value": 3
+                     },
+                     "kids": {}
+                    },
+                    "right": {
+                     "t": "Name",
+                     "line": 12,
+                     "col": 21,
+                     "ty": null,
+                     "attrs": {
+                      "id": "n"
+                     },
+                     "kids": {}
+                    }
+                   }
+                  },
+                  "right": {
+                   "t": "IntLit",
+                   "line": 12,
+                   "col": 25,
+                   "ty": null,
+                   "attrs": {
+                    "value": 1
+                   },
+                   "kids": {}
+                  }
+                 }
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "t": "AugAssign",
+            "line": 13,
+            "col": 9,
+            "ty": null,
+            "attrs": {
+             "op": "+"
+            },
+            "kids": {
+             "target": {
+              "t": "Name",
+              "line": 13,
+              "col": 9,
+              "ty": null,
+              "attrs": {
+               "id": "result"
+              },
+              "kids": {}
+             },
+             "value": {
+              "t": "IntLit",
+              "line": 13,
+              "col": 19,
+              "ty": null,
+              "attrs": {
+               "value": 1
+              },
+              "kids": {}
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "t": "Return",
+         "line": 14,
+         "col": 5,
+         "ty": null,
+         "attrs": {},
+         "kids": {
+          "value": {
+           "t": "Name",
+           "line": 14,
+           "col": 12,
+           "ty": null,
+           "attrs": {
+            "id": "result"
+           },
+           "kids": {}
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "typed_ast": {
+   "t": "Module",
+   "line": 1,
+   "col": 1,
+   "ty": null,
+   "attrs": {},
+   "kids": {
+    "funcs": [
+     {
+      "t": "FuncDef",
+      "line": 1,
+      "col": 1,
+      "ty": null,
+      "attrs": {
+       "name": "collatz_sequence_len",
+       "locals": {
+        "result": "int"
+       }
+      },
+      "kids": {
+       "params": [
+        {
+         "t": "Param",
+         "line": 1,
+         "col": 26,
+         "ty": "int",
+         "attrs": {
+          "name": "n"
+         },
+         "kids": {
+          "ann": {
+           "t": "TypeExpr",
+           "line": 1,
+           "col": 29,
+           "ty": null,
+           "attrs": {
+            "name": "int"
+           },
+           "kids": {}
+          }
+         }
+        }
+       ],
+       "ret": {
+        "t": "TypeExpr",
+        "line": 1,
+        "col": 37,
+        "ty": null,
+        "attrs": {
+         "name": "int"
+        },
+        "kids": {}
+       },
+       "body": [
+        {
+         "t": "Assign",
+         "line": 7,
+         "col": 5,
+         "ty": "int",
+         "attrs": {
+          "declares": true
+         },
+         "kids": {
+          "target": {
+           "t": "Name",
+           "line": 7,
+           "col": 5,
+           "ty": "int",
+           "attrs": {
+            "id": "result"
+           },
+           "kids": {}
+          },
+          "value": {
+           "t": "IntLit",
+           "line": 7,
+           "col": 14,
+           "ty": "int",
+           "attrs": {
+            "value": 1
+           },
+           "kids": {}
+          }
+         }
+        },
+        {
+         "t": "While",
+         "line": 8,
+         "col": 5,
+         "ty": null,
+         "attrs": {},
+         "kids": {
+          "test": {
+           "t": "Compare",
+           "line": 8,
+           "col": 13,
+           "ty": "bool",
+           "attrs": {
+            "op": "!="
+           },
+           "kids": {
+            "left": {
+             "t": "Name",
+             "line": 8,
+             "col": 11,
+             "ty": "int",
+             "attrs": {
+              "id": "n"
+             },
+             "kids": {}
+            },
+            "right": {
+             "t": "IntLit",
+             "line": 8,
+             "col": 16,
+             "ty": "int",
+             "attrs": {
+              "value": 1
+             },
+             "kids": {}
+            }
+           }
+          },
+          "body": [
+           {
+            "t": "If",
+            "line": 9,
+            "col": 9,
+            "ty": null,
+            "attrs": {},
+            "kids": {
+             "test": {
+              "t": "Compare",
+              "line": 9,
+              "col": 18,
+              "ty": "bool",
+              "attrs": {
+               "op": "=="
+              },
+              "kids": {
+               "left": {
+                "t": "BinOp",
+                "line": 9,
+                "col": 14,
+                "ty": "int",
+                "attrs": {
+                 "op": "%",
+                 "no_guard": false
+                },
+                "kids": {
+                 "left": {
+                  "t": "Name",
+                  "line": 9,
+                  "col": 12,
+                  "ty": "int",
+                  "attrs": {
+                   "id": "n"
+                  },
+                  "kids": {}
+                 },
+                 "right": {
+                  "t": "IntLit",
+                  "line": 9,
+                  "col": 16,
+                  "ty": "int",
+                  "attrs": {
+                   "value": 2
+                  },
+                  "kids": {}
+                 }
+                }
+               },
+               "right": {
+                "t": "IntLit",
+                "line": 9,
+                "col": 21,
+                "ty": "int",
+                "attrs": {
+                 "value": 0
+                },
+                "kids": {}
+               }
+              }
+             },
+             "body": [
+              {
+               "t": "AugAssign",
+               "line": 10,
+               "col": 13,
+               "ty": "int",
+               "attrs": {
+                "op": "//"
+               },
+               "kids": {
+                "target": {
+                 "t": "Name",
+                 "line": 10,
+                 "col": 13,
+                 "ty": "int",
+                 "attrs": {
+                  "id": "n"
+                 },
+                 "kids": {}
+                },
+                "value": {
+                 "t": "IntLit",
+                 "line": 10,
+                 "col": 19,
+                 "ty": "int",
+                 "attrs": {
+                  "value": 2
+                 },
+                 "kids": {}
+                }
+               }
+              }
+             ],
+             "orelse": [
+              {
+               "t": "Assign",
+               "line": 12,
+               "col": 13,
+               "ty": "int",
+               "attrs": {
+                "declares": false
+               },
+               "kids": {
+                "target": {
+                 "t": "Name",
+                 "line": 12,
+                 "col": 13,
+                 "ty": "int",
+                 "attrs": {
+                  "id": "n"
+                 },
+                 "kids": {}
+                },
+                "value": {
+                 "t": "BinOp",
+                 "line": 12,
+                 "col": 23,
+                 "ty": "int",
+                 "attrs": {
+                  "op": "+",
+                  "no_guard": false
+                 },
+                 "kids": {
+                  "left": {
+                   "t": "BinOp",
+                   "line": 12,
+                   "col": 19,
+                   "ty": "int",
+                   "attrs": {
+                    "op": "*",
+                    "no_guard": false
+                   },
+                   "kids": {
+                    "left": {
+                     "t": "IntLit",
+                     "line": 12,
+                     "col": 17,
+                     "ty": "int",
+                     "attrs": {
+                      "value": 3
+                     },
+                     "kids": {}
+                    },
+                    "right": {
+                     "t": "Name",
+                     "line": 12,
+                     "col": 21,
+                     "ty": "int",
+                     "attrs": {
+                      "id": "n"
+                     },
+                     "kids": {}
+                    }
+                   }
+                  },
+                  "right": {
+                   "t": "IntLit",
+                   "line": 12,
+                   "col": 25,
+                   "ty": "int",
+                   "attrs": {
+                    "value": 1
+                   },
+                   "kids": {}
+                  }
+                 }
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "t": "AugAssign",
+            "line": 13,
+            "col": 9,
+            "ty": "int",
+            "attrs": {
+             "op": "+"
+            },
+            "kids": {
+             "target": {
+              "t": "Name",
+              "line": 13,
+              "col": 9,
+              "ty": "int",
+              "attrs": {
+               "id": "result"
+              },
+              "kids": {}
+             },
+             "value": {
+              "t": "IntLit",
+              "line": 13,
+              "col": 19,
+              "ty": "int",
+              "attrs": {
+               "value": 1
+              },
+              "kids": {}
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "t": "Return",
+         "line": 14,
+         "col": 5,
+         "ty": "int",
+         "attrs": {},
+         "kids": {
+          "value": {
+           "t": "Name",
+           "line": 14,
+           "col": 12,
+           "ty": "int",
+           "attrs": {
+            "id": "result"
+           },
+           "kids": {}
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "pir": {
+   "t": "Module",
+   "line": 1,
+   "col": 1,
+   "ty": null,
+   "attrs": {},
+   "kids": {
+    "funcs": [
+     {
+      "t": "FuncDef",
+      "line": 1,
+      "col": 1,
+      "ty": null,
+      "attrs": {
+       "name": "collatz_sequence_len",
+       "locals": {
+        "result": "int"
+       }
+      },
+      "kids": {
+       "params": [
+        {
+         "t": "Param",
+         "line": 1,
+         "col": 26,
+         "ty": "int",
+         "attrs": {
+          "name": "n"
+         },
+         "kids": {
+          "ann": {
+           "t": "TypeExpr",
+           "line": 1,
+           "col": 29,
+           "ty": null,
+           "attrs": {
+            "name": "int"
+           },
+           "kids": {}
+          }
+         }
+        }
+       ],
+       "ret": {
+        "t": "TypeExpr",
+        "line": 1,
+        "col": 37,
+        "ty": null,
+        "attrs": {
+         "name": "int"
+        },
+        "kids": {}
+       },
+       "body": [
+        {
+         "t": "Assign",
+         "line": 7,
+         "col": 5,
+         "ty": "int",
+         "attrs": {
+          "declares": true
+         },
+         "kids": {
+          "target": {
+           "t": "Name",
+           "line": 7,
+           "col": 5,
+           "ty": "int",
+           "attrs": {
+            "id": "result"
+           },
+           "kids": {}
+          },
+          "value": {
+           "t": "IntLit",
+           "line": 7,
+           "col": 14,
+           "ty": "int",
+           "attrs": {
+            "value": 1
+           },
+           "kids": {}
+          }
+         }
+        },
+        {
+         "t": "While",
+         "line": 8,
+         "col": 5,
+         "ty": null,
+         "attrs": {},
+         "kids": {
+          "test": {
+           "t": "Compare",
+           "line": 8,
+           "col": 13,
+           "ty": "bool",
+           "attrs": {
+            "op": "!="
+           },
+           "kids": {
+            "left": {
+             "t": "Name",
+             "line": 8,
+             "col": 11,
+             "ty": "int",
+             "attrs": {
+              "id": "n"
+             },
+             "kids": {}
+            },
+            "right": {
+             "t": "IntLit",
+             "line": 8,
+             "col": 16,
+             "ty": "int",
+             "attrs": {
+              "value": 1
+             },
+             "kids": {}
+            }
+           }
+          },
+          "body": [
+           {
+            "t": "If",
+            "line": 9,
+            "col": 9,
+            "ty": null,
+            "attrs": {},
+            "kids": {
+             "test": {
+              "t": "Compare",
+              "line": 9,
+              "col": 18,
+              "ty": "bool",
+              "attrs": {
+               "op": "=="
+              },
+              "kids": {
+               "left": {
+                "t": "BinOp",
+                "line": 9,
+                "col": 14,
+                "ty": "int",
+                "attrs": {
+                 "op": "%",
+                 "no_guard": false
+                },
+                "kids": {
+                 "left": {
+                  "t": "Name",
+                  "line": 9,
+                  "col": 12,
+                  "ty": "int",
+                  "attrs": {
+                   "id": "n"
+                  },
+                  "kids": {}
+                 },
+                 "right": {
+                  "t": "IntLit",
+                  "line": 9,
+                  "col": 16,
+                  "ty": "int",
+                  "attrs": {
+                   "value": 2
+                  },
+                  "kids": {}
+                 }
+                }
+               },
+               "right": {
+                "t": "IntLit",
+                "line": 9,
+                "col": 21,
+                "ty": "int",
+                "attrs": {
+                 "value": 0
+                },
+                "kids": {}
+               }
+              }
+             },
+             "body": [
+              {
+               "t": "AugAssign",
+               "line": 10,
+               "col": 13,
+               "ty": "int",
+               "attrs": {
+                "op": "//"
+               },
+               "kids": {
+                "target": {
+                 "t": "Name",
+                 "line": 10,
+                 "col": 13,
+                 "ty": "int",
+                 "attrs": {
+                  "id": "n"
+                 },
+                 "kids": {}
+                },
+                "value": {
+                 "t": "IntLit",
+                 "line": 10,
+                 "col": 19,
+                 "ty": "int",
+                 "attrs": {
+                  "value": 2
+                 },
+                 "kids": {}
+                }
+               }
+              }
+             ],
+             "orelse": [
+              {
+               "t": "Assign",
+               "line": 12,
+               "col": 13,
+               "ty": "int",
+               "attrs": {
+                "declares": false
+               },
+               "kids": {
+                "target": {
+                 "t": "Name",
+                 "line": 12,
+                 "col": 13,
+                 "ty": "int",
+                 "attrs": {
+                  "id": "n"
+                 },
+                 "kids": {}
+                },
+                "value": {
+                 "t": "BinOp",
+                 "line": 12,
+                 "col": 23,
+                 "ty": "int",
+                 "attrs": {
+                  "op": "+",
+                  "no_guard": false
+                 },
+                 "kids": {
+                  "left": {
+                   "t": "BinOp",
+                   "line": 12,
+                   "col": 19,
+                   "ty": "int",
+                   "attrs": {
+                    "op": "*",
+                    "no_guard": false
+                   },
+                   "kids": {
+                    "left": {
+                     "t": "IntLit",
+                     "line": 12,
+                     "col": 17,
+                     "ty": "int",
+                     "attrs": {
+                      "value": 3
+                     },
+                     "kids": {}
+                    },
+                    "right": {
+                     "t": "Name",
+                     "line": 12,
+                     "col": 21,
+                     "ty": "int",
+                     "attrs": {
+                      "id": "n"
+                     },
+                     "kids": {}
+                    }
+                   }
+                  },
+                  "right": {
+                   "t": "IntLit",
+                   "line": 12,
+                   "col": 25,
+                   "ty": "int",
+                   "attrs": {
+                    "value": 1
+                   },
+                   "kids": {}
+                  }
+                 }
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "t": "AugAssign",
+            "line": 13,
+            "col": 9,
+            "ty": "int",
+            "attrs": {
+             "op": "+"
+            },
+            "kids": {
+             "target": {
+              "t": "Name",
+              "line": 13,
+              "col": 9,
+              "ty": "int",
+              "attrs": {
+               "id": "result"
+              },
+              "kids": {}
+             },
+             "value": {
+              "t": "IntLit",
+              "line": 13,
+              "col": 19,
+              "ty": "int",
+              "attrs": {
+               "value": 1
+              },
+              "kids": {}
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "t": "Return",
+         "line": 14,
+         "col": 5,
+         "ty": "int",
+         "attrs": {},
+         "kids": {
+          "value": {
+           "t": "Name",
+           "line": 14,
+           "col": 12,
+           "ty": "int",
+           "attrs": {
+            "id": "result"
+           },
+           "kids": {}
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "cpp": "/* ------------------------------------------------------------------\n * Generated by PYTHIA 0.1 from utils.py\n * Do not edit: regenerate with `python -m pythia.cli <source>.py`.\n * ---------------------------------------------------------------- */\n#include \"pyrt.hpp\"\n\n/* forward declarations (PySub allows mutual recursion) */\nstatic int64_t f_collatz_sequence_len(int64_t p_n);\n\nstatic int64_t f_collatz_sequence_len(int64_t p_n) {\n    int64_t p_result = 0;\n\n    p_result = INT64_C(1);\n    while ((((p_n) != (INT64_C(1))))) {\n        if ((((py_mod_i64(p_n, INT64_C(2))) == (INT64_C(0))))) {\n            p_n = py_floordiv_i64(p_n, INT64_C(2));\n        } else {\n            p_n = py_add_i64(py_mul_i64(INT64_C(3), p_n), INT64_C(1));\n        }\n        p_result = py_add_i64(p_result, INT64_C(1));\n    }\n    return p_result;\n    return 0;   /* unreachable unless the result is Optional */\n}\n\nstatic int pythia_main(void) {\n    pyrt_set_py_minor(13);   /* match this CPython's error texts */\n    try {\n        return 0;\n    } catch (const PythonException &exc) {\n        py_print_exception(exc);\n        return 1;\n    }\n}\nint main(void) { return py_run_main(pythia_main); }\n",
+  "fidelity": [
+   {
+    "line": 9,
+    "col": 14,
+    "cls": "D3 modulo sign convention",
+    "detail": "In Python the sign of % follows the divisor; in C it follows the dividend, so -7 % 2 is 1 in Python, -1 in C.",
+    "mitigation": "emitted as py_mod_i64/py_mod_f64; exact.",
+    "severity": "exact"
+   },
+   {
+    "line": 10,
+    "col": 13,
+    "cls": "D2 floor-division rounding direction",
+    "detail": "Python floors toward -inf; C truncates toward zero, so -7 // 2 is -4 in Python and -3 in C.",
+    "mitigation": "emitted as py_floordiv_i64/py_floordiv_f64, which reproduces Python exactly.",
+    "severity": "exact"
+   },
+   {
+    "line": 12,
+    "col": 19,
+    "cls": "D1 unbounded-int vs int64",
+    "detail": "CPython ints are arbitrary precision; the C image uses int64_t, so '*' can overflow where CPython cannot.",
+    "mitigation": "checked with __builtin_*_overflow; raises OverflowError instead of wrapping. Sound but not complete.",
+    "severity": "guarded"
+   },
+   {
+    "line": 12,
+    "col": 23,
+    "cls": "D1 unbounded-int vs int64",
+    "detail": "CPython ints are arbitrary precision; the C image uses int64_t, so '+' can overflow where CPython cannot.",
+    "mitigation": "checked with __builtin_*_overflow; raises OverflowError instead of wrapping. Sound but not complete.",
+    "severity": "guarded"
+   },
+   {
+    "line": 13,
+    "col": 9,
+    "cls": "D1 unbounded-int vs int64",
+    "detail": "CPython ints are arbitrary precision; the C image uses int64_t, so '+' can overflow where CPython cannot.",
+    "mitigation": "checked with __builtin_*_overflow; raises OverflowError instead of wrapping. Sound but not complete.",
+    "severity": "guarded"
+   },
+   {
+    "line": 0,
+    "col": 0,
+    "cls": "D7 object lifetime / reclamation",
+    "detail": "PySub objects (str, list) are heap-allocated and never freed; CPython reclaims them by reference counting.",
+    "mitigation": "Peak memory may exceed CPython's. Region-based reclamation is the Review 3 target. Observable output is unaffected.",
+    "severity": "guarded"
+   }
+  ],
+  "guard_elision": {
+   "elided": 0,
+   "kept": 2
+  }
+ }
+}

@@ -1,0 +1,133 @@
+{
+ "rows": [
+  {
+   "id": "TC-01",
+   "category": "Positive",
+   "desc": "Operator precedence: print(2 + 3 * 4 ** 2)",
+   "cpython": "50",
+   "pythia": "50",
+   "identical": true
+  },
+  {
+   "id": "TC-02",
+   "category": "Boundary",
+   "desc": "Floor division and modulo with negative operands",
+   "cpython": "-4 1 -4 -1",
+   "pythia": "-4 1 -4 -1",
+   "identical": true
+  },
+  {
+   "id": "TC-03",
+   "category": "Boundary",
+   "desc": "Float repr: 0.1 + 0.2 and 1e16",
+   "cpython": "0.30000000000000004 1e+16 1000000000000000.0",
+   "pythia": "0.30000000000000004 1e+16 1000000000000000.0",
+   "identical": true
+  },
+  {
+   "id": "TC-04",
+   "category": "Negative",
+   "desc": "Type mismatch in assignment: x: int = 'hello'",
+   "cpython": "hello",
+   "pythia": "rejected at 1:10: 'x' is annotated int but the initialiser has type str",
+   "identical": false
+  },
+  {
+   "id": "TC-05",
+   "category": "Boundary",
+   "desc": "Index out of range: xs[10] on a 3-element list",
+   "cpython": "  [IndexError]",
+   "pythia": "  [IndexError]",
+   "identical": true
+  },
+  {
+   "id": "TC-06",
+   "category": "Boundary",
+   "desc": "Division by zero: 1 // z",
+   "cpython": "  [ZeroDivisionError]",
+   "pythia": "  [ZeroDivisionError]",
+   "identical": true
+  },
+  {
+   "id": "TC-07",
+   "category": "Boundary",
+   "desc": "range with step zero",
+   "cpython": "  [ValueError]",
+   "pythia": "  [ValueError]",
+   "identical": true
+  },
+  {
+   "id": "TC-08",
+   "category": "Regression",
+   "desc": "Unbounded recursion",
+   "cpython": "  [RecursionError]",
+   "pythia": "  [RecursionError]",
+   "identical": true
+  },
+  {
+   "id": "TC-09",
+   "category": "OOP",
+   "desc": "Class, method call, field update",
+   "cpython": "12",
+   "pythia": "12",
+   "identical": true
+  },
+  {
+   "id": "TC-10",
+   "category": "Limit (D1)",
+   "desc": "Integer beyond int64: print(2 ** 62 * 2)",
+   "cpython": "9223372036854775808",
+   "pythia": "  [OverflowError]",
+   "identical": false
+  },
+  {
+   "id": "TC-11",
+   "category": "Limit (D13)",
+   "desc": "Non-ASCII string length: len('h\u00e9llo')",
+   "cpython": "5",
+   "pythia": "6",
+   "identical": false
+  },
+  {
+   "id": "TC-12",
+   "category": "In-place",
+   "desc": "Library mode: swap list ends inside compiled code, caller's list",
+   "cpython": "[4, 2, 3, 1]",
+   "pythia": "[4, 2, 3, 1]",
+   "identical": true
+  },
+  {
+   "id": "TC-13",
+   "category": "Limit (D13)",
+   "desc": "Library mode: word_len('h\u00e9llo') with non-ASCII input",
+   "cpython": "5",
+   "pythia": "FallbackError (shim then runs the Python body)",
+   "identical": true
+  },
+  {
+   "id": "TC-14",
+   "category": "Limit (D1)",
+   "desc": "Library mode: list element 2**70 (beyond int64)",
+   "cpython": "works (bignum)",
+   "pythia": "OverflowError",
+   "identical": false
+  }
+ ],
+ "lib": {
+  "built": true,
+  "build_s": 5.9,
+  "cached": false,
+  "mem": {
+   "calls": 200000,
+   "rss_before_kb": 28640,
+   "rss_after_kb": 28640,
+   "per_call_alloc": "list of 500 ints + 500-char str",
+   "seconds": 0.37
+  },
+  "call_overhead_us": 0.15,
+  "py_len_us": 0.038,
+  "marshal_100k_ms": 1.18
+ },
+ "python": "3.14.4",
+ "date": "2026-10-24T08:14:35+0000"
+}

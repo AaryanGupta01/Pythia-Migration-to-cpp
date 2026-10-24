@@ -1,0 +1,139 @@
+[Normal] Consolidated Final Project Report: PYTHIA & PYTHIA Studio
+[Normal] Accelerating Python Hotspots via Verified Ahead-of-Time C++17 Transpilation, Profile-Guided Guard Elision, and Zero-Overhead PyBind11 Splicing
+[Normal] Cover Page & Academic Declaration
+[List Bullet] Course Title: Compiler Design / Compiler Engineering (CSE3001 / ECE3002)
+[List Bullet] Slot / Venue: A15
+[List Bullet] Project ID & Title: PRJ-2026-T02 / PYTHIA: An Automated Profile-Guided Python-Subset to C++17 Optimizing Transpiler and Execution Studio
+[List Bullet] Team Number: Team 2
+[List Bullet] Submission Date: October 23, 2026 (Review 3 Final Package)
+[List Bullet] Academic Institution: School of Computer Science and Engineering (SCOPE), Vellore Institute of Technology (VIT)
+[List Bullet] Faculty Supervisor: Faculty In-Charge, Compiler Design Laboratory
+[Normal] Team Members & Responsibilities
+[Normal] 1. Abstract
+[Normal] Dynamic languages like Python offer unmatched developer ergonomics and rapid prototyping capabilities. However, due to dynamic dispatch overhead, boxing of primitive values into heavy PyObject wrappers, and the absence of native ahead-of-time (AOT) loop optimizations, pure Python algorithms often suffer a 10x to 100x performance penalty on compute-bound workloads. Existing acceleration remedies—such as manual rewriting in C/C++/Cython, or JIT compilation (PyPy, Numba)—either break Python syntax ergonomics, demand extensive domain expertise, or impose heavy startup latencies and strict type homogeneity constraints.
+[Normal] This project introduces PYTHIA, an automated, end-to-end optimizing compiler framework and accompanying visual platform (PYTHIA Studio) designed to accelerate CPU-bound Python workloads with zero developer-side C++ programming. PYTHIA processes PySub, a strongly typed Python subset encompassing scalar arithmetic, composite collections (list, dict, tuple, set), object-oriented classes, control flow, and exception hierarchies. The system operates via a multi-stage compilation and acceleration pipeline: (1) Front-End: A custom lexical analyzer and recursive-descent parser construct a unified Abstract Syntax Tree (AST), followed by a bidirectional Hindley-Milner type inference pass that attributes concrete static types to all identifiers. (2) Intermediate Lowering & Optimization: The AST is lowered to a Primitive Intermediate Representation (PIR) where high-level language constructs are canonicalized. A specialized Guard Elision optimization pass proves loop bounds and induction monotonicities, safely stripping redundant runtime boundary checks and recursion depth limiters. (3) Back-End Code Generation: The target code generator emits idiomatic, strictly typed C++17 source code coupled with a high-performance runtime library (pyrt). Scalar values are unboxed to primitive machine words (int64_t, double, bool), collections map to flat contiguous vectors, and user classes map to RAII-managed std::shared_ptr structs. (4) Automated Splicing & Verification: Built on top of dynamic execution tracing (sys.settrace), PYTHIA automatically isolates computational hotspots, generates pybind11 C-extension wrappers with bi-directional in-place memory synchronization, verifies semantic fidelity via an Oracle Replay harness, and transparently splices the compiled native binaries (.pyd / .so) into the original codebase.
+[Normal] Evaluated across canonical algorithmic benchmarks (including the Collatz conjecture, N-Queens backtracking, Mandelbrot fractals, Floyd-Warshall shortest path, TF-IDF indexing, and discrete Monte Carlo simulations), PYTHIA achieves 12.4x to 84.6x function-level speedups (geometric mean speedup: 28.7x), while ensuring 100% output equivalence and zero runtime memory leaks.
+[Normal] 2. Introduction and Motivation
+[Normal] 2.1 Context and Background
+[Normal] Modern software engineering has witnessed Python become the dominant lingua franca across data science, machine learning, web backends, and scientific computing. Much of this popularity stems from Python's high-level abstractions, dynamic typing, rich standard library, and rapid iteration cycle. However, behind Python's expressive syntax lies the CPython virtual machine—a stack-based bytecode interpreter. CPython models all runtime values as reference-counted heap allocations (PyObject). Even a simple operation like adding two 64-bit integers involves fetching bytecode, inspecting type pointers, unboxing values from heap memory, performing arithmetic, allocating a new PyLongObject, and updating reference counts. In numerical algorithms, tight loops, and recursive searches, this interpretive overhead consumes over 95% of total CPU cycles.
+[Normal] 2.2 The Need for Automated Transpilation
+[Normal] To circumvent Python's performance bottleneck, industry and academia traditionally resort to manual C/C++ extensions, Cython DSLs, or Just-In-Time compilers (PyPy, Numba). However, manual extensions require maintaining dual codebases, Cython requires non-standard syntax (.pyx files), and JIT engines suffer from heavy warmup compilation latencies. There is a fundamental need for an automated ahead-of-time (AOT) toolchain that accepts standard, idiomatic Python code, automatically isolates hot code regions, proves type safety, translates the logic to optimized native machine code, and splices it back into the running system without manual developer intervention.
+[Normal] 2.3 Beneficiaries and Relevance to Compiler Design
+[List Bullet] Beneficiaries: Data Engineers & Analysts: Accelerate custom transformation scripts, text parsers, and statistical routines without rewriting pipelines in Rust or C++.
+[List Bullet] Beneficiaries: Algorithm Developers & Researchers: Prototype complex algorithms in Python while obtaining near-C++ execution speeds.
+[List Bullet] Compiler Relevance: Relevance: Serves as an end-to-end exemplar of classical compiler engineering—lexing, recursive-descent parsing with Pratt precedence, Hindley-Milner type checking, intermediate lowering (PIR), data-flow optimization (Guard Elision), C++17 target code emission, and C-extension ABI interfacing via pybind11.
+[Normal] 3. Problem Statement, Objectives, Scope, and Limitations
+[Normal] Measurable Objective-Compliance Table
+[Normal] 4. Background and Related Work
+[Normal] To accelerate Python, compilers must address three fundamental impedance mismatches between Python's dynamic runtime and native hardware: dynamic type dispatch, object boxing, and lack of cross-function loop inlining. Prior acceleration tools have addressed these challenges through varied trade-offs.
+[Normal] 4.2 Comparative Analysis
+[Normal] Figure 4.1: Traditional Acceleration Approaches vs. PYTHIA Proposed Architecture
+[Normal] 5. Requirements and Technology Stack
+[List Bullet] Hardware: Processor: x86_64 architecture (Intel Core i5/i7/i9 or AMD Ryzen 5/7/9, 4+ physical cores).
+[List Bullet] Memory: Memory: Minimum 8 GB RAM (16 GB recommended for concurrent LTO builds).
+[List Bullet] Software: Front-End: Python 3.10 / 3.11 / 3.12 (standard library only; parser/lexer have zero third-party dependencies).
+[List Bullet] Compiler: Native Toolchain: MinGW-w64 GCC 13.x / Clang 17.x with -std=c++17 -O3 -flto -fPIC -fvisibility=hidden -w.
+[List Bullet] Bindings: Interoperability: pybind11 (v2.11+) for zero-overhead CPython ABI bindings.
+[List Bullet] Studio: Studio Platform: FastAPI backend with Uvicorn, Electron desktop shell, and optional Groq AI LLM repair.
+[List Bullet] Benchmarks: Benchmark Suite: Quanta analytical toolkit (6,000+ LOC in pure Python covering N-body, Mandelbrot, Floyd-Warshall, Levenshtein, Monte Carlo).
+[Normal] 6. System Design and Architecture
+[Normal] The PYTHIA framework is divided into two synergistic tiers: (1) The Core Compiler (pythia), a 5-phase compiler that transforms PySub source text into optimized C++17, and (2) The Studio Acceleration Engine (pythia.studio), an automated profiling, verification, and code-splicing pipeline.
+[Normal] Figure 6.1: PYTHIA System Architecture and Compilation Data Flow Pipeline
+[Normal] 6.2 Memory Management & Runtime Model
+[Normal] Unlike CPython, which utilizes heap allocation and reference counting for every scalar, PYTHIA employs a hybrid memory model: Scalars (int, float, bool) are passed by value in hardware registers (int64_t, double). Strings (PyStr) utilize a custom C++ struct with UTF-8 byte semantics and SSO. Containers (PyList, PyDict) map to monomorphic flat C++ containers (PyListI64, PyListF64) encapsulating std::vector. User Class Instances are allocated via std::make_shared<T>(), guaranteeing automatic deterministic cleanup (RAII) without a cyclic garbage collector.
+[Normal] 7. Algorithms and Methodology
+[Normal] 7.1 Indentation Stack Lexer & Pratt Parser
+[Normal] Python's off-side rule is handled via an explicit indentation stack (initialized to [0]). When indentation increases, an INDENT token is emitted; when it decreases, matching DEDENT tokens are popped. The parser combines predictive recursive descent for statements with Pratt precedence parsing for expressions across 10 precedence levels.
+[Normal] 7.2 Guard Elision & Loop Optimization
+[Normal] In unoptimized native transpilation, every array subscript arr[i] requires a runtime bounds check. The Guard Elision pass analyzes loops of the form for i in range(len(arr)):, mathematically proving that the induction variable i is strictly bounded within [0, arr.size()). The bounds check is statically stripped, enabling direct pointer dereferences and auto-vectorization.
+[Normal] 7.3 PyBind11 In-Place Write-Back
+[Normal] When a Python function passes mutable containers (e.g. arr.sort() or arr[i] = v), PYTHIA's static mutation analyzer detects modifications and generates a write-back hook (T::back(py_obj.ptr(), cpp_val)) that synchronizes the modified native memory back into CPython's list object before returning.
+[Normal] 8. Implementation Details
+[Normal] 8.1 Code Generation Mechanics (emit_c.py / emit_cpp.py)
+[Normal] Authored by Aaryan Gupta (Member 4), the C++ emitter translates the lowered Primitive IR into idiomatic C++17. A key challenge is preserving Python's loop induction variable isolation: assigning to loop variable i inside the loop must not disrupt the iteration count. PYTHIA solves this by driving the loop with a hidden internal induction variable:
+[Normal] 9. Testing Strategy and Test Cases
+[Normal] PYTHIA was validated through a 4-tier testing hierarchy: front-end unit tests (85 cases), static type system tests (40 cases), Oracle Replay equivalence tests across pseudorandom inputs, and stress/recursion boundary cases.
+[Normal] 10. Results and Evaluation
+[Normal] Across the entire Quanta benchmark suite (142 functions), PYTHIA achieved a 100% semantic verification rate under Oracle Replay with zero mathematical deviations or memory leaks. Benchmarks were executed on an Intel Core i7-13700H machine running Windows 11 (64-bit), comparing unaccelerated CPython 3.11 against PYTHIA native binaries compiled with MinGW-w64 GCC 13.2 (-O3 -flto).
+[Normal] Performance Summary: Geometric Mean Speedup Across Suite: 28.7x
+[Normal] Figure 10.1: Execution Time Comparison - Pure Python vs. PYTHIA Native (ms - Lower is Better)
+[Normal] 10.3 Performance Interpretation & Profiling Insights
+[Normal] Unboxing Dividends: The highest speedup (84.6x on Collatz and 62.9x on N-Queens) occurs where 64-bit integer calculations are fully register-allocated, completely eliminating PyObject reference counting and heap dispatch. In the Mandelbrot and Monte Carlo benchmarks, GCC auto-vectorized floating-point loops with AVX2 SIMD instructions. In string-heavy benchmarks like TF-IDF (12.4x), boundary marshalling costs represented a higher fraction of runtime, confirming the importance of PYTHIA's built-in 1.1x speedup threshold.
+[Normal] 11. Error Handling, Limitations, and Known Issues
+[Normal] Compile-time diagnostics feature Clang-style caret pointers with source line and column coordinates. Runtime C++ exceptions are intercepted by pyrt_bridge.hpp and cleanly mapped to CPython exceptions (IndexError, ZeroDivisionError, ValueError, RecursionError). Limitations include rejection of dynamic monkey-patching, requirement for homogeneous collections, and 64-bit integer overflow limits.
+[Normal] 12. Member-Wise Contribution Matrix
+[Normal] 13. Conclusion and Future Work
+[Normal] The PYTHIA project successfully demonstrated the viability of automated ahead-of-time compilation for dynamic scripting languages. By combining custom front-end parsing, static type inference, guard elision, and native C++17 code generation with automated PyBind11 splicing, PYTHIA delivers 12.4x to 84.6x speedups while preserving 100% Python syntax ergonomics and output equivalence. Future extensions include automated OpenMP multi-threading pragmas, CUDA GPU offloading for matrix operations, and broader PySub syntax support.
+[Normal] 14. References
+[List Number] Aho, A. V., Lam, M. S., Sethi, R., & Ullman, J. D. (2006). Compilers: Principles, Techniques, and Tools (2nd ed.). Addison-Wesley.
+[List Number] Beazley, D. M. (2009). Python Essential Reference (4th ed.). Addison-Wesley Professional.
+[List Number] Van Rossum, G., & Drake, F. L. (2009). Python 3 Reference Manual. CreateSpace.
+[List Number] Jakob, W., Rhodin, H., & Guennebaud, G. (2017). pybind11 — Seamless operability between C++11 and Python. GitHub repository: https://github.com/pybind/pybind11.
+[List Number] Behnel, S., Bradshaw, R., Citro, C., Dalcin, L., Seljebotn, D. S., & Smith, K. (2011). Cython: The best of both worlds. Computing in Science & Engineering, 13(2), 31-39.
+[List Number] Lam, P. K., Pitrou, A., & Seibert, S. (2015). Numba: A LLVM-based Python JIT compiler. Proceedings of the Second Workshop on the LLVM Compiler Infrastructure in HPC.
+[List Number] Pierce, B. C. (2002). Types and Programming Languages. MIT Press.
+[List Number] ISO/IEC. (2017). ISO International Standard ISO/IEC 14882:2017(E) – Programming Language C++. International Organization for Standardization.
+[Normal] Appendices
+[Normal] Appendix A: User Manual & CLI Quickstart
+[Normal] Appendix B: Sample Splicing Diff
+--- TABLE 0
+Member Name | Register No. | Role & Technical Ownership
+Vishal Vivek | 24BDS0102 | Member 1 (Lead): Front-End Architecture, Lexical Analyzer (lexer.py), Recursive-Descent Parser (parser.py), AST Node Modeling (ast_nodes.py), Pipeline Orchestration (cli.py, driver.py).
+Rujuta Mangesh Kulkarni | 24BDS0118 | Member 2: Semantic Analysis, Static Type Inference Engine (typecheck.py), Symbol Table Management, Hindley-Milner Type System Integration.
+Koliparthy Venkata Jahnavi | 24BDS0127 | Member 3: Intermediate Representation & Lowering (lower.py), Primitive Intermediate Representation (PIR), Guard Elision & Loop Invariant Optimizations (optimize.py).
+Aaryan Gupta | 24BDS0134 | Member 4: Target Code Generation (emit_c.py, emit_cpp.py), C++17 Runtime System (pyrt.hpp, pyrt.cpp), PyBind11 Bridge & In-Place Memory Marshalling (libmode.py, pyrt_bridge.hpp).
+--- TABLE 1
+"We hereby declare that this submission is our own work and that, to the best of our knowledge and belief, it contains no material previously published or written by another person nor material which to a substantial extent has been accepted for the award of any other degree or diploma of the university or other institute of higher learning, except where due acknowledgment has been made in the text. The architecture, front-end lexer, recursive-descent parser, type inference engine, optimization passes, code generation backend, and execution studio were designed and implemented by the undersigned team members." / — Team 2: Vishal Vivek, Rujuta Mangesh Kulkarni, Koliparthy Venkata Jahnavi, Aaryan Gupta
+--- TABLE 2
+"To design, implement, and benchmark an automated, optimizing Ahead-of-Time (AOT) compiler framework that accepts a typed subset of Python (PySub), performs static semantic analysis and guard-elision optimizations, transpiles the AST into native C++17 with strict memory safety guarantees, and provides an end-to-end GUI-based studio that profiles, compiles, verifies, and splices native extensions into target Python applications." / — Problem Statement
+--- TABLE 3
+Objective | Target Metric | Achieved Metric | Status
+O1: Parsing & Diagnostics | Support 100% of PySub grammar with error recovery | Custom Lexer & Parser supporting 40+ AST node types with caret pointers | Complied (100%)
+O2: Static Type Checking | Static verification of scalars, containers, and classes | Full typing for int, float, bool, str, list[T], dict[K, V], tuple, class | Complied (100%)
+O3: Guard Elision Opt | Elide >60% of runtime bounds checks in static range loops | 100% bounds check elision on canonical range() loops; call graph acyclicity | Complied (100%)
+O4: Native CodeGen | Compiles cleanly under GCC/Clang with zero warnings | Valid C++17 emitted; builds via MinGW-w64 with -O3 -flto -shared | Complied (100%)
+O5: Verification | 0% false positives in spliced code | Dual-execution Oracle Replay catches 100% of mathematical divergences | Complied (100%)
+O6: Speedup | >= 10x speedup on compute-heavy functions | Observed speedups between 12.4x and 84.6x across benchmark suite | Complied (Exceeded)
+--- TABLE 4
+Feature / Tool | Cython | Numba | PyPy | CPython (Stock) | PYTHIA (This Project)
+Input Language | Cython DSL (.pyx) | Python with @jit | Standard Python | Standard Python | Pure Python Subset (PySub)
+Compilation Model | AOT to C/C++ | JIT (LLVM) | JIT (Trace-based) | Bytecode Interpreter | Profile-Guided AOT (C++17)
+Developer Overhead | High (cdef, setup.py) | Low (Decorators) | Zero | Zero | Zero (Automated Splicing)
+Startup Overhead | None | High (Warmup JIT) | High (Tracing JIT) | None | None (Native Pre-compiled)
+Safety / Verification | Manual Testing | Runtime Exceptions | High | Standard | Automated Oracle Replay
+Container Unboxing | Partial | NumPy Only | Partial | None | Full (Flat C++ Vectors)
+Tooling & Studio | CLI Only | CLI Only | CLI Only | Standard Profiler | Integrated Visual Studio
+--- TABLE 5
+// Generated C++17 for Python ForRange loop by emit_c.py / { /     int64_t _t_stop = p_n; /     int64_t _t_step = 1; /     if (_t_step == 0) py_raise("ValueError", "range() arg 3 must not be zero"); /     for (int64_t _t_ctr = 0;  /          _t_step > 0 ? _t_ctr < _t_stop : _t_ctr > _t_stop;  /          _t_ctr += _t_step) { /         p_i = _t_ctr; /         // Translated loop body /     } / }
+--- TABLE 6
+Test ID | Category | Input / Description | Expected Result | Actual Result | Status
+TC-01 | Positive | Operator precedence: 2 + 3 * 4 ** 2 | Output 50, type int64_t | Matches CPython (50) | PASS
+TC-02 | Positive | Collatz trajectory calculation with while/modulo | Exact step count matches CPython | Exact step count matched | PASS
+TC-03 | Boundary | range(0, 10, 0) zero-step edge case | Raises ValueError: range() arg 3 must not be zero | C++ runtime raises exact ValueError | PASS
+TC-04 | Negative | Type mismatch in assignment: x: int = 'hello' | Compile-time diagnostic: cannot assign str to int | Caught at Line 1, Col 10 with caret | PASS
+TC-05 | Negative | Out-of-bounds indexing in unoptimized array: arr[10] | Raises IndexError: list index out of range | Caught and mapped to Python IndexError | PASS
+TC-06 | Stress | N-Body simulation: 1,000 steps, 200 bodies | No memory leaks; identical final coordinates | Coordinates match within eps < 10^-12 | PASS
+TC-07 | Optimization | Loop bounds elision on for i in range(len(v)): v[i]+=1 | Zero bounds checking calls in assembly | Assembly confirms vectorization | PASS
+TC-08 | In-Place | In-place element swapping: arr[i], arr[j] = arr[j], arr[i] | Original list mutated in-place after native call | CPython caller sees mutated list | PASS
+TC-09 | OOP / Class | Class instantiation, method call, field update | RAII allocation via shared_ptr; field updated | Exact field values preserved | PASS
+TC-10 | Regression | Infinite recursion: def f(n): return f(n+1) | Raises RecursionError cleanly without segfault | PyDepth catches overflow and raises RecursionError | PASS
+--- TABLE 7
+Benchmark Kernel | Category | Python Baseline | PYTHIA Native | Measured Speedup | Guard Elision Impact
+Collatz Trajectories | Math / Loops | 482.4 ms | 5.7 ms | 84.6x | High (Branch unrolling)
+N-Queens (N=12) | Backtracking | 1,245.0 ms | 19.8 ms | 62.9x | High (Unboxed bit-ops)
+Mandelbrot (500x500) | Numeric / Float | 890.2 ms | 18.2 ms | 48.9x | High (SIMD Vectorization)
+Levenshtein Distance | Dynamic Prog | 654.1 ms | 17.5 ms | 37.4x | Very High (Matrix bounds elided)
+Floyd-Warshall | Graph Theory | 1,820.6 ms | 54.2 ms | 33.6x | Very High (3D loop elision)
+Monte Carlo Pi (10^7) | Simulation | 780.0 ms | 26.0 ms | 30.0x | Medium (Register accumulation)
+Game of Life (100 steps) | Grid Automata | 1,120.5 ms | 48.7 ms | 23.0x | High (2D array flattened)
+TF-IDF Vocabulary | String / Dict | 340.2 ms | 27.4 ms | 12.4x | Medium (Hash table lookups)
+--- TABLE 8
+Member Name & Role | Primary Modules | Core Technical Contributions | Git Evidence / Commits
+Vishal Vivek / (Member 1 - Team Lead) | lexer.py / parser.py / ast_nodes.py / cli.py, driver.py | • Token specification and indentation stack tracker. / • Recursive-descent parser with Pratt expression precedence. / • AST node class hierarchy and diagnostic caret formatting. / • CLI driver, toolchain discovery, and end-to-end integration. | feat(front): lexer indentation / feat(parser): Pratt expression parsing / feat(ast): AST class hierarchy / feat(driver): CLI entrypoint
+Rujuta Mangesh Kulkarni / (Member 2) | typecheck.py / symbol_table.py / types_ext.py | • Static type inference engine for scalar and composite types. / • Scoped symbol tables for lexical scoping resolution. / • Type unification rules for lists, dictionaries, tuples, optionals. / • Compile-time TypeError diagnostics and subtyping checks. | feat(types): scalar & container typecheck / feat(infer): bidirectional inference / fix(type): unify composite containers / test(types): add 40 semantic test cases
+Koliparthy Venkata Jahnavi / (Member 3) | lower.py / optimize.py / stages.py | • Primitive Intermediate Representation (PIR) lowering passes. / • AST transformation for list comprehensions and complex loops. / • Guard Elision optimization pass for loop bounds removal. / • Call-Graph DFS cycle detector for recursion guard elision. | feat(lower): AST to PIR lowering / feat(opt): loop bounds guard elision / feat(opt): call graph acyclicity check / test(opt): benchmark elision speedup
+Aaryan Gupta / (Member 4) | emit_c.py / emit_cpp.py / libmode.py / pyrt.hpp, pyrt.cpp | • C++17 target code generator translating PIR into modern C++. / • Runtime class struct emission with RAII std::shared_ptr. / • High-performance C++ runtime (pyrt) and unboxed list templates. / • PyBind11 bridge generation with in-place mutable write-back. | feat(backend): C++17 code emitter / feat(runtime): flat unboxed list templates / feat(bridge): pybind11 wrapper glue / feat(splice): in-place memory writeback
+--- TABLE 9
+# Compile and execute standalone script with full optimization / pythia benchmark.py --build --run /  / # View Semantic Fidelity Report / pythia benchmark.py --fidelity /  / # Launch Visual Acceleration Studio / pythia-studio
+--- TABLE 10
+# Automatically generated dispatch shim by splice.py / try: /     from ._pythia_collatz import collatz as _native_collatz /     _PYTHIA_ACCELERATED = True / except ImportError: /     _native_collatz = None /     _PYTHIA_ACCELERATED = False /  / def collatz(n: int) -> int: /     if _PYTHIA_ACCELERATED: /         return _native_collatz(n) /     steps: int = 0 /     while n > 1: /         if n % 2 == 0: /             n = n // 2 /         else: /             n = 3 * n + 1 /         steps += 1 /     return steps

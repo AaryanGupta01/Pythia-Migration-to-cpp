@@ -1,0 +1,1553 @@
+{
+ "loc": {
+  "frontend": {
+   "loc": 2325,
+   "files": [
+    [
+     "pythia/lexer.py",
+     296
+    ],
+    [
+     "pythia/parser.py",
+     979
+    ],
+    [
+     "pythia/parse_ext.py",
+     537
+    ],
+    [
+     "pythia/parse_iter.py",
+     155
+    ],
+    [
+     "pythia/parse_types.py",
+     121
+    ],
+    [
+     "pythia/ast_nodes.py",
+     237
+    ]
+   ]
+  },
+  "types": {
+   "loc": 6136,
+   "files": [
+    [
+     "pythia/typecheck.py",
+     1218
+    ],
+    [
+     "pythia/types_ext.py",
+     1031
+    ],
+    [
+     "pythia/classes_ext.py",
+     2368
+    ],
+    [
+     "pythia/builtins_ext.py",
+     705
+    ],
+    [
+     "pythia/tuples.py",
+     259
+    ],
+    [
+     "pythia/comprehensions.py",
+     555
+    ]
+   ]
+  },
+  "lower_opt": {
+   "loc": 787,
+   "files": [
+    [
+     "pythia/lower.py",
+     359
+    ],
+    [
+     "pythia/optimize.py",
+     428
+    ]
+   ]
+  },
+  "emit_lib": {
+   "loc": 3006,
+   "files": [
+    [
+     "pythia/emit_c.py",
+     1004
+    ],
+    [
+     "pythia/emit_ext.py",
+     311
+    ],
+    [
+     "pythia/lib_ext.py",
+     125
+    ],
+    [
+     "pythia/libmode.py",
+     573
+    ],
+    [
+     "pythia/classes_lib.py",
+     240
+    ],
+    [
+     "pythia/toolchain.py",
+     112
+    ],
+    [
+     "pythia/cli.py",
+     144
+    ],
+    [
+     "pythia/driver.py",
+     421
+    ],
+    [
+     "pythia/stages.py",
+     76
+    ]
+   ]
+  },
+  "convert": {
+   "loc": 2687,
+   "files": [
+    [
+     "pythia/convert/__init__.py",
+     881
+    ],
+    [
+     "pythia/convert/infer.py",
+     1273
+    ],
+    [
+     "pythia/convert/observe.py",
+     146
+    ],
+    [
+     "pythia/convert/pending.py",
+     57
+    ],
+    [
+     "pythia/convert/prep.py",
+     44
+    ],
+    [
+     "pythia/convert/search.py",
+     117
+    ],
+    [
+     "pythia/convert/types.py",
+     169
+    ]
+   ]
+  },
+  "studio_backend": {
+   "loc": 7307,
+   "files": [
+    [
+     "pythia/studio/__init__.py",
+     1
+    ],
+    [
+     "pythia/studio/_replay_worker.py",
+     217
+    ],
+    [
+     "pythia/studio/_tracer_boot.py",
+     253
+    ],
+    [
+     "pythia/studio/annotate.py",
+     200
+    ],
+    [
+     "pythia/studio/bench.py",
+     42
+    ],
+    [
+     "pythia/studio/branding.py",
+     50
+    ],
+    [
+     "pythia/studio/codec.py",
+     187
+    ],
+    [
+     "pythia/studio/converter.py",
+     271
+    ],
+    [
+     "pythia/studio/demos.py",
+     50
+    ],
+    [
+     "pythia/studio/doctor.py",
+     119
+    ],
+    [
+     "pythia/studio/engine.py",
+     385
+    ],
+    [
+     "pythia/studio/envfile.py",
+     18
+    ],
+    [
+     "pythia/studio/explain.py",
+     102
+    ],
+    [
+     "pythia/studio/export.py",
+     169
+    ],
+    [
+     "pythia/studio/filemode.py",
+     151
+    ],
+    [
+     "pythia/studio/filework.py",
+     88
+    ],
+    [
+     "pythia/studio/fixer.py",
+     173
+    ],
+    [
+     "pythia/studio/infer.py",
+     455
+    ],
+    [
+     "pythia/studio/ingest.py",
+     235
+    ],
+    [
+     "pythia/studio/jobstate.py",
+     214
+    ],
+    [
+     "pythia/studio/launcher.py",
+     267
+    ],
+    [
+     "pythia/studio/llm.py",
+     258
+    ],
+    [
+     "pythia/studio/models.py",
+     90
+    ],
+    [
+     "pythia/studio/pipeline.py",
+     564
+    ],
+    [
+     "pythia/studio/proc.py",
+     126
+    ],
+    [
+     "pythia/studio/pysub_rules.py",
+     200
+    ],
+    [
+     "pythia/studio/rank.py",
+     123
+    ],
+    [
+     "pythia/studio/reasons.py",
+     114
+    ],
+    [
+     "pythia/studio/replay.py",
+     138
+    ],
+    [
+     "pythia/studio/samples.py",
+     45
+    ],
+    [
+     "pythia/studio/scan.py",
+     1106
+    ],
+    [
+     "pythia/studio/splice.py",
+     129
+    ],
+    [
+     "pythia/studio/trace.py",
+     90
+    ],
+    [
+     "pythia/studio/server/app.py",
+     363
+    ],
+    [
+     "pythia/studio/server/bus.py",
+     121
+    ],
+    [
+     "pythia/studio/server/playground.py",
+     193
+    ]
+   ]
+  },
+  "studio_mock": {
+   "loc": 2415,
+   "files": [
+    [
+     "pythia/studio/server/mock_data.py",
+     1143
+    ],
+    [
+     "pythia/studio/server/mock_engine.py",
+     1272
+    ]
+   ]
+  },
+  "runtime": {
+   "loc": 2853,
+   "files": [
+    [
+     "runtime/pyrt.hpp",
+     1383
+    ],
+    [
+     "runtime/pyrt.cpp",
+     383
+    ],
+    [
+     "runtime/pydict.hpp",
+     297
+    ],
+    [
+     "runtime/pyset.hpp",
+     416
+    ],
+    [
+     "runtime/pyrt_bridge.hpp",
+     321
+    ],
+    [
+     "runtime/pythia_accel/__init__.py",
+     53
+    ]
+   ]
+  },
+  "runtime_c11_legacy": {
+   "loc": 595,
+   "files": [
+    [
+     "runtime/pyrt.c",
+     448
+    ],
+    [
+     "runtime/pyrt.h",
+     147
+    ]
+   ]
+  },
+  "web": {
+   "loc": 9531,
+   "files": [
+    [
+     "studio/web/src/actions.ts",
+     35
+    ],
+    [
+     "studio/web/src/api.ts",
+     176
+    ],
+    [
+     "studio/web/src/env.d.ts",
+     8
+    ],
+    [
+     "studio/web/src/examples.ts",
+     190
+    ],
+    [
+     "studio/web/src/player.ts",
+     141
+    ],
+    [
+     "studio/web/src/reducer.ts",
+     416
+    ],
+    [
+     "studio/web/src/store.ts",
+     359
+    ],
+    [
+     "studio/web/src/types.ts",
+     396
+    ],
+    [
+     "studio/web/src/agent.tsx",
+     194
+    ],
+    [
+     "studio/web/src/App.tsx",
+     331
+    ],
+    [
+     "studio/web/src/bottom.tsx",
+     344
+    ],
+    [
+     "studio/web/src/brand.tsx",
+     28
+    ],
+    [
+     "studio/web/src/charts.tsx",
+     244
+    ],
+    [
+     "studio/web/src/code.tsx",
+     214
+    ],
+    [
+     "studio/web/src/editors.tsx",
+     211
+    ],
+    [
+     "studio/web/src/fileicons.tsx",
+     30
+    ],
+    [
+     "studio/web/src/fnview.tsx",
+     201
+    ],
+    [
+     "studio/web/src/hero.tsx",
+     197
+    ],
+    [
+     "studio/web/src/journey.tsx",
+     451
+    ],
+    [
+     "studio/web/src/main.tsx",
+     17
+    ],
+    [
+     "studio/web/src/motion.tsx",
+     89
+    ],
+    [
+     "studio/web/src/pages.tsx",
+     620
+    ],
+    [
+     "studio/web/src/palette.tsx",
+     138
+    ],
+    [
+     "studio/web/src/setup.tsx",
+     171
+    ],
+    [
+     "studio/web/src/sheets.tsx",
+     77
+    ],
+    [
+     "studio/web/src/shell.tsx",
+     360
+    ],
+    [
+     "studio/web/src/sidepanel.tsx",
+     311
+    ],
+    [
+     "studio/web/src/stages.tsx",
+     560
+    ],
+    [
+     "studio/web/src/ui.tsx",
+     253
+    ],
+    [
+     "studio/web/src/welcome.tsx",
+     337
+    ],
+    [
+     "studio/web/src/lib/format.ts",
+     74
+    ],
+    [
+     "studio/web/src/lib/monaco.ts",
+     93
+    ],
+    [
+     "studio/web/src/mock/minipy.ts",
+     917
+    ],
+    [
+     "studio/web/src/mock/mockApi.ts",
+     116
+    ],
+    [
+     "studio/web/src/mock/project.ts",
+     357
+    ],
+    [
+     "studio/web/src/mock/script.ts",
+     190
+    ],
+    [
+     "studio/web/src/mock/sources.ts",
+     685
+    ]
+   ]
+  },
+  "tools_scripts": {
+   "loc": 3754,
+   "files": [
+    [
+     "tools/fuzz.py",
+     230
+    ],
+    [
+     "tools/fuzz_run.py",
+     122
+    ],
+    [
+     "tools/oracle.py",
+     160
+    ],
+    [
+     "scripts/_stress_one.py",
+     65
+    ],
+    [
+     "scripts/author_offline_cache.py",
+     52
+    ],
+    [
+     "scripts/check_api.py",
+     42
+    ],
+    [
+     "scripts/check_back.py",
+     227
+    ],
+    [
+     "scripts/check_basics.py",
+     64
+    ],
+    [
+     "scripts/check_convert.py",
+     55
+    ],
+    [
+     "scripts/check_corpus.py",
+     80
+    ],
+    [
+     "scripts/check_demo.py",
+     553
+    ],
+    [
+     "scripts/check_examples.py",
+     38
+    ],
+    [
+     "scripts/check_front.py",
+     258
+    ],
+    [
+     "scripts/check_inputs.py",
+     97
+    ],
+    [
+     "scripts/check_installed.py",
+     84
+    ],
+    [
+     "scripts/check_libmode.py",
+     513
+    ],
+    [
+     "scripts/check_llm_live.py",
+     54
+    ],
+    [
+     "scripts/check_project.py",
+     52
+    ],
+    [
+     "scripts/check_server.py",
+     236
+    ],
+    [
+     "scripts/check_snippets.py",
+     46
+    ],
+    [
+     "scripts/demo_job.py",
+     171
+    ],
+    [
+     "scripts/make_sample_job.py",
+     31
+    ],
+    [
+     "scripts/measure_coverage.py",
+     56
+    ],
+    [
+     "scripts/property_test.py",
+     380
+    ],
+    [
+     "scripts/stress.py",
+     88
+    ]
+   ]
+  },
+  "tests_pos": {
+   "loc": 2971,
+   "files": [
+    [
+     "tests/positive/t01_arith.py",
+     11
+    ],
+    [
+     "tests/positive/t02_lists.py",
+     17
+    ],
+    [
+     "tests/positive/t03_strings.py",
+     11
+    ],
+    [
+     "tests/positive/t04_control.py",
+     23
+    ],
+    [
+     "tests/positive/t05_floats.py",
+     7
+    ],
+    [
+     "tests/positive/t06_boolops.py",
+     20
+    ],
+    [
+     "tests/positive/t07_bubble.py",
+     18
+    ],
+    [
+     "tests/positive/t08_nested.py",
+     23
+    ],
+    [
+     "tests/positive/t09_sieve.py",
+     14
+    ],
+    [
+     "tests/positive/t100_linked_list_inferred.py",
+     70
+    ],
+    [
+     "tests/positive/t101_inheritance_dispatch.py",
+     67
+    ],
+    [
+     "tests/positive/t102_static_class_property.py",
+     58
+    ],
+    [
+     "tests/positive/t103_dunders_sorting.py",
+     72
+    ],
+    [
+     "tests/positive/t104_leetcode_solution.py",
+     82
+    ],
+    [
+     "tests/positive/t105_bst_stack_queue.py",
+     148
+    ],
+    [
+     "tests/positive/t106_dataclass_records.py",
+     46
+    ],
+    [
+     "tests/positive/t107_class_attrs_accounts.py",
+     86
+    ],
+    [
+     "tests/positive/t108_graph_tree_people.py",
+     92
+    ],
+    [
+     "tests/positive/t109_class_error_paths.py",
+     73
+    ],
+    [
+     "tests/positive/t10_collatz.py",
+     17
+    ],
+    [
+     "tests/positive/t110_private_inplace_membership.py",
+     57
+    ],
+    [
+     "tests/positive/t111_assert_and_nested_init.py",
+     22
+    ],
+    [
+     "tests/positive/t112_stdlib_heap_bisect_deque_copy_sys.py",
+     54
+    ],
+    [
+     "tests/positive/t113_stdlib_itertools_enum_setcomp.py",
+     30
+    ],
+    [
+     "tests/positive/t11_matmul.py",
+     20
+    ],
+    [
+     "tests/positive/t12_err_index.py",
+     5
+    ],
+    [
+     "tests/positive/t13_err_zerodiv.py",
+     4
+    ],
+    [
+     "tests/positive/t14_edges.py",
+     10
+    ],
+    [
+     "tests/positive/t15_classes_dict_nested_try.py",
+     36
+    ],
+    [
+     "tests/positive/t160_dict_get1.py",
+     7
+    ],
+    [
+     "tests/positive/t161_slice_assign_del.py",
+     25
+    ],
+    [
+     "tests/positive/t162_nlargest_str_container.py",
+     7
+    ],
+    [
+     "tests/positive/t163_try_else_finally.py",
+     48
+    ],
+    [
+     "tests/positive/t164_recursion_stdin.py",
+     28
+    ],
+    [
+     "tests/positive/t165_semicolons_inline.py",
+     16
+    ],
+    [
+     "tests/positive/t16_classes_methods_exceptions.py",
+     54
+    ],
+    [
+     "tests/positive/t17_loopvar_reassign_immune.py",
+     12
+    ],
+    [
+     "tests/positive/t18_pysub11_features.py",
+     75
+    ],
+    [
+     "tests/positive/t19_error_messages.py",
+     50
+    ],
+    [
+     "tests/positive/t20_ifexp_not.py",
+     28
+    ],
+    [
+     "tests/positive/t21_list_sorted_sources.py",
+     23
+    ],
+    [
+     "tests/positive/t22_ord_chr.py",
+     23
+    ],
+    [
+     "tests/positive/t23_chained_compare.py",
+     21
+    ],
+    [
+     "tests/positive/t24_tuples.py",
+     55
+    ],
+    [
+     "tests/positive/t40_list_dict_comprehensions.py",
+     41
+    ],
+    [
+     "tests/positive/t41_generator_consumers.py",
+     39
+    ],
+    [
+     "tests/positive/t42_enumerate_zip_reversed.py",
+     59
+    ],
+    [
+     "tests/positive/t43_key_functions.py",
+     58
+    ],
+    [
+     "tests/positive/t44_comprehension_edges.py",
+     22
+    ],
+    [
+     "tests/positive/t45_dict_changed_during_iteration.py",
+     8
+    ],
+    [
+     "tests/positive/t46_tuples_with_iteration.py",
+     23
+    ],
+    [
+     "tests/positive/t50_defaults_kwargs.py",
+     49
+    ],
+    [
+     "tests/positive/t51_optional_linked.py",
+     125
+    ],
+    [
+     "tests/positive/t52_isinstance.py",
+     52
+    ],
+    [
+     "tests/positive/t53_module_globals.py",
+     58
+    ],
+    [
+     "tests/positive/t54_sets.py",
+     52
+    ],
+    [
+     "tests/positive/t55_dict_values.py",
+     53
+    ],
+    [
+     "tests/positive/t56_optional_scalars.py",
+     74
+    ],
+    [
+     "tests/positive/t57_collections.py",
+     48
+    ],
+    [
+     "tests/positive/t70_bitops.py",
+     55
+    ],
+    [
+     "tests/positive/t71_math.py",
+     101
+    ],
+    [
+     "tests/positive/t72_slices.py",
+     44
+    ],
+    [
+     "tests/positive/t73_str_methods.py",
+     56
+    ],
+    [
+     "tests/positive/t74_list_dict_methods.py",
+     49
+    ],
+    [
+     "tests/positive/t75_pow_int_conv.py",
+     81
+    ],
+    [
+     "tests/positive/t76_format_percent.py",
+     27
+    ],
+    [
+     "tests/positive/t77_err_sqrt.py",
+     6
+    ],
+    [
+     "tests/positive/t78_err_dict_pop.py",
+     3
+    ],
+    [
+     "tests/positive/t79_err_negshift.py",
+     4
+    ],
+    [
+     "tests/positive/t80_err_pow_inverse.py",
+     4
+    ],
+    [
+     "tests/positive/t81_err_slice_step.py",
+     4
+    ],
+    [
+     "tests/positive/t82_err_log0.py",
+     3
+    ],
+    [
+     "tests/positive/t83_repr_concat.py",
+     37
+    ],
+    [
+     "tests/positive/t90_list_repeat.py",
+     17
+    ],
+    [
+     "tests/positive/t91_chained_assign.py",
+     17
+    ],
+    [
+     "tests/positive/t92_fstring_eq.py",
+     8
+    ],
+    [
+     "tests/positive/t93_cond_mixed_boolop.py",
+     14
+    ],
+    [
+     "tests/positive/t94_optional_tuple.py",
+     15
+    ]
+   ]
+  },
+  "tests_neg": {
+   "loc": 396,
+   "files": [
+    [
+     "tests/negative/n01_rebind.py",
+     4
+    ],
+    [
+     "tests/negative/n02_badarg.py",
+     4
+    ],
+    [
+     "tests/negative/n03_undefined.py",
+     2
+    ],
+    [
+     "tests/negative/n04_return_type.py",
+     4
+    ],
+    [
+     "tests/negative/n05_mixed_list.py",
+     3
+    ],
+    [
+     "tests/negative/n06_missing_return.py",
+     5
+    ],
+    [
+     "tests/negative/n07_empty_list_infer.py",
+     4
+    ],
+    [
+     "tests/negative/n08_arity.py",
+     4
+    ],
+    [
+     "tests/negative/n09_bad_index.py",
+     3
+    ],
+    [
+     "tests/negative/n100_print_subclass_no_repr.py",
+     10
+    ],
+    [
+     "tests/negative/n101_multiple_inheritance.py",
+     7
+    ],
+    [
+     "tests/negative/n102_override_signature.py",
+     9
+    ],
+    [
+     "tests/negative/n103_classmethod_via_subclass.py",
+     11
+    ],
+    [
+     "tests/negative/n104_field_not_inferable.py",
+     7
+    ],
+    [
+     "tests/negative/n105_sort_without_lt.py",
+     6
+    ],
+    [
+     "tests/negative/n106_operator_not_defined.py",
+     5
+    ],
+    [
+     "tests/negative/n107_property_no_setter.py",
+     9
+    ],
+    [
+     "tests/negative/n108_frozen_dataclass.py",
+     7
+    ],
+    [
+     "tests/negative/n109_base_defined_later.py",
+     5
+    ],
+    [
+     "tests/negative/n10_str_item_assign.py",
+     4
+    ],
+    [
+     "tests/negative/n110_eq_in_hierarchy.py",
+     8
+    ],
+    [
+     "tests/negative/n111_iter_dunder.py",
+     6
+    ],
+    [
+     "tests/negative/n112_exception_subclass.py",
+     3
+    ],
+    [
+     "tests/negative/n113_class_attr_call.py",
+     6
+    ],
+    [
+     "tests/negative/n114_dataclass_mutable_default.py",
+     5
+    ],
+    [
+     "tests/negative/n115_method_only_in_subclass.py",
+     9
+    ],
+    [
+     "tests/negative/n116_unknown_decorator.py",
+     6
+    ],
+    [
+     "tests/negative/n117_super_outside_method.py",
+     7
+    ],
+    [
+     "tests/negative/n118_instance_hides_class_attr.py",
+     7
+    ],
+    [
+     "tests/negative/n119_default_repr_in_fstring.py",
+     6
+    ],
+    [
+     "tests/negative/n11_compare_types.py",
+     2
+    ],
+    [
+     "tests/negative/n12_break_outside.py",
+     3
+    ],
+    [
+     "tests/negative/n13_class_no_init.py",
+     4
+    ],
+    [
+     "tests/negative/n14_missing_init_fields.py",
+     5
+    ],
+    [
+     "tests/negative/n15_bad_field.py",
+     7
+    ],
+    [
+     "tests/negative/n16_dict_bad_key.py",
+     3
+    ],
+    [
+     "tests/negative/n17_unknown_exception.py",
+     5
+    ],
+    [
+     "tests/negative/n18_print_class.py",
+     7
+    ],
+    [
+     "tests/negative/n19_nested_list_too_deep.py",
+     3
+    ],
+    [
+     "tests/negative/n20_break_in_try_no_loop.py",
+     5
+    ],
+    [
+     "tests/negative/n21_ifexp_mixed.py",
+     4
+    ],
+    [
+     "tests/negative/n22_chain_impure_middle.py",
+     5
+    ],
+    [
+     "tests/negative/n23_tuple_var_index.py",
+     4
+    ],
+    [
+     "tests/negative/n40_lambda_value.py",
+     4
+    ],
+    [
+     "tests/negative/n41_len_generator.py",
+     3
+    ],
+    [
+     "tests/negative/n42_enumerate_len.py",
+     3
+    ],
+    [
+     "tests/negative/n43_unpack_list.py",
+     4
+    ],
+    [
+     "tests/negative/n44_comp_var_scope.py",
+     4
+    ],
+    [
+     "tests/negative/n45_set_comprehension.py",
+     3
+    ],
+    [
+     "tests/negative/n46_range_value.py",
+     3
+    ],
+    [
+     "tests/negative/n47_list_key.py",
+     3
+    ],
+    [
+     "tests/negative/n48_bare_genexp.py",
+     3
+    ],
+    [
+     "tests/negative/n49_comp_unpack_list.py",
+     3
+    ],
+    [
+     "tests/negative/n50_unknown_kwarg.py",
+     4
+    ],
+    [
+     "tests/negative/n51_duplicate_kwarg.py",
+     4
+    ],
+    [
+     "tests/negative/n52_missing_arg.py",
+     4
+    ],
+    [
+     "tests/negative/n53_nonconst_default.py",
+     5
+    ],
+    [
+     "tests/negative/n54_optional_arith.py",
+     5
+    ],
+    [
+     "tests/negative/n55_isinstance_float.py",
+     4
+    ],
+    [
+     "tests/negative/n56_print_set.py",
+     3
+    ],
+    [
+     "tests/negative/n57_iterate_set.py",
+     4
+    ],
+    [
+     "tests/negative/n58_import_os.py",
+     3
+    ],
+    [
+     "tests/negative/n59_typing_not_imported.py",
+     4
+    ],
+    [
+     "tests/negative/n60_unbound_local.py",
+     5
+    ],
+    [
+     "tests/negative/n61_none_infer.py",
+     3
+    ],
+    [
+     "tests/negative/n62_union.py",
+     5
+    ],
+    [
+     "tests/negative/n63_set_pop.py",
+     3
+    ],
+    [
+     "tests/negative/n64_is_int.py",
+     4
+    ],
+    [
+     "tests/negative/n65_int_default_float.py",
+     4
+    ],
+    [
+     "tests/negative/n66_global_undefined.py",
+     5
+    ],
+    [
+     "tests/negative/n67_defaultdict_factory.py",
+     4
+    ],
+    [
+     "tests/negative/n68_optional_len.py",
+     9
+    ],
+    [
+     "tests/negative/n70_bitop_float.py",
+     4
+    ],
+    [
+     "tests/negative/n71_unsupported_module.py",
+     3
+    ],
+    [
+     "tests/negative/n72_partition.py",
+     3
+    ],
+    [
+     "tests/negative/n73_dict_keys_print.py",
+     3
+    ],
+    [
+     "tests/negative/n74_math_unknown.py",
+     3
+    ],
+    [
+     "tests/negative/n75_format_nonliteral.py",
+     3
+    ],
+    [
+     "tests/negative/n76_slice_dict.py",
+     3
+    ],
+    [
+     "tests/negative/n77_pct_d_str.py",
+     2
+    ],
+    [
+     "tests/negative/n79_invert_float.py",
+     4
+    ],
+    [
+     "tests/negative/n80_hash.py",
+     2
+    ],
+    [
+     "tests/negative/n81_gcd_float.py",
+     3
+    ],
+    [
+     "tests/negative/n82_pct_few.py",
+     2
+    ],
+    [
+     "tests/negative/n83_format_attr.py",
+     2
+    ],
+    [
+     "tests/negative/n84_format_impure.py",
+     4
+    ],
+    [
+     "tests/negative/n85_fstring_ascii.py",
+     3
+    ],
+    [
+     "tests/negative/n93_boolop_value_mixed.py",
+     4
+    ]
+   ]
+  },
+  "packaging": {
+   "loc": 448,
+   "files": [
+    [
+     "packaging/windows/build.py",
+     308
+    ],
+    [
+     "packaging/windows/launcher.c",
+     61
+    ],
+    [
+     "packaging/windows/launcher.rc",
+     30
+    ],
+    [
+     "packaging/windows/pythia-studio.iss",
+     49
+    ]
+   ]
+  }
+ },
+ "tests": {
+  "positive": 78,
+  "negative": 88,
+  "basics": 91,
+  "snippets": 22
+ },
+ "git": {
+  "commits": 143,
+  "head": "95bbb1b",
+  "shortlog": [
+   "138\tVishal Vivek",
+   "     3\tCopilot",
+   "     1\tAaryanGupta01",
+   "     1\tJahnavi"
+  ],
+  "first": "84f1251 2026-09-04 Vishal Vivek",
+  "last": "95bbb1b 2026-10-19"
+ },
+ "symbols": {
+  "lexer": {
+   "file": "pythia/lexer.py",
+   "lines": {
+    "class Lexer": 48,
+    "def tokenize": 79
+   }
+  },
+  "parser": {
+   "file": "pythia/parser.py",
+   "lines": {
+    "class Parser": 69,
+    "def parse_block": 249,
+    "def parse_expr": 512,
+    "def parse_atom": 609
+   }
+  },
+  "ast": {
+   "file": "pythia/ast_nodes.py",
+   "lines": {
+    "class Node": 15
+   }
+  },
+  "typecheck": {
+   "file": "pythia/typecheck.py",
+   "lines": {
+    "def widens_to": 54,
+    "def join": 71,
+    "class Scope": 82,
+    "class TypeChecker": 176,
+    "def check_expr": 648,
+    "def synth\\(": 700,
+    "def synth_call": 1101,
+    "def check_assign": 518
+   }
+  },
+  "lower": {
+   "file": "pythia/lower.py",
+   "lines": {
+    "class FidelityNote": 26,
+    "class Lowerer": 55,
+    "def check_binop": 353,
+    "def lower": 392
+   }
+  },
+  "optimize": {
+   "file": "pythia/optimize.py",
+   "lines": {
+    "class GuardElider": 138,
+    "def eval": 145,
+    "def block": 227,
+    "def elide_guards": 335
+   }
+  },
+  "emit": {
+   "file": "pythia/emit_c.py",
+   "lines": {
+    "class Emitter": 103,
+    "def emit_module": 176
+   }
+  },
+  "libmode": {
+   "file": "pythia/libmode.py",
+   "lines": {
+    "def build_library": 551
+   }
+  },
+  "cli": {
+   "file": "pythia/cli.py",
+   "lines": {
+    "def compile_source": 37,
+    "def main": 89
+   }
+  },
+  "convert": {
+   "file": "pythia/convert/__init__.py",
+   "lines": {
+    "def to_pysub": 161,
+    "class ConvertResult": 28
+   }
+  },
+  "infer": {
+   "file": "pythia/convert/infer.py",
+   "lines": {
+    "class Engine": 163,
+    "def infer": 1351
+   }
+  },
+  "types": {
+   "file": "pythia/convert/types.py",
+   "lines": {
+    "def join": 41
+   }
+  },
+  "search": {
+   "file": "pythia/convert/search.py",
+   "lines": {
+    "def best_assignment": 108
+   }
+  },
+  "observe": {
+   "file": "pythia/convert/observe.py",
+   "lines": {
+    "def": 21
+   }
+  },
+  "scan": {
+   "file": "pythia/studio/scan.py",
+   "lines": {
+    "def scan_workspace": 1177,
+    "def extract_pysub": 860,
+    "def analyze": 940
+   }
+  },
+  "pipeline": {
+   "file": "pythia/studio/pipeline.py",
+   "lines": {
+    "class Pipeline": 31,
+    "def _run": 128,
+    "def do_trace": 202,
+    "def do_rank": 258,
+    "def do_fix": 296,
+    "def fix_one": 349,
+    "def do_compile": 407,
+    "def do_verify": 469,
+    "def do_bench": 506,
+    "def do_splice": 544
+   }
+  },
+  "rank": {
+   "file": "pythia/studio/rank.py",
+   "lines": {
+    "def static_heuristic": 27,
+    "MARSHAL_S_PER_ELEM": 20,
+    "COLD_SHARE": 24
+   }
+  },
+  "replay": {
+   "file": "pythia/studio/replay.py",
+   "lines": {
+    "MIN_CALLS": 19,
+    "def": 22
+   }
+  },
+  "worker": {
+   "file": "pythia/studio/_replay_worker.py",
+   "lines": {
+    "def": 39
+   }
+  },
+  "tracer": {
+   "file": "pythia/studio/_tracer_boot.py",
+   "lines": {
+    "sys\\.monitoring|mon =": 66
+   }
+  },
+  "splice": {
+   "file": "pythia/studio/splice.py",
+   "lines": {
+    "GUARD": 20,
+    "DECORATOR": 25
+   }
+  },
+  "app": {
+   "file": "pythia/studio/server/app.py",
+   "lines": {
+    "def create_app|app = FastAPI": 108
+   }
+  },
+  "bus": {
+   "file": "pythia/studio/server/bus.py",
+   "lines": {
+    "class": 17
+   }
+  },
+  "launcher": {
+   "file": "pythia/studio/launcher.py",
+   "lines": {
+    "def main": 203,
+    "def _probe": 37
+   }
+  },
+  "oracle": {
+   "file": "tools/oracle.py",
+   "lines": {
+    "def run_positive": 94,
+    "def run_negative": 129,
+    "def build_and_run": 59
+   }
+  },
+  "fuzz": {
+   "file": "tools/fuzz.py",
+   "lines": {
+    "def": 58
+   }
+  },
+  "stress": {
+   "file": "scripts/stress.py",
+   "lines": {
+    "def": 38
+   }
+  },
+  "pyrt": {
+   "file": "runtime/pyrt.hpp",
+   "lines": {
+    "struct PyStr|class PyStr": 70,
+    "py_floordiv|inline int64_t py_floordiv": 127,
+    "PyList": 111
+   }
+  },
+  "bridge": {
+   "file": "runtime/pyrt_bridge.hpp",
+   "lines": {
+    "template": 115
+   }
+  },
+  "pydict": {
+   "file": "runtime/pydict.hpp",
+   "lines": {
+    "class PyDict|struct PyDict": 29
+   }
+  },
+  "pyset": {
+   "file": "runtime/pyset.hpp",
+   "lines": {
+    "class PySet|struct PySet": 39
+   }
+  }
+ }
+}

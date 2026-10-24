@@ -1,0 +1,47 @@
+{
+ "ws_id": "e79899aa",
+ "name": "project-euler",
+ "root": "C:\\Users\\visha\\AppData\\Local\\pythia-dev\\home-r3b\\workspaces\\e79899aa",
+ "py_files": [
+  "solutions/problem_001.py",
+  "solutions/problem_002.py",
+  "solutions/problem_003.py",
+  "solutions/problem_004.py",
+  "solutions/problem_005.py",
+  "solutions/problem_006.py",
+  "solutions/problem_007.py",
+  "solutions/problem_008.py",
+  "solutions/problem_009.py",
+  "solutions/problem_010.py",
+  "solutions/problem_011.py",
+  "solutions/problem_012.py",
+  "solutions/problem_013.py",
+  "solutions/problem_014.py",
+  "solutions/problem_015.py",
+  "solutions/problem_016.py",
+  "solutions/problem_017.py",
+  "solutions/problem_020.py",
+  "solutions/problem_021.py",
+  "solutions/problem_022.py",
+  "solutions/problem_023.py",
+  "solutions/problem_025.py",
+  "solutions/problem_027.py",
+  "solutions/problem_029.py",
+  "solutions/problem_030.py",
+  "solutions/problem_032.py",
+  "solutions/tests.py",
+  "solutions/utils.py"
+ ],
+ "skipped": [
+  {
+   "path": ".git/",
+   "reason": "excluded directory"
+  },
+  {
+   "path": "solutions/__pycache__/",
+   "reason": "excluded directory"
+  }
+ ],
+ "input_kind": "folder",
+ "origin": "C:\\Users\\visha\\AppData\\Local\\pythia-dev\\demo-repos2\\project-euler"
+}

@@ -1,0 +1,40 @@
+{
+ "job_id": "c45cc4b3",
+ "workspace_id": "4624d684",
+ "name": "project-euler",
+ "state": "done",
+ "options": {
+  "trace_cmd": "python solutions/problem_014.py",
+  "trace_timeout_s": 60,
+  "offline": false,
+  "llm": false,
+  "model": null,
+  "pace_ms": 0
+ },
+ "input": {
+  "kind": "folder",
+  "path": "C:\\Users\\visha\\AppData\\Local\\pythia-dev\\demo-repos2\\project-euler"
+ },
+ "started": 1792828815.2343976,
+ "finished": 1792828866.149315,
+ "summary": {
+  "functions": 102,
+  "verified": 0,
+  "guarded": 1,
+  "fixable": 16,
+  "not_eligible": 64,
+  "failed": 0,
+  "declined": 21,
+  "e2e_speedup": 11.578885133355135,
+  "geomean_speedup": 21.29267094800376
+ },
+ "e2e": {
+  "cmd": "python solutions/problem_014.py",
+  "before_s": 8.901063000000022,
+  "after_s": 0.7687323000000106,
+  "speedup": 11.578885133355135,
+  "output_match": true,
+  "ok": true
+ },
+ "sample": false
+}

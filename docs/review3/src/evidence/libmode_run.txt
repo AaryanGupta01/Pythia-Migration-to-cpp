@@ -1,0 +1,8 @@
+2026-10-24T07:02:45+00:00
+build timings: cold 15.05s (compile_s 14.691), cached 27 ms, new TU with cached runtime object 5.63s
+74 calls compared against CPython
+exceptions, fallback, write-back, ordering, diagnostics: ok
+classes: 22 calls compared against CPython (1 ran in Python after FallbackError; objects in/out, identity, write-back, class attributes)
+leak check: 3000 iterations in 0.66s, RSS grew 0 KB
+OK
+exit=0

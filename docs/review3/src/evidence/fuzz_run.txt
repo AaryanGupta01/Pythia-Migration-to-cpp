@@ -1,0 +1,15 @@
+2026-10-24T07:03:14+00:00
+wrote 150 generated programs to /tmp/fz
+  ... 50/150
+  ... 100/150
+  ... 150/150
+
+============================================================
+FUZZ RUN: 150 programs in 407.8s
+  matched CPython exactly : 150
+  rejected by PYTHIA      : 0  (generator sampled outside PySub semantics)
+  cc compile failures     : 0   <-- real PYTHIA bugs if > 0
+  MISMATCHED OUTPUT       : 0   <-- real PYTHIA bugs if > 0
+  timeouts                : 0
+============================================================
+exit=0

@@ -1,0 +1,3 @@
+{"main": {"repo": "dayyass/project-euler", "url": "https://github.com/dayyass/project-euler", "sha": "ad501f8", "stars": 7, "licence": "none declared (GitHub reports null)", "cmd": "python solutions/problem_014.py", "job": "c45cc4b3"},
+ "backup1": {"repo": "dayyass/project-euler", "cmd": "python solutions/problem_010.py", "job": "1eab5ef0"},
+ "backup2": {"repo": "TextLab (bundled demo, not a third-party repo)", "cmd": "python main.py --small", "job": "429050d0"}}

@@ -1,0 +1,36 @@
+#include "pyrt.hpp"
+
+/* forward declarations (PySub allows mutual recursion) */
+static int64_t f_total(PyListI64 *p_xs, int64_t p_n);
+
+static int64_t f_total(PyListI64 *p_xs, int64_t p_n) {
+    int64_t p_s = 0;
+    int64_t p_i = 0;
+
+    p_s = INT64_C(0);
+    {
+        int64_t _t1 = p_n;
+        int64_t _t2 = 1;
+        if (_t2 == 0) py_raise("ValueError", "range() arg 3 must not be zero");
+        for (int64_t _t3 = INT64_C(0);
+             _t2 > 0 ? _t3 < _t1 : _t3 > _t1;
+             _t3 += _t2) {
+            p_i = _t3;
+            p_s = py_add_i64(p_s, py_mul_i64(PyListI64_get(p_xs, p_i), INT64_C(2)));
+        }
+    }
+    return p_s;
+    return 0;   /* unreachable unless the result is Optional */
+}
+
+static int pythia_main(void) {
+    pyrt_set_py_minor(13);   /* match this CPython's error texts */
+    try {
+        py_print_begin();
+        py_print_sep();
+        py_print_i64(f_total([&]() { PyListI64 *_t5 = PyListI64_new(); PyListI64_append(_t5, INT64_C(1)); PyListI64_append(_t5, INT64_C(2)); PyListI64_append(_t5, INT64_C(3)); return _t5; }(), INT64_C(3)));
+        py_print_end();
+        return 0;
+    } catch (const PythonException &exc) {
+        py_print_exception(exc);
+        return 1;

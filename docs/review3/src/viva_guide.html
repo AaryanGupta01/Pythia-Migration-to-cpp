@@ -1,0 +1,451 @@
+<!doctype html><html><head><meta charset='utf-8'><title>PYTHIA Viva Guide</title><style>@font-face{font-family:Inter;src:url("file:///C:/Users/visha/OneDrive/Desktop/Documents/programming/pythia/studio/web/node_modules/%40fontsource-variable/inter/files/inter-latin-wght-normal.woff2");font-weight:100 900}@font-face{font-family:"JetBrains Mono";src:url("file:///C:/Users/visha/OneDrive/Desktop/Documents/programming/pythia/studio/web/node_modules/%40fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2");font-weight:100 800}@page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+:root {
+  --ink: #14171f; --ink2: #4f5664; --ink3: #7c8391; --line: #d9dce4; --accent: #584bf0; --paper: #ffffff;
+  --tint: #f3f2fe; --ok: #0f8f60; --warn: #b26f08; --bad: #cd372e;
+}
+* { box-sizing: border-box; }
+html { font-family: "Inter", system-ui, sans-serif; font-size: 10.3pt; color: var(--ink); line-height: 1.5; }
+body { margin: 0; background: #fff; }
+code, pre, .mono { font-family: "JetBrains Mono", Consolas, monospace; }
+code { font-size: 0.86em; background: #f1f1fb; color: #2e2a9e; padding: 0.05em 0.35em; border-radius: 4px; }
+b { font-weight: 650; }
+h1 { font-size: 22pt; line-height: 1.15; margin: 0 0 8mm; letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 4mm; page-break-after: avoid; }
+h1 .no { color: #fff; background: var(--accent); border-radius: 8px; font-size: 14pt; padding: 1.2mm 3.2mm; font-weight: 700; transform: translateY(-1mm); }
+h2 { font-size: 13pt; margin: 7mm 0 2mm; color: var(--accent); page-break-after: avoid; }
+h3 { font-size: 11.5pt; margin: 5mm 0 1.5mm; page-break-after: avoid; }
+h4 { font-size: 10.5pt; margin: 0 0 1.5mm; }
+h5 { font-size: 8.4pt; margin: 3mm 0 1mm; text-transform: uppercase; letter-spacing: .08em; color: var(--ink3); }
+p { margin: 0 0 2.6mm; }
+ul, ol { margin: 0 0 3mm; padding-left: 5.2mm; }
+li { margin-bottom: 1.1mm; }
+.lead { font-size: 12pt; line-height: 1.45; color: var(--ink); border-left: 4px solid var(--accent); padding-left: 4mm; margin-bottom: 5mm; }
+.small { font-size: 8.8pt; color: var(--ink2); }
+.chap { page-break-before: always; }
+.cover { height: 255mm; display: flex; flex-direction: column; justify-content: center; page-break-after: always; position: relative; }
+.cover .kicker { color: var(--accent); font-weight: 700; letter-spacing: .14em; font-size: 10pt; }
+.cover h1 { font-size: 46pt; margin: 6mm 0 3mm; display: block; letter-spacing: -0.03em; }
+.cover .sub { font-size: 15pt; color: var(--ink2); max-width: 150mm; }
+.cover .meta { margin-top: 14mm; color: var(--ink2); font-size: 10pt; }
+.cover .badge { position: absolute; right: 0; top: 0; background: #fff4e0; color: #8a5300; border: 1px solid #f0cf94; border-radius: 99px; padding: 1.5mm 4mm; font-size: 9pt; font-weight: 650; }
+.toc { columns: 2; column-gap: 12mm; margin-top: 10mm; font-size: 10.5pt; }
+.toc div { margin-bottom: 2mm; }
+.toc .n { color: var(--accent); font-weight: 700; display: inline-block; width: 8mm; }
+.cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2.5mm; margin: 3mm 0 5mm; }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 3mm; background: var(--tint); }
+.card h4 { color: var(--accent); }
+.card p { font-size: 8.6pt; margin: 0; line-height: 1.4; }
+.say, .warn, .tip { border-radius: 10px; padding: 3.2mm 4mm; margin: 4mm 0; position: relative; page-break-inside: avoid; }
+.say { background: #eefaf4; border: 1px solid #b7e4cf; }
+.warn { background: #fff6e8; border: 1px solid #f1d3a0; }
+.tip { background: var(--tint); border: 1px solid #cfccf8; }
+.tag { display: inline-block; font-size: 7.6pt; text-transform: uppercase; letter-spacing: .1em; font-weight: 750; padding: .4mm 2.2mm; border-radius: 99px; margin-right: 2mm; background: #0f8f60; color: #fff; vertical-align: 1px; }
+.warn .tag { background: var(--warn); }
+.tip .tag { background: var(--accent); }
+.script { background: #f7f7fb; border-radius: 10px; padding: 4mm 5mm; font-size: 10.6pt; line-height: 1.6; border: 1px solid var(--line); }
+table { border-collapse: collapse; width: 100%; margin: 2mm 0 4mm; font-size: 9pt; }
+th { text-align: left; background: #ecebfb; padding: 1.6mm 2.4mm; font-weight: 650; }
+td { padding: 1.6mm 2.4mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr { page-break-inside: avoid; }
+table.nums td { font-size: 10pt; padding: 2.2mm 2.4mm; }
+table.nums td.big { font-size: 17pt; font-weight: 750; color: var(--accent); width: 32mm; font-variant-numeric: tabular-nums; }
+.fig { margin: 4mm 0 5mm; text-align: center; page-break-inside: avoid; }
+.fig img { max-width: 100%; border-radius: 8px; }
+.fig .cap { font-size: 8.6pt; color: var(--ink2); margin-top: 1.5mm; text-align: left; }
+.fig.shot img { border: 1px solid var(--line); box-shadow: 0 2px 10px rgba(30,38,70,.12); }
+pre { background: #f6f7fb; border: 1px solid var(--line); border-radius: 8px; padding: 2.6mm 3.2mm; font-size: 7.6pt; line-height: 1.38; overflow: hidden; white-space: pre-wrap; word-break: break-all; margin: 1.5mm 0 3.5mm; page-break-inside: avoid; }
+pre.tree { font-size: 7.4pt; word-break: normal; white-space: pre; }
+.member { --c: #2563eb; border: 1.5px solid color-mix(in srgb, var(--c) 45%, white); border-radius: 12px; padding: 4mm 5mm 3mm; margin: 5mm 0; background: color-mix(in srgb, var(--c) 4%, white); }
+.member .mh { display: flex; align-items: center; gap: 3mm; margin-bottom: 2mm; }
+.member h3 { margin: 0; color: var(--c); font-size: 14pt; }
+.member .reg { margin-left: auto; font-size: 9pt; color: var(--ink2); }
+.member .dot { width: 4mm; height: 4mm; border-radius: 50%; background: var(--c); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+.proposed { border: 1.4px dashed var(--c); border-radius: 9px; padding: 2.4mm 3.6mm; margin: 3mm 0; background: #fff; font-size: 9.4pt; }
+.proposed .tag { background: var(--c); }
+table.open th { background: color-mix(in srgb, var(--c, #584bf0) 14%, white); }
+table.open td:first-child { white-space: nowrap; }
+.lim { margin: 3.2mm 0; page-break-inside: avoid; border: 1px solid var(--line); border-radius: 10px; padding: 3mm 4mm; }
+.lim h4 { font-size: 10.6pt; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; font-size: 9.4pt; }
+.two .h .tag { background: var(--warn); }
+.two .c .tag { background: var(--ok); }
+.qa { margin: 2.2mm 0; page-break-inside: avoid; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.qa .q { background: var(--tint); font-weight: 650; padding: 2mm 3.4mm; display: flex; gap: 3mm; }
+.qa .q .n { color: #fff; background: var(--accent); border-radius: 99px; min-width: 6mm; height: 6mm; text-align: center; font-size: 8.5pt; line-height: 6mm; flex: none; }
+.qa .a { padding: 2mm 3.4mm 2.4mm; font-size: 9.5pt; }
+ol.steps li { margin-bottom: 2mm; }
+.step { border-left: 3px solid var(--accent); padding: 0 0 0 4mm; margin: 4mm 0; page-break-inside: avoid; }
+.step h3 { margin: 0 0 1mm; }
+.step .num { color: var(--accent); }
+.step .plain { margin-bottom: 1.6mm; }
+.step .why { font-size: 9.3pt; color: var(--ink2); margin-bottom: 1.6mm; }
+.demo-h { display: flex; gap: 3mm; align-items: baseline; }
+.checklist { list-style: none; padding-left: 0; }
+.checklist li::before { content: "☐"; color: var(--accent); margin-right: 2.4mm; font-size: 11pt; }
+.kbd { border: 1px solid var(--line2, #cfd3dc); border-bottom-width: 2px; border-radius: 4px; padding: 0 1.4mm; font-size: 8.4pt; background: #fff; font-family: "JetBrains Mono", monospace; }
+</style></head><body>
+<div class="cover">
+<div class="badge">Internal · not for submission</div>
+<div class="kicker">BCSE307L · COMPILER DESIGN · TEAM 2 · A15</div>
+<h1>PYTHIA<br>Viva Guide</h1>
+<div class="sub">Everything the four of us need to explain the project in plain words, point at our own code, and answer the hard questions.</div>
+<div class="toc"><div><span class="n">1</span>PYTHIA in 60 seconds</div><div><span class="n">2</span>The whole flow, step by step</div><div><span class="n">3</span>What changed since Review 2</div><div><span class="n">4</span>Who did what, and how it fits</div><div><span class="n">5</span>“Open the codebase” cheat sheet</div><div><span class="n">6</span>Tools we chose, and why</div><div><span class="n">7</span>Limitations and comebacks</div><div><span class="n">8</span>The value this adds</div><div><span class="n">9</span>Likely viva questions</div><div><span class="n">10</span>Live demo script and backup plan</div><div><span class="n">11</span>Glossary</div></div>
+<div class="meta">Vishal Vivek 24BCE2377 · Rujuta Mangesh Kulkarni 24BDS0459 · Koliparthy Venkata Jahnavi 24BDS0132 · Aaryan Gupta 24BDS0134<br>
+Repository commit <code>95bbb1b</code> · measured on 2026-10-24 · every number here is from a command we ran (report, Appendix F)</div>
+</div>
+<section class="chap" id="s1">
+<h1><span class="no">1</span>PYTHIA in 60 seconds</h1>
+<p class="lead">PYTHIA speeds up the slow parts of your Python project, and it <b>proves</b>, using your own program's calls, that the fast version gives the same answers as the original.</p>
+
+<h2>The problem</h2>
+<p>Python is easy to write and slow to run. Loops that add numbers, compare strings or fill tables can be 10 to 100 times slower than the same loop in C++.</p>
+<p>People fix this in four ways: rewrite the code in C++, learn a special dialect (Cython), use a JIT (Numba, PyPy), or ask ChatGPT to translate it. Every one of these either costs a second codebase or gives you <i>no evidence</i> that the fast version behaves like the old one.</p>
+
+<h2>What we built</h2>
+<p>Two things, one inside the other.</p>
+<ul>
+<li><b>PYTHIA, the compiler.</b> It reads a typed subset of Python (we call it <b>PySub</b>) and writes readable C++17. This is what you built in Reviews 1 and 2.</li>
+<li><b>PYTHIA Studio, the app.</b> You give it a snippet, a file, a folder or a GitHub link. It finds the slow functions, works out their types, converts them, compiles them, checks them against real Python, and swaps them in. You see every step and every diff.</li>
+</ul>
+
+<h2>What is special</h2>
+<div class="cards">
+<div class="card"><h4>Verified</h4><p>Each converted function is run against CPython on the calls your program really made. Different answer? It is thrown away automatically.</p></div>
+<div class="card"><h4>Fidelity Report</h4><p>A list of every spot where Python and C++ could behave differently, with the line number and what we did about it.</p></div>
+<div class="card"><h4>Whole project</h4><p>Point it at a repo. It scans, ranks, converts what it can, and tells you in plain English why it left the rest.</p></div>
+<div class="card"><h4>No LLM needed</h4><p>Types are worked out by our own code. Same input, same output, free, works offline.</p></div>
+<div class="card"><h4>Readable</h4><p>The C++ is something a person can open and read. The app shows it next to your Python.</p></div>
+</div>
+
+<div class="say"><span class="tag">Say it</span><b>One-line pitch.</b> “PYTHIA is a compiler plus an app that makes the slow parts of a Python project faster, and proves on your own program’s calls that the fast version is correct.”</div>
+
+<h2>The 60-second version, out loud</h2>
+<p class="script">Python is slow on loop-heavy code. The usual fixes cost you a rewrite, or they ask you to trust a black box. PYTHIA takes an ordinary Python project, runs it once to see where the time goes, converts the hot functions to C++17 using our own type inference, and then replays the function’s real calls through both versions. If even one answer differs, the conversion is rejected. What survives is spliced in behind a one-line decorator, so the original code is still there. On our benchmark kernels the C++ is a median of 11 times faster, and every output matches CPython. It is a compiler, so we built every phase: lexer, parser, type checker, lowering, optimiser and emitter. Where Python and C++ can differ, PYTHIA says so, line by line.</p>
+
+<h2>Numbers to remember</h2>
+<table class="nums">
+<tr><td class="big">78/78</td><td>valid programs where compiled output equals CPython’s (the oracle)</td></tr>
+<tr><td class="big">88/88</td><td>invalid programs correctly rejected, each with the right message</td></tr>
+<tr><td class="big">91/91</td><td>everyday untyped programs converted <i>without any LLM</i> and matching CPython</td></tr>
+<tr><td class="big">21/22</td><td>LeetCode-style snippets (one is refused on purpose: <code>coin_change</code>)</td></tr>
+<tr><td class="big">14</td><td>divergence classes (D1 to D14), 1280 positioned notes across the corpus</td></tr>
+<tr><td class="big">11x</td><td>median speedup on our ten fixed kernels (nine kernels 1.5x to 29.7x; one dictionary kernel is about 29x <i>slower</i>)</td></tr>
+<tr><td class="big">11.6x</td><td>whole-program speedup on the demo repository (<code>dayyass/project-euler</code>, problem 14), output identical</td></tr>
+</table>
+</section>
+
+<section class="chap" id="s2">
+<h1><span class="no">2</span>The whole flow, one function at a time</h1>
+<p class="lead">We follow one real function, <code>collatz_sequence_len</code> from <code>dayyass/project-euler</code>, through every stage. Everything below is real output from the app, not a mock-up.</p>
+<div class="step"><h3><span class="num">1</span> Your Python function</h3><p class="plain">This is the function exactly as it sits in <code>solutions/utils.py</code>. It has type annotations or not; PYTHIA does not care yet.</p><p class="why"><b>Why:</b> Everything starts from your own code. Nothing is rewritten by hand.</p><pre>def collatz_sequence_len(n: int) -&gt; int:
+    &quot;&quot;&quot;
+    Compute len of Collatz sequence.
+
+    - O(1) space-complexity
+    &quot;&quot;&quot;
+    result = 1
+    while n != 1:
+        if n % 2 == 0:
+            n //= 2
+        else:
+            n = 3 * n + 1
+        result += 1
+    return result</pre></div>
+<div class="step"><h3><span class="num">2</span> The tracer watches the program run</h3><p class="plain">PYTHIA runs your entry command (<code>python solutions/problem_014.py</code>) once with a tracer on. For this function it saw <b>999,999 calls</b>, about <b>84.8%</b> of the run time, and argument types <code>[&#x27;int&#x27;]</code> returning <code>int</code>.</p><p class="why"><b>Why:</b> Real calls give two things: which functions are worth compiling, and the types they really receive.</p><pre>{&quot;calls&quot;: 999999, &quot;self_s&quot;: 9.6259183, &quot;arg_types&quot;: [&quot;int&quot;], &quot;ret_type&quot;: &quot;int&quot;, &quot;samples&quot;: 500}</pre></div>
+<div class="step"><h3><span class="num">3</span> Types are filled in (PySub)</h3><p class="plain">The compiler only accepts PySub, where every variable has a type. If the function was missing annotations, PYTHIA adds them from the observed types and from how the values are used, then asks the real type checker to accept the result. Here the function already type-checked as written, so nothing had to change.</p><p class="why"><b>Why:</b> No guessing without a check: the compiler is the judge.</p><pre>def collatz_sequence_len(n: int) -&gt; int:
+
+
+
+
+
+    result = 1
+    while n != 1:
+        if n % 2 == 0:
+            n //= 2</pre></div>
+<div class="step"><h3><span class="num">4</span> Tokens: the words of the program</h3><p class="plain">The lexer cuts the text into tokens (keywords, names, numbers, operators). Python uses indentation, so the lexer also invents <b>INDENT</b> and <b>DEDENT</b> tokens where the block gets deeper or shallower.</p><p class="why"><b>Why:</b> After this, the parser does not need to count spaces: blocks look like braces.</p><pre>KEYWORD(def)  NAME(collatz_sequence_len)  OP(()  NAME(n)  OP(:)  NAME(int)  OP())  OP(-&gt;)  NAME(int)  OP(:)  NEWLINE  INDENT  NAME(result)  OP(=)  INT(1)  NEWLINE  KEYWORD(while)  NAME(n)  OP(!=)  INT(1)  OP(:)  NEWLINE  INDENT  KEYWORD(if)  NAME(n)  OP(%)</pre></div>
+<div class="step"><h3><span class="num">5</span> AST: the shape of the program</h3><p class="plain">The parser builds a tree: a function contains statements, a loop contains a body, an expression contains operands. Every node remembers its line and column.</p><p class="why"><b>Why:</b> Trees are easy to check and rewrite; error messages use the positions.</p><pre>FuncDef &#x27;collatz_sequence_len&#x27;
+  Assign
+    Name &#x27;result&#x27;
+    IntLit 1
+  While
+    Compare &#x27;!=&#x27;
+      Name &#x27;n&#x27;
+      IntLit 1
+    If
+      Compare &#x27;==&#x27;
+        BinOp &#x27;%&#x27;
+        IntLit 0
+      AugAssign &#x27;//&#x27;
+        Name &#x27;n&#x27;
+        IntLit 2
+      Assign</pre></div>
+<div class="step"><h3><span class="num">6</span> Type checking: every node gets a type</h3><p class="plain">The type checker walks the tree and writes a type on each node. It pushes expected types inward (bidirectional) and widens bool to int to float where needed. Any mismatch stops here with a line and column.</p><p class="why"><b>Why:</b> C++ needs to know the exact type of everything; this is where we find out.</p><pre>FuncDef &#x27;collatz_sequence_len&#x27;
+  Assign  : int
+    Name &#x27;result&#x27;  : int
+    IntLit 1  : int
+  While
+    Compare &#x27;!=&#x27;  : bool
+      Name &#x27;n&#x27;  : int
+      IntLit 1  : int
+    If
+      Compare &#x27;==&#x27;  : bool
+        BinOp &#x27;%&#x27;  : int
+        IntLit 0  : int
+      AugAssign &#x27;//&#x27;  : int
+        Name &#x27;n&#x27;  : int
+        IntLit 2  : int
+      Assign  : int</pre></div>
+<div class="step"><h3><span class="num">7</span> Lowering: make hidden things explicit (PIR)</h3><p class="plain">Python converts silently (an int becomes a float in <code>a / b</code>); C++ must be told. Lowering inserts explicit conversion nodes (none in this function) and attaches a <b>fidelity note</b> to every place where C++ could behave differently. This function has <b>7</b> notes.</p><p class="why"><b>Why:</b> This is the Semantic Fidelity Report being born.</p><pre>9:14 D3 modulo sign convention (exact)
+10:13 D2 floor-division rounding direction (exact)
+12:19 D1 unbounded-int vs int64 (guarded)
+12:23 D1 unbounded-int vs int64 (guarded)
+13:9 D1 unbounded-int vs int64 (guarded)
+0:0 D7 object lifetime / reclamation (guarded)
+0:0 L1 copy semantics at the Python boundary (guarded)</pre></div>
+<div class="step"><h3><span class="num">8</span> Guard elision: remove checks that cannot fire</h3><p class="plain">Each integer <code>+ - *</code> could overflow 64 bits, so by default it is a checked call. The interval analysis proves some cannot: here <b>0</b> checks were removed and <b>2</b> kept.</p><p class="why"><b>Why:</b> Fewer checks, faster code, and never a removed check that was needed.</p></div>
+<div class="step"><h3><span class="num">9</span> C++17 code generation</h3><p class="plain">The emitter walks the typed tree and writes readable C++17: typed variables, loops, calls into our runtime for Python behaviour.</p><p class="why"><b>Why:</b> Readable output means you can review and export it.</p><pre>static int64_t f_collatz_sequence_len(int64_t p_n) {
+    int64_t p_result = 0;
+
+    p_result = INT64_C(1);
+    while ((((p_n) != (INT64_C(1))))) {
+        if ((((py_mod_i64(p_n, INT64_C(2))) == (INT64_C(0))))) {
+            p_n = py_floordiv_i64(p_n, INT64_C(2));
+        } else {
+            p_n = py_add_i64(py_mul_i64(INT64_C(3), p_n), INT64_C(1));
+        }
+        p_result = py_add_i64(p_result, INT64_C(1));
+    }
+    return p_result;
+    return 0;   /* unreachable unless the result is Optional */
+}
+</pre></div>
+<div class="step"><h3><span class="num">10</span> The pybind11 bridge</h3><p class="plain">A small generated wrapper turns Python arguments into C++ values, calls the function, and turns the result back. Mutated lists are written back. Anything it cannot represent faithfully raises <code>FallbackError</code>, and the original Python runs.</p><p class="why"><b>Why:</b> This is the boundary, and it costs time, which is why the ranker predicts it.</p><pre>static py::object w_collatz_sequence_len(py::object a_n) {
+    pyb::Arena _arena;
+    using T0 = pyb::I64;
+    T0::C c_n = T0::in(a_n.ptr());
+    using TR = pyb::I64;
+    TR::C _r{};
+    try {
+        _r = f_collatz_sequence_len(c_n);
+    } catch (const pyrt::PythonException &amp;_e) {
+        pyb::raise(_e);
+    }
+    return pyb::steal(TR::out(_r));
+}
+
+PYBIND11_MODULE(pythia_9c9bf9bd, m) {
+    m.doc() = &quot;PYTHIA-compiled module (library mode)&quot;;
+    pyrt::pyrt_set_py_minor(PY_MINOR_VERSION);
+    pyb::FallbackError = PyErr_NewException(&quot;pythia_9c9bf9bd.FallbackError&quot;, PyExc_Exception, nullptr);
+    m.attr(&quot;FallbackError&quot;) = py::reinterpret_borrow&lt;py::object&gt;(pyb::FallbackError);
+    pyb::SemanticError = PyErr_NewException(&quot;pythia_9c9bf9bd.PythiaSemanticError&quot;, PyExc_RuntimeError, nullptr);</pre></div>
+<div class="step"><h3><span class="num">11</span> Build</h3><p class="plain">g++ compiles the C++ and links a Python extension, <code>pythia_9c9bf9bd</code>. Builds are cached by content: compile took <b>5.501 s</b>.</p><p class="why"><b>Why:</b> A second run of the same project reuses it.</p></div>
+<div class="step"><h3><span class="num">12</span> Replay: the oracle on your own calls</h3><p class="plain">The recorded calls are run through both the original function and the compiled one: <b>500 of 500</b> calls matched (return value, exception, changed arguments; floats bit for bit). Source of inputs: <code>trace</code>.</p><p class="why"><b>Why:</b> One mismatch and the function is thrown away automatically.</p></div>
+<div class="step"><h3><span class="num">13</span> Benchmark</h3><p class="plain">Python took <b>0.855 ms</b> per call and C++ <b>0.040 ms</b>: <b>21.3x</b> faster (median over repeats). Anything under 1.1x is declined.</p><p class="why"><b>Why:</b> A function that compiles is not always worth compiling.</p></div>
+<div class="step"><h3><span class="num">14</span> Splice: one line, original kept</h3><p class="plain">PYTHIA adds a decorator above the original function in the working copy. The body is untouched, so the change is tiny and reversible; if the compiled module is missing, Python runs.</p><p class="why"><b>Why:</b> The project keeps working whatever happens.</p><pre>--- a/solutions/utils.py
++++ b/solutions/utils.py
+@@ -1,194 +1,200 @@
+-from typing import Set, Iterable
+-
+-
+-def is_prime(n: int) -&gt; bool:
+-    &quot;&quot;&quot;
+-    Check if the number is prime using Trial division algorithm.
+-
+-    - O(sqrt(n)) time-complexity
+-    - O(1) space-complexity
+-    &quot;&quot;&quot;
+-    if n &lt;= 1:
+-        return False
+-
+-    for i in range(2, int(n ** 0.5) + 1):
+-        if n % i == 0:
+-            return False
+-    return True</pre></div>
+</section>
+
+<section class="chap" id="s3">
+<h1><span class="no">3</span>What changed since Review 2, and why</h1>
+<p>At Review 2 you could type a PySub program and get C++ out. It worked: 17 valid programs matched CPython, 20 invalid ones were rejected, and we had added the dictionary and set libraries and moved from C11 to C++17.</p>
+<p>But think about who would use that. Nobody has a PySub program. They have a Python project that is a bit slow. So we asked: <i>what would a real developer need?</i></p>
+<ol class="steps">
+<li><b>Find the slow parts.</b> Run the program once under a tracer and rank functions by time. (Trace and Rank stages.)</li>
+<li><b>Work out the types.</b> Real code has no annotations, so we infer them ourselves from what the tracer saw and from how values are used. (Fix stage.)</li>
+<li><b>Prove it still works.</b> Replay the real calls through both versions and compare. (Verify stage.)</li>
+<li><b>Put it back without breaking anything.</b> Add one decorator line and keep the original function; if the fast version cannot run, Python runs. (Splice stage.)</li>
+<li><b>Show everything.</b> A desktop app that displays each stage, the diff and the fidelity notes, installable with one click.</li>
+</ol>
+<div class="fig"><img src="file:///C:/Users/visha/OneDrive/Desktop/Documents/programming/pythia/docs/review3/src/figures/fig_whatchanged.png"><div class="cap"><b>Figure 3.1.</b> Review 2 (top) and Review 3 (bottom). “Reused” means the compiler core carried over; everything marked “new” is Review 3 work.</div></div>
+<div class="warn"><span class="tag">Be ready</span><b>We dropped the WebAssembly back end.</b> It was promised for Review 3. A second back end would show retargetability but would not help a developer speed up a Python project, and the time went into the Studio pipeline. Say this first, before they ask. Also say: the compiler’s IR is language-agnostic after the front end, so adding it later is an addition, not a rewrite.</div>
+<p><b>Other targets that moved:</b> the positive oracle corpus is 78, not 120 (we added an independent 91-program gate, snippets and a generator instead); memory is reclaimed per call in library mode but standalone binaries still never free memory.</p>
+</section>
+
+<section class="chap" id="s4">
+<h1><span class="no">4</span>Who did what, and how it fits</h1>
+<div class="warn"><span class="tag">Read first</span><b>What git can and cannot prove.</b> The first commit already holds the Review 2 code base, and the whole Studio (17 to 19 October) was committed under one name. So the split below for Reviews 1 and 2 follows the Review 1 responsibility table and the “Owner:” headers in the files; the split for the Studio work is a <b>proposal</b> that follows each person’s compiler phase. Agree it as a team before the viva, and be honest if asked how the Studio was built: with AI coding assistants, recorded as co-authors on 99 of 143 commits.</div>
+<div class="fig"><img src="file:///C:/Users/visha/OneDrive/Desktop/Documents/programming/pythia/docs/review3/src/figures/fig_handoff.png"><div class="cap"><b>Figure 4.1.</b> What each person hands to the next. Solid cards are Reviews 1 and 2; dashed cards are the proposed Studio split.</div></div>
+
+<div class="member" style="--c:#2563eb">
+<div class="mh"><span class="dot"></span><h3>Vishal Vivek</h3><span class="reg">24BCE2377 · team lead</span></div>
+<div class="grid2">
+<div><h5>What they own</h5><p>The <b>front end</b>: grammar, lexer, parser, AST, diagnostics; the command line, the repository and integration.</p><h5>What they built</h5><ul><li><b>Lexer</b> with the off-side rule: turns indentation into INDENT and DEDENT tokens.</li><li><b>Parser</b>: recursive descent for statements, Pratt for expressions, panic-mode error recovery.</li><li><b>AST</b> nodes (every node has line, column and a type slot).</li><li>Review 3: the whole <b>Studio</b> engine, server, web app, packaging, and merging parallel work.</li></ul></div>
+<div><h5>Hardest problem they solved</h5><p>Panic-mode recovery. The parser’s <code>synchronize()</code> must always eat at least one token, or a parser parked on a bad token calls it forever. The code comment explains the bug. Also: merging eight parallel feature branches that all touched the same few dispatch functions without breaking the oracle.</p><h5>How it feeds the next person</h5><p>The parser hands an <b>AST</b> to the type checker. If the AST were wrong or missing positions, Rujuta’s error messages would point at the wrong line.</p>
+<h5>Git evidence</h5><p class="small">138 of 143 commits are under the owner’s name, including every Studio commit and all merges. The Review 1/2 front-end files arrive in the first commit (<code>84f1251</code>), so git cannot split Review 1 work between people; ownership of those files follows the Review 1 matrix and each file’s “Owner:” header.</p></div>
+</div>
+<div class="proposed"><span class="tag">You explain this in the viva (proposed, agree it first)</span><b>Studio shell.</b> <code>pipeline.py</code> runs the ten stages; <code>server/app.py</code> and <code>bus.py</code> carry REST calls and the WebSocket event stream; the React UI, the launcher and the Windows installer. <i>Explain:</i> how a click becomes a job, what an event is, and what Splice does to the files.</div>
+</div>
+<div class="member" style="--c:#059669">
+<div class="mh"><span class="dot"></span><h3>Rujuta Mangesh Kulkarni</h3><span class="reg">24BDS0459</span></div>
+<div class="grid2">
+<div><h5>What they own</h5><p>The <b>type system</b>: symbol table, scopes, the bidirectional type checker, local inference, the negative test corpus, and dictionary support.</p><h5>What they built</h5><ul><li><b>Type checker</b>: types every expression, keeps one type per variable, widens bool, int, float.</li><li><b>Negative corpus</b>: 88 invalid programs, each with an <code>expect:</code> marker for the message it must produce.</li><li><b>PyDict</b>: a Python-compatible dictionary runtime (merged as pull request #2).</li></ul></div>
+<div><h5>Hardest problem they solved</h5><p>Typing things that have no type yet. <code>xs = []</code> cannot be typed alone, but <code>xs: list[int] = []</code> can, because the expected type is pushed inward. That is what “bidirectional” means.</p><h5>How it feeds the next person</h5><p>The type checker puts a type on every AST node. Jahnavi’s lowering pass reads those types to decide where a conversion or a guard is needed.</p>
+<h5>Git evidence</h5><p class="small">Pull request #2 (merged as <code>079bcb5</code>) added <code>runtime/pydict.hpp</code> (351 lines), a 20-case C++ test and five documents. Its commits are authored as “Copilot”, so say plainly that an AI assistant helped write the dictionary library. The type checker itself is in the first commit.</p></div>
+</div>
+<div class="proposed"><span class="tag">You explain this in the viva (proposed, agree it first)</span><b>In-house type inference and eligibility.</b> <code>convert/infer.py</code> (evidence and fixpoint), <code>types.py</code> (the lattice), <code>search.py</code> (guessing), <code>scan.py</code> and <code>reasons.py</code> (the compiler as judge, plain-English reasons). <i>Explain:</i> why a function is eligible, how types are inferred with no LLM, and why <code>coin_change</code> is refused.</div>
+</div>
+<div class="member" style="--c:#d97706">
+<div class="mh"><span class="dot"></span><h3>Koliparthy Venkata Jahnavi</h3><span class="reg">24BDS0132</span></div>
+<div class="grid2">
+<div><h5>What they own</h5><p><b>Lowering and the runtime</b>: the divergence catalogue, the Semantic Fidelity Report, the <code>pyrt</code> runtime, guard elision by interval analysis, and PySet.</p><h5>What they built</h5><ul><li><b>Lowering</b>: makes every hidden Python conversion explicit and tags each risky spot.</li><li><b>Fidelity catalogue</b>: D1 to D14, each with a mitigation.</li><li><b>Interval analysis</b> (<code>optimize.py</code>): removes overflow checks that cannot fire.</li><li><b>PySet</b>: Python-compatible sets (pull request #3).</li></ul></div>
+<div><h5>Hardest problem they solved</h5><p>Being sound. The interval pass may <i>keep</i> a check it did not need, but must never <i>remove</i> one it did. Accumulators that feed back into themselves are widened to “unknown” before the loop body is analysed, so one pass is enough.</p><h5>How it feeds the next person</h5><p>Lowering gives Aaryan an IR in which every conversion is explicit, so the emitter never has to guess.</p>
+<h5>Git evidence</h5><p class="small">Pull request #3 (merged as <code>4ef0102</code>): <code>runtime/pyset.hpp</code> (533 lines) and a 366-line test, authored by Jahnavi (<code>ddc975b</code>). <code>lower.py</code>, <code>optimize.py</code> and the C runtime are in the first commit.</p></div>
+</div>
+<div class="proposed"><span class="tag">You explain this in the viva (proposed, agree it first)</span><b>Fidelity and the boundary.</b> The fidelity gutter and panel, <code>libmode.py</code> and <code>pyrt_bridge.hpp</code> (copy in, copy out, <code>FallbackError</code>, <code>OverflowError</code>, the arena), <code>rank.py</code> (the boundary-cost model). <i>Explain:</i> why a long list is slow to pass, what the arena frees, what D1 and D13 mean in practice.</div>
+</div>
+<div class="member" style="--c:#7c3aed">
+<div class="mh"><span class="dot"></span><h3>Aaryan Gupta</h3><span class="reg">24BDS0134</span></div>
+<div class="grid2">
+<div><h5>What they own</h5><p>The <b>back end and the safety net</b>: the C++ emitter, the C11 to C++17 migration, the differential oracle, the program generator, CI, the corpus and the benchmarks.</p><h5>What they built</h5><ul><li><b>Emitter</b> (<code>emit_c.py</code>): walks the IR and writes C++17.</li><li><b>C11 to C++17 migration</b> (pull request #1, 4 September 2026).</li><li><b>Oracle</b>: runs CPython and the compiled binary, compares output byte for byte.</li><li><b>Generator and CI</b>: samples programs from the grammar; runs everything on every push.</li></ul></div>
+<div><h5>Hardest problem they solved</h5><p>Making “same behaviour” measurable. The oracle compares stdout and the exception class; the negative suite checks the <i>message</i>, not just failure. On its first run the oracle found four bugs that manual testing had missed (Review 1, section 11.4).</p><h5>How it feeds the next person</h5><p>Aaryan’s oracle is the gate everyone else ships through. If a change anywhere breaks equivalence, the oracle names the program.</p>
+<h5>Git evidence</h5><p class="small">Pull request #1 (merged as <code>086b6f8</code>): commit <code>9264cbb</code> “Migrate backend from C11 to C++17”, six files, +270/−48 lines. The emitter, oracle, generator and workflow files carry “Owner: Member 4” headers and are in the first commit.</p></div>
+</div>
+<div class="proposed"><span class="tag">You explain this in the viva (proposed, agree it first)</span><b>Verification and measurement.</b> <code>replay.py</code>, <code>_replay_worker.py</code>, <code>codec.py</code> (the comparison), <code>bench.py</code> (median speedup, end to end), <code>stress.py</code>, <code>property_test.py</code>, the oracle and CI. <i>Explain:</i> how “verified” is decided, why floats compare bit for bit, and why the threshold is 1.1x.</div>
+</div>
+</section>
+
+<section class="chap" id="s5">
+<h1><span class="no">5</span>“Open the codebase” cheat sheet</h1>
+<p>Line numbers are from commit <code>95bbb1b</code>; they were looked up by the build script, so they match the code you open. If someone edits those files, regenerate this guide.</p>
+
+<div class="member" style="--c:#2563eb">
+<div class="mh"><span class="dot"></span><h3>Vishal: front end and Studio shell</h3></div>
+<table class="open"><tr><th style="width:26%">Open</th><th>Point at this</th></tr><tr><td><code>lexer.py:48</code></td><td>The lexer class. The indentation stack lives in <code>self.indents</code>.</td></tr><tr><td><code>lexer.py:79</code></td><td>The main loop: layout at line start, comments, NEWLINE, strings, operators, then end-of-file DEDENTs.</td></tr><tr><td><code>parser.py:43</code></td><td>The binding-power table. One line per precedence level; <code>**</code> is the only right-associative operator.</td></tr><tr><td><code>parser.py:512</code></td><td>The Pratt loop: parse a unary, then keep folding operators while their binding power is high enough.</td></tr><tr><td><code>parser.py:108</code></td><td>Panic-mode recovery. Read the docstring: it explains the infinite-loop bug it avoids.</td></tr><tr><td><code>cli.py:37</code></td><td>The whole compiler in six lines: parse, typecheck, lower, elide guards, emit.</td></tr><tr><td><code>pipeline.py:128</code></td><td>The ten stages in order, with cancellation checks between them.</td></tr><tr><td><code>app.py:108</code></td><td>The server: REST routes plus the WebSocket that streams events.</td></tr><tr><td><code>launcher.py:37</code></td><td>How the app refuses to reuse a stale server (build fingerprint check).</td></tr></table>
+<div class="say"><span class="tag">30-second talk track</span>“Python marks blocks with indentation, which a grammar cannot see. My lexer keeps a stack of indent widths and turns changes into INDENT and DEDENT tokens, so after that the parser sees ordinary braces-like blocks. Statements are recursive descent; expressions use Pratt parsing with the binding-power table here, so adding an operator is one table line. When there is a syntax error the parser skips to the next statement boundary and carries on, so one run reports several errors. For Review 3 I built the pipeline that runs the ten stages and the server and app around it.”</div>
+</div>
+<div class="member" style="--c:#059669">
+<div class="mh"><span class="dot"></span><h3>Rujuta: type system</h3></div>
+<table class="open"><tr><th style="width:26%">Open</th><th>Point at this</th></tr><tr><td><code>typecheck.py:23</code></td><td>The type representation: a name plus element, key or tuple parts.</td></tr><tr><td><code>typecheck.py:54</code></td><td>The implicit-conversion lattice: bool to int to float, plus subclass and optional rules.</td></tr><tr><td><code>typecheck.py:71</code></td><td>How two branch types are combined; <code>[]</code> next to <code>[1,2]</code> becomes <code>list[int]</code>.</td></tr><tr><td><code>typecheck.py:82</code></td><td>Parent-linked scope chain.</td></tr><tr><td><code>typecheck.py:648</code></td><td>Checking mode: the expected type is pushed inward, which is how empty lists get typed.</td></tr><tr><td><code>typecheck.py:700</code></td><td>Synthesis mode: the type is computed from the expression itself.</td></tr><tr><td><code>n02_badarg.py:1</code></td><td>A negative test: the first line says what the message must contain.</td></tr><tr><td><code>pydict.hpp:29</code></td><td>The dictionary runtime (pull request #2).</td></tr><tr><td><code>infer.py:163</code></td><td><b>Studio, proposed:</b> the whole-program type inference engine.</td></tr><tr><td><code>types.py:41</code></td><td><b>Studio, proposed:</b> the lattice the inference joins evidence on.</td></tr><tr><td><code>search.py:108</code></td><td><b>Studio, proposed:</b> guessing types for parameters nobody calls.</td></tr></table>
+<div class="say"><span class="tag">30-second talk track</span>“The type checker has two modes. In synthesis mode it works a type out from the expression, like <code>1 + 2.5</code> being float. In checking mode it already knows what it expects, like a list annotated <code>list[int]</code>, and pushes that inward, which is the only way <code>[]</code> can be typed. Each variable keeps one type for life, which is what lets us emit unboxed C++. For Studio the same idea runs on untyped code: we collect evidence about every variable until nothing changes, and then let the real type checker accept or reject the result.”</div>
+</div>
+<div class="member" style="--c:#d97706">
+<div class="mh"><span class="dot"></span><h3>Jahnavi: lowering, fidelity, runtime, guard elision</h3></div>
+<table class="open"><tr><th style="width:26%">Open</th><th>Point at this</th></tr><tr><td><code>lower.py:26</code></td><td>One fidelity note: position, class, detail, mitigation, severity.</td></tr><tr><td><code>lower.py:40</code></td><td>The catalogue of divergence classes D1 to D13 (D14 is added in two extension modules).</td></tr><tr><td><code>lower.py:353</code></td><td>Where each operator is examined and tagged.</td></tr><tr><td><code>optimize.py:40</code></td><td>The safety margin: stay inside plus or minus 2<sup>62</sup>.</td></tr><tr><td><code>optimize.py:138</code></td><td>The interval analysis. <code>eval</code> computes ranges; <code>block</code> widens loop-carried variables.</td></tr><tr><td><code>pyrt.cpp:103</code></td><td>A checked addition: throws <code>OverflowError</code> instead of wrapping.</td></tr><tr><td><code>pyrt.hpp:53</code></td><td>The per-call arena that frees memory in library mode.</td></tr><tr><td><code>pyset.hpp:39</code></td><td>The set runtime (pull request #3).</td></tr><tr><td><code>pyrt_bridge.hpp:46</code></td><td><b>Studio, proposed:</b> the boundary: copy in, copy out, write back, <code>FallbackError</code>.</td></tr><tr><td><code>libmode.py:551</code></td><td><b>Studio, proposed:</b> generate the pybind11 wrapper and build the module.</td></tr></table>
+<div class="say"><span class="tag">30-second talk track</span>“Python and C++ disagree on small things that change output: floor division, the sign of modulo, integer overflow. My lowering pass finds every such spot and records a note with its position, its class and what we did. That is the Semantic Fidelity Report. Overflow checks cost time, so the interval pass proves where they cannot fire and removes them, but it is conservative: it may keep a check it did not need, never drop one it did. The runtime gives C++ Python’s behaviour.”</div>
+</div>
+<div class="member" style="--c:#7c3aed">
+<div class="mh"><span class="dot"></span><h3>Aaryan: emitter, oracle, verification</h3></div>
+<table class="open"><tr><th style="width:26%">Open</th><th>Point at this</th></tr><tr><td><code>emit_c.py:103</code></td><td>The emitter class.</td></tr><tr><td><code>emit_c.py:176</code></td><td>Walks the module and writes the translation unit.</td></tr><tr><td><code>emit_c.py:977</code></td><td>Where a guarded or unguarded <code>+</code> is chosen (look for <code>no_guard</code> just above).</td></tr><tr><td><code>oracle.py:94</code></td><td>The oracle: CPython versus the compiled binary, stdout and exception class.</td></tr><tr><td><code>oracle.py:129</code></td><td>The negative suite: the diagnostic must contain the <code>expect:</code> text.</td></tr><tr><td><code>fuzz.py:28</code></td><td>The grammar-directed program generator keeps a live type environment.</td></tr><tr><td><code>ci.yml:1</code></td><td>CI: three jobs on every push.</td></tr><tr><td><code>replay.py:19</code></td><td><b>Studio, proposed:</b> at least 50 calls per function, topped up when too few were recorded.</td></tr><tr><td><code>codec.py:83</code></td><td><b>Studio, proposed:</b> the comparison; floats are compared bit for bit.</td></tr><tr><td><code>bench.py:28</code></td><td><b>Studio, proposed:</b> end-to-end timing before and after the splice, with an output hash.</td></tr><tr><td><code>stress.py:25</code></td><td><b>Studio, proposed:</b> the stress harness over public repositories.</td></tr></table>
+<div class="say"><span class="tag">30-second talk track</span>“Same behaviour is a claim, so we built the thing that tries to break it. The oracle runs every program under CPython and as a compiled binary and compares the output byte for byte, plus the exception class. A second suite checks that bad programs are rejected with the right message. A generator makes new programs from the grammar so we find bugs we did not think of. In Studio the same idea runs on your own function’s recorded calls, and anything that disagrees is rejected.”</div>
+</div>
+<h2>Repository tree, one line per folder</h2>
+<pre class="tree">pythia/                      the compiler (Python)
+  lexer.py  parser.py  ast_nodes.py    off-side rule, Pratt/recursive descent, AST
+  typecheck.py  types_ext.py           bidirectional type checker and extensions
+  classes_ext.py  tuples.py  comprehensions.py  builtins_ext.py
+  lower.py  optimize.py                PIR, fidelity notes, interval guard elision
+  emit_c.py (emit_cpp.py alias)  emit_ext.py  lib_ext.py   C++17 emitter
+  libmode.py  classes_lib.py           pybind11 extension modules
+  toolchain.py  paths.py  cli.py  driver.py  stages.py
+  convert/                             in-house untyped-Python converter (no LLM)
+  studio/                              Studio back end: pipeline, scan, rank, replay, splice, server/
+runtime/                     C++ runtime: pyrt.hpp/.cpp, pydict.hpp, pyset.hpp, pyrt_bridge.hpp, pythia_accel/
+                             (pyrt.c/.h: Review 1 C11 runtime, not used by the C++17 pipeline)
+studio/web/                  React + TypeScript UI (dist/ committed)    studio/DECISIONS.md  CONTRACTS.md
+packaging/windows/           installer build (build.py, launcher.c, .iss)
+tests/positive  tests/negative   oracle corpora (78 and 88 programs)
+tools/                       oracle.py  fuzz.py  fuzz_run.py
+scripts/                     check_basics, check_snippets, property_test, stress, check_libmode, ...
+demo/                        quanta (3,800 lines), textlab (480 lines), offline cache, sample run
+docs/                        grammar.ebnf, Review 1 report/deck, review3/ (this report, viva guide, sources)
+.github/workflows/           ci.yml (oracle, library mode, package), release.yml</pre>
+<h2>Files added since Review 2</h2>
+<p>Everything below was added after commit <code>533f875</code> (10 September 2026, “Final Cleanup Before Review 2”).</p>
+<table class="open"><tr><th style="width:30%">Where</th><th>What was added</th></tr>
+<tr><td><code>pythia/convert/</code> (7 files)</td><td>The in-house untyped-Python converter: inference engine, type lattice, observer, search, preparation.</td></tr>
+<tr><td><code>pythia/studio/</code> (40 files)</td><td>The Studio back end: ingest, scan, trace, rank, fix, compile, verify, benchmark, splice, export, server, LLM fixer (optional), playground converter.</td></tr>
+<tr><td><code>pythia/libmode.py</code>, <code>classes_lib.py</code>, <code>lib_ext.py</code>, <code>toolchain.py</code>, <code>paths.py</code></td><td>pybind11 library mode, class marshalling, toolchain discovery.</td></tr>
+<tr><td><code>pythia/*_ext.py</code>, <code>tuples.py</code>, <code>comprehensions.py</code>, <code>classes_ext.py</code>, <code>parse_*.py</code>, <code>driver.py</code>, <code>stages.py</code></td><td>Language growth: types, classes, tuples, comprehensions, built-ins, parsing hooks.</td></tr>
+<tr><td><code>runtime/pyrt_bridge.hpp</code>, <code>runtime/pythia_accel/</code></td><td>Python/C++ marshalling and the loader shim.</td></tr>
+<tr><td><code>studio/web/</code> (46 source files)</td><td>The React, TypeScript and Monaco application.</td></tr>
+<tr><td><code>packaging/windows/</code></td><td>Installer assembly, launcher, Inno Setup script.</td></tr>
+<tr><td><code>scripts/</code></td><td>check_basics, check_snippets, check_libmode, check_project, check_installed, property_test, stress, measure_coverage, install scripts, corpora.</td></tr>
+<tr><td><code>studio/DECISIONS.md</code>, <code>CONTRACTS.md</code>, <code>README.md</code>, <code>USER_GUIDE.md</code>, <code>INSTALL.md</code>, <code>DEMO.md</code>, <code>STATUS.md</code></td><td>Design decisions, interface contracts, user and install guides, demo script, hand-over status.</td></tr>
+<tr><td><code>demo/</code>, <code>docs/review3/</code></td><td>Two bundled demo projects with an offline cache; this review’s documents and sources.</td></tr>
+</table>
+</section>
+
+<section class="chap" id="s6">
+<h1><span class="no">6</span>Tools we chose, and why</h1>
+<table class="open"><tr><th style="width:24%">We chose</th><th>Why</th><th style="width:26%">Instead of</th></tr><tr><td><b>Python for the compiler</b></td><td>The compiler works on trees and text, not hot loops, and Studio has to import and run the user’s code. Python is quick to change.</td><td>C++ or Rust: faster compiler, but slower to write and awkward to call into user code.</td></tr><tr><td><b>Hand-written lexer and parser</b></td><td>We needed to control the indentation rule and give precise error positions, with no extra dependency.</td><td>ANTLR, Lark, PLY: less code, but harder to get Python’s layout and friendly errors.</td></tr><tr><td><b>C++17 as the target</b></td><td>pybind11 needs C++. Templates give typed lists. The output is readable. g++ does the optimising.</td><td>C11 (what we started with; needed GNU tricks) and LLVM IR (not readable, needs LLVM).</td></tr><tr><td><b>pybind11</b></td><td>Converts types and exceptions for us, one header, same compiler.</td><td>ctypes/cffi (hand-written marshalling), raw C-API (long). nanobind: we did not evaluate it.</td></tr><tr><td><b>Differential testing</b></td><td>Our spec is “behaves like CPython”; running both is the cheapest executable spec.</td><td>Unit tests (only what we thought of) or a formal proof (out of reach).</td></tr><tr><td><b>In-house type inference</b></td><td>Deterministic, free, offline. We <b>tried</b> an LLM first (Groq free tier: about 200,000 tokens a day, answers vary, needs internet) and kept it only as an optional fallback.</td><td>LLM translation.</td></tr><tr><td><b>FastAPI + WebSockets</b></td><td>Live event stream is a first-class feature.</td><td>Flask, Django.</td></tr><tr><td><b>React + Vite + TypeScript + Monaco in an app window</b></td><td>A real diff editor, runs in any browser, no second runtime to ship.</td><td>Tkinter, Qt, Electron.</td></tr><tr><td><b>Bundled MinGW-w64 GCC</b></td><td>A zip we can put inside the installer; the build flags target GCC.</td><td>MSVC (a separate big install).</td></tr><tr><td><b>Inno Setup</b></td><td>One script, per-user install, no admin rights.</td><td>WiX/MSI, NSIS.</td></tr><tr><td><b>sys.monitoring tracing</b></td><td>Cheap per-function events on Python 3.12+; falls back to setprofile. We never use settrace.</td><td>sys.settrace (line-level, slower).</td></tr></table>
+<div class="say"><span class="tag">Be careful</span>The “instead of” column is our reasoning, not benchmarks. If asked “did you measure nanobind or Electron?”, answer “no, we chose on maturity and simplicity”.</div>
+</section>
+
+<section class="chap" id="s7">
+<h1><span class="no">7</span>Limitations and comebacks</h1>
+<p>Say the honest answer first, then the comeback. A panel trusts you more if you name the limit before they do.</p>
+<div class="lim"><h4>“What about NumPy, pandas, PyTorch, OpenCV?”</h4>
+<div class="two"><div class="h"><span class="tag">Honest answer</span>PYTHIA cannot transpile functions that call those libraries. The scanner marks them “not eligible” and says why.</div><div class="c"><span class="tag">Confident comeback</span>Those libraries are already C and C++ inside, so the maths is not where Python is slow. The time goes in the pure-Python code around them. PYTHIA compiles that glue and leaves the library calls in Python. Next steps: call the libraries from compiled code through the CPython C-API, map a NumPy subset onto Eigen or xtensor, or use LibTorch’s C++ API directly instead of transpiling.</div></div></div><div class="lim"><h4>“What if the code is dynamic: <code>eval</code>, monkey-patching, a variable that changes type?”</h4>
+<div class="two"><div class="h"><span class="tag">Honest answer</span>Those are rejected with a reason, not guessed at. Our own snippet <code>coin_change</code> is refused because it returns an int on one path and a float on another.</div><div class="c"><span class="tag">Confident comeback</span>Refusing is the safe answer: the old version of the converter widened it to float and printed <code>3.0 -1.0</code> where Python prints <code>3 -1</code>, and we caught that. To cover more, compile one specialised version per observed type signature, or use <code>std::variant</code> for union types.</div></div></div><div class="lim"><h4>“Python ints are unbounded. What happens on overflow?”</h4>
+<div class="two"><div class="h"><span class="tag">Honest answer</span>Compiled code uses 64-bit ints. Operations that might overflow are checked and raise <code>OverflowError</code>; an int beyond 64 bits passed into a compiled function also raises it. We measured both (2**62 * 2 raises OverflowError).</div><div class="c"><span class="tag">Confident comeback</span>It fails loudly instead of silently wrapping, and the fidelity report lists every site (class D1). The remedy is bignum promotion on overflow: fall back to an arbitrary-precision type only when a check fires.</div></div></div><div class="lim"><h4>“Strings and Unicode?”</h4>
+<div class="two"><div class="h"><span class="tag">Honest answer</span>Compiled strings are ASCII bytes. A non-ASCII argument makes the wrapper raise <code>FallbackError</code>, and the original Python function runs instead, so nothing breaks, you just do not get the speedup.</div><div class="c"><span class="tag">Confident comeback</span>It is a safe fallback by design. The fix is UTF-8-aware strings with code-point indexing, which is a runtime change, not a compiler redesign.</div></div></div><div class="lim"><h4>“Memory: does it leak?”</h4>
+<div class="two"><div class="h"><span class="tag">Honest answer</span>Standalone binaries never free memory (class D7). In library mode, which is what Studio uses, everything allocated during a call is freed when the call ends. We checked: memory did not grow over 200000 calls (28640 KB before, 28640 KB after), and the repo’s own check shows no growth over 3,000 calls.</div><div class="c"><span class="tag">Confident comeback</span>So the Studio path is safe. For standalone programs the next step is a region allocator or reference counting.</div></div></div><div class="lim"><h4>“Isn’t crossing between Python and C++ expensive?”</h4>
+<div class="two"><div class="h"><span class="tag">Honest answer</span>Yes. Arguments are copied in and out. For a trivial function the call costs about 0.15 µs against 0.038 µs for Python’s own <code>len</code>, and a 100,000-element list costs about 1.18 ms per call to copy.</div><div class="c"><span class="tag">Confident comeback</span>That is exactly why the ranker exists: it predicts marshalling cost, and a function whose measured speedup is under 1.1x is “declined” and never spliced. Remedies: zero-copy buffers, keep data on the C++ side across calls, fuse neighbouring hot functions.</div></div></div><div class="lim"><h4>“Testing is not proof.”</h4>
+<div class="two"><div class="h"><span class="tag">Honest answer</span>Correct. Verification is differential testing on recorded and generated calls. It shows agreement on those calls, not on all inputs. Untraced code paths are untested, which is why the entry command matters.</div><div class="c"><span class="tag">Confident comeback</span>It is evidence about <i>your</i> program, which a generic proof would not give, and anything that disagrees is rejected. Stronger forms exist and are future work: translation validation per pass, property-based fuzzing around the recorded inputs, and formally proving one pass in the style of CompCert.</div></div></div><div class="lim"><h4>“Only Python?”</h4>
+<div class="two"><div class="h"><span class="tag">Honest answer</span>Yes: Python in, C++ out.</div><div class="c"><span class="tag">Confident comeback</span>Everything after the front end works on the typed tree and the IR, which do not know about Python syntax. A new front end is the only addition needed for another source language; a new emitter would give another target.</div></div></div><div class="lim"><h4>“Are dictionaries fast?”</h4>
+<div class="two"><div class="h"><span class="tag">Honest answer</span>No. Our benchmark with a string-keyed dictionary and about 2,000 keys ran about 29 times <i>slower</i> than CPython. The cause is in <code>runtime/pyrt.cpp</code> line 131: the specialised dictionaries scan a vector for every lookup.</div><div class="c"><span class="tag">Confident comeback</span>Correct and slow is a fixable kind of wrong: a hash index in that one macro removes it, and the ranker would already decline such a function when the measured speedup is below 1.1x, so Studio would not splice it.</div></div></div><div class="lim"><h4>“Generators, threads, files, regex, <code>random</code>?”</h4>
+<div class="two"><div class="h"><span class="tag">Honest answer</span>Not supported: generators are rejected, and I/O, threads, regex and unseeded randomness are refused with a reason (<code>explain.py</code>).</div><div class="c"><span class="tag">Confident comeback</span>Most hot numeric code does not need them. Seeded randomness is the one we would add first, because a generator with a known algorithm can be reproduced exactly.</div></div></div><div class="lim"><h4>“It takes a long time to compile.”</h4>
+<div class="two"><div class="h"><span class="tag">Honest answer</span>The first build of a module is slow: 15.05 s cold in our library check, 5.63 s for a new module with the runtime already built, and 27 ms when the build cache hits. A whole cold project run takes minutes (Section 10.4 of the report).</div><div class="c"><span class="tag">Confident comeback</span>Builds are content-addressed, so a second run of the same project is fast, and the demo ships prebuilt modules. The bundled compiler means nothing is installed.</div></div></div>
+</section>
+
+<section class="chap" id="s8">
+<h1><span class="no">8</span>The value this adds</h1>
+<h2>Who would use it</h2>
+<ul>
+<li><b>A developer with a slow Python project</b> who wants the hot functions faster without a rewrite, and wants to review the change as a diff.</li>
+<li><b>A team that must justify a port.</b> The Fidelity Report is an audit trail: here is every place the behaviour could differ, and what we did.</li>
+<li><b>Students and teachers of compilers.</b> Every phase is small enough to read and the app shows each one.</li>
+</ul>
+<h2>What it saves</h2>
+<p>The time to find the hot spots (the tracer does it), the time to hand-annotate (the inference does it), the time to write bindings (pybind11 glue is generated), and the time to convince yourself the fast version is right (replay does it). On the bundled TextLab demo a whole program went from 17.2 s to 6.5 s with no source edits beyond decorator lines.</p>
+<h2>Why verified matters more than raw speed</h2>
+<p>A fast wrong answer is worse than a slow right one. Tools that translate quietly change behaviour (a 64-bit integer, a different rounding rule), and the problem shows up months later. PYTHIA’s promise is smaller and checkable: whatever it splices in agreed with CPython on the calls we replayed, and anything doubtful is reported or refused.</p>
+<h2>Where it could go</h2>
+<ul>
+<li><b>A research paper</b> on the divergence report as a first-class output of a source-to-source compiler, paired with replay verification. It needs a bigger independent corpus and a comparison with Cython, mypyc and Codon on the same programs.</li>
+<li><b>A VS Code extension</b> that shows the gutter and diff inside the editor.</li>
+<li><b>CI integration</b> that fails a build when a converted function stops matching.</li>
+<li><b>Bignum promotion, UTF-8 strings, zero-copy buffers, type-specialised versions</b> (Section 7).</li>
+</ul>
+</section>
+
+<section class="chap" id="s9">
+<h1><span class="no">9</span>Likely viva questions, with short answers</h1>
+<p>30 questions. Learn the shape of each answer, not the words. Numbers are from this session’s runs (report, Appendix F).</p>
+<div class="qa"><div class="q"><span class="n">1</span>Isn’t this just Cython?</div><div class="a">No. Cython needs you to write C type declarations (or pure-Python mode annotations) and gives you a C extension with Python semantics; it does not check the result against CPython or tell you where behaviour differs. PYTHIA takes untyped code, works out the types, produces readable C++17, and checks every conversion on real calls. Cython is more complete: it handles arbitrary Python and C libraries, and we say so.</div></div><div class="qa"><div class="q"><span class="n">2</span>Why not just ask ChatGPT to convert it?</div><div class="a">We tried an LLM first (commit <code>dfe6942</code>). Three problems: the free tier ran out (about 200,000 tokens a day), answers change between runs, and nothing proves the answer is right. PYTHIA’s in-house inference is deterministic and free, and everything it produces is checked. An optional LLM fallback still exists, but its output has to pass the type checker and the replay like anything else.</div></div><div class="qa"><div class="q"><span class="n">3</span>How do you know the C++ is correct?</div><div class="a">Two checks. The oracle compiles 78 programs and compares output and exception class with CPython byte for byte, and rejects 88 invalid programs with the right message. In Studio, every converted function is replayed on at least 50 calls (recorded, topped up with generated ones, and labelled) and the return value, exception and mutated arguments must match; floats are compared bit for bit. It is differential testing, not a proof, and we say so.</div></div><div class="qa"><div class="q"><span class="n">4</span>Why are the speedups different from Review 1?</div><div class="a">Review 1 reported a median of 9.4x (range 3.3x to 13.8x) on 14 programs with generated C11. The oracle now reports a median of 15.2x (range 6.1x to 46.9x) on 78 programs with C++17 and <code>-O2 -flto</code>. We did not isolate each cause: the backend changed, more programs are in the set, guard elision exists, and those timings are single runs of whole processes. For performance claims we use a separate benchmark: ten fixed kernels, medians of 5 runs, median 11x.</div></div><div class="qa"><div class="q"><span class="n">5</span>What happens if someone passes NumPy code?</div><div class="a">Functions that use NumPy are marked not eligible, with the reason “uses numpy (a C-extension library)”, and keep running in Python. NumPy’s own loops are already native, so the time is usually in the Python around them, which PYTHIA can compile.</div></div><div class="qa"><div class="q"><span class="n">6</span>What did <i>you</i> personally build?</div><div class="a">Answer from Section 4 and 5: name your files, the hardest problem, and one function to open. If it is Studio work, say which part you understood and wrote or reviewed, and be straight that AI coding assistants were used and are credited in the repository history.</div></div><div class="qa"><div class="q"><span class="n">7</span>Why C++ and not LLVM?</div><div class="a">Readable output, and pybind11 needs C++. g++ already optimises well, and we can bundle it on Windows. LLVM IR would not be readable and would need LLVM at run time. The cost: we depend on a C++ compiler, which we ship in the installer.</div></div><div class="qa"><div class="q"><span class="n">8</span>What happens on integer overflow?</div><div class="a">Checked arithmetic raises <code>OverflowError</code> instead of wrapping (class D1). Where interval analysis proves a result stays within plus or minus 2<sup>62</sup>, the check is removed. An int beyond 64 bits passed into compiled code also raises. Python would have kept going with a big integer, so this is a documented divergence.</div></div><div class="qa"><div class="q"><span class="n">9</span>Why did you drop the WebAssembly backend?</div><div class="a">It was promised at Review 2. A second back end shows retargetability but does not help a developer speed up a Python project, and the time went to the Studio pipeline. The IR does not depend on Python syntax, so adding it later is an addition.</div></div><div class="qa"><div class="q"><span class="n">10</span>What’s a DEDENT token?</div><div class="a">Python marks blocks by indentation. When a line is indented less than the previous one, the lexer emits one DEDENT for each block that just ended, so the parser can treat blocks like braces. INDENT is the opposite. The lexer keeps a stack of indentation widths to know how many to emit.</div></div><div class="qa"><div class="q"><span class="n">11</span>Explain bidirectional type checking.</div><div class="a">Two modes. Synthesis works a type out from the expression (<code>1 + 2.5</code> is float). Checking is given an expected type and pushes it inward (<code>xs: list[int] = []</code> types the empty list as <code>list[int]</code>). Alone, <code>[]</code> has no type; with an expected type it does.</div></div><div class="qa"><div class="q"><span class="n">12</span>Is the type system Hindley–Milner?</div><div class="a">No. The compiler uses bidirectional local inference with one fixed type per variable. The converter for untyped code uses a whole-program fixpoint over a type lattice (join evidence until nothing changes), which is simpler than HM unification and gives up on conflicts instead of generalising.</div></div><div class="qa"><div class="q"><span class="n">13</span>Why Pratt parsing?</div><div class="a">Expressions have many precedence levels. A Pratt parser uses one loop and a binding-power table, so adding an operator is one line, and right-associativity (<code>**</code>) is a small tweak. A cascade of grammar functions would need one function per level.</div></div><div class="qa"><div class="q"><span class="n">14</span>What is the Semantic Fidelity Report?</div><div class="a">A list, produced by the compiler, of every place where C++ could behave differently from Python: position, class (D1 to D14), what could differ, what we did, and a severity (exact, guarded, divergent). On our corpus it has 1280 notes: 42.6% exact, 56.7% guarded, 0.7% divergent. We did not find a surveyed tool whose documentation describes a per-site report like this.</div></div><div class="qa"><div class="q"><span class="n">15</span>What is PIR?</div><div class="a">The typed tree after lowering. It uses the same node classes, but every implicit conversion (bool to int to float) is an explicit Coerce node and every risky site carries a fidelity note, so the emitter never has to infer anything.</div></div><div class="qa"><div class="q"><span class="n">16</span>What does guard elision do, and is it sound?</div><div class="a">Every int <code>+ - *</code> is a checked call by default. Interval analysis computes a range for each integer expression; where the range provably fits, it marks the operation unguarded. It is sound by construction: unknown means keep the check, and loop-carried variables are treated as unknown. Measured gain on our kernels is real but modest, and it does nothing for accumulators.</div></div><div class="qa"><div class="q"><span class="n">17</span>What does “verified” versus “guarded” mean?</div><div class="a">Both mean every replayed call matched. “Guarded” also means the function contains sites we cannot prove safe, such as integer addition that could overflow int64, which raises instead of wrapping. “Verified” has none of those.</div></div><div class="qa"><div class="q"><span class="n">18</span>Why a 1.1x threshold?</div><div class="a">Compiling a function does not make it faster if copying its arguments across the boundary costs more than it saves. We measure each function and keep it only if the median speedup is at least 1.1x. Below that it is “declined” and the number is shown.</div></div><div class="qa"><div class="q"><span class="n">19</span>What if the traced run does not cover a code path?</div><div class="a">Then that path is untested. Replay only checks the calls the program made (plus generated inputs, labelled). That is why the entry command should exercise the hot code, and why we call it differential testing.</div></div><div class="qa"><div class="q"><span class="n">20</span>Does it change my code?</div><div class="a">Not your folder. It works on a copy. In the copy, each accepted function gets one decorator line and the original body stays, so it is reversible, and if the compiled module cannot run, the Python body does.</div></div><div class="qa"><div class="q"><span class="n">21</span>Is it safe to run on unknown code?</div><div class="a">No. Tracing and replay execute your project. The server listens only on 127.0.0.1 and rejects foreign Host headers, but you should only run it on code you trust.</div></div><div class="qa"><div class="q"><span class="n">22</span>How does it find the hot functions?</div><div class="a">It runs your entry command with a tracer that uses <code>sys.monitoring</code> on Python 3.12 or later (<code>sys.setprofile</code> before that) and records calls and time per function. The ranker combines time share, eligibility and a predicted marshalling cost.</div></div><div class="qa"><div class="q"><span class="n">23</span>How does type inference work without an LLM?</div><div class="a">Four steps: observe runtime types by running the program once; collect evidence from assignments, calls and returns into a lattice until nothing changes; for parameters nobody calls, try plausible type combinations; then let the real type checker accept or reject the whole result. If anything is ambiguous, such as int on some paths and float on others, it refuses.</div></div><div class="qa"><div class="q"><span class="n">24</span>Did you use AI to build this?</div><div class="a">Yes, and the repository says so: Claude (Opus 5.5 and Sonnet 5.5) and GitHub Copilot appear as co-authors on 99 of 143 commits, including the dictionary library. The product itself does not need an LLM to run. We are responsible for what we submit, and you should be able to explain any file you claim.</div></div><div class="qa"><div class="q"><span class="n">25</span>What does “the compiler is the judge” mean?</div><div class="a">The scanner does not keep a list of supported features. It extracts each function into a standalone module and runs the real parser and type checker on it. If it passes, the function is eligible. So when the compiler gains a feature, the scanner needs no change.</div></div><div class="qa"><div class="q"><span class="n">26</span>What are the time complexities?</div><div class="a">Lexing, parsing, type checking, lowering, interval analysis and emission are linear in the size of the unit. Inference iterates passes of linear cost until the lattice stops changing (it has finite height). The search tries at most 400 type assignments, each a full check. Build time is dominated by g++.</div></div><div class="qa"><div class="q"><span class="n">27</span>Why is the end-to-end speedup smaller than the per-function speedup?</div><div class="a">Amdahl’s law: only the converted functions get faster. On TextLab, functions are 4x to 44x faster but the whole program is 2.6x, because the rest still runs in Python and the program has other costs.</div></div><div class="qa"><div class="q"><span class="n">28</span>What are the known bugs?</div><div class="a">Honest list: the snippet <code>coin_change</code> is refused (21 of 22 snippets); the grammar file is the v0.1 core and has not been regenerated for the later language; some fidelity-note text is stale (D8 still mentions <code>setjmp</code>); and STATUS.md lists three stress-harness cases found earlier that we did not re-investigate.</div></div><div class="qa"><div class="q"><span class="n">29</span>What would you do with another month?</div><div class="a">Bignum promotion and UTF-8 strings, zero-copy buffers, type-specialised versions so int-or-float functions convert, a VS Code extension, and a larger independent corpus with a comparison against Cython, mypyc and Codon so the novelty claim could become a paper.</div></div><div class="qa"><div class="q"><span class="n">30</span>Can I see it work?</div><div class="a">Yes. Section 10 is the demo script: it runs the app on a small public repository, shows the pipeline, one diff, and one function it correctly leaves alone, in under three minutes.</div></div>
+</section>
+
+<section class="chap" id="s10">
+<h1><span class="no">10</span>Live demo script and backup plan</h1>
+<table class="open"><tr><th style="width:16%">Pick</th><th>Detail</th></tr><tr><td>Main</td><td><b>dayyass/project-euler</b> @ <code>ad501f8</code>, command <code>python solutions/problem_014.py</code>. <code>collatz_sequence_len</code> 21.3x (500/500 replays), caller declined 0.81x, whole program 8.9 s to 0.8 s (11.6x), output identical.</td></tr><tr><td>Backup 1</td><td>Same repo, <code>python solutions/problem_010.py</code>: <code>is_prime</code> 1.8x, whole program 5.4x.</td></tr><tr><td>Backup 2</td><td>TextLab (bundled): <code>python main.py --small</code>, 9 functions accelerated.</td></tr></table>
+<h2>Clicks, about 2 to 3 minutes</h2><ol class="steps"><li>Open folder (or clone the URL), type the entry command, press Analyse.</li><li>Watch the stepper; at Trace say “about a million calls”; at Rank say “measured, not guessed”.</li><li>Click <code>collatz_sequence_len</code>: Guarded, 21.3x, 500/500 replays match. Diff: one decorator line.</li><li>Journey tab: walk the stages (Section 2).</li><li>Click <code>problem_014</code>: Declined 0.81x. “Careful, not reckless.”</li><li>End-to-end card: 11.6x, output identical; original folder untouched.</li></ol>
+<h2>If something fails</h2><ol class="steps"><li><b>Replay a saved run</b> (no network): run <code>docs\review3\demo\install_saved_runs.py</code>, open <code>/?job=c45cc4b3&amp;replay=1</code>.</li><li><b>Local folder</b> instead of the URL.</li><li><b>TextLab</b> (<code>python main.py --small</code>) or its saved run.</li></ol>
+<h2>Before you go on stage</h2><ul class="checklist"><li>Laptop charged and plugged in</li><li>Installer rebuilt after this session’s runtime fixes (the one in <code>dist/</code> is from 19 Oct)</li><li>No stale server on port 8765 (also check WSL)</li><li>Saved runs installed; dry run done this morning, cold and warm</li><li>Wi-Fi-off test passed; light theme; window at least 1440x900</li></ul>
+<div class="warn"><span class="tag">Be honest</span>The main demo compiles <b>one</b> function and the repo has no licence file. If asked “why this repo”: it was the best small, unknown, pure-Python project that went through the real pipeline with identical output; most small repos use classes, generators or global state, which v1 declines with a stated reason.</div>
+<div class="fig shot"><img src="file:///C:/Users/visha/OneDrive/Desktop/Documents/programming/pythia/docs/review3/src/figures/shots/diff.png"><div class="cap"><b>Figure 10.1.</b> The diff for the main demo: one decorator added, original body untouched.</div></div>
+</section>
+
+<section class="chap" id="s11">
+<h1><span class="no">11</span>One-page glossary</h1>
+<table class="open gl"><tr><th style="width:28%">Term</th><th>Meaning</th></tr><tr><td><b>AST</b></td><td>Abstract syntax tree: the program as a tree of statements and expressions.</td></tr><tr><td><b>Arena</b></td><td>Memory region freed in one go when a library call ends.</td></tr><tr><td><b>Bidirectional type checking</b></td><td>Synthesise a type from an expression, or check it against an expected type pushed inward.</td></tr><tr><td><b>Boundary / marshalling</b></td><td>Copying values between Python objects and C++ objects when a compiled function is called.</td></tr><tr><td><b>DEDENT / INDENT</b></td><td>Tokens the lexer invents when indentation decreases or increases.</td></tr><tr><td><b>Differential testing</b></td><td>Run two implementations on the same input and compare their behaviour.</td></tr><tr><td><b>Divergence (D1 to D14)</b></td><td>A place where C++ could behave differently from Python; each class has a mitigation.</td></tr><tr><td><b>Fidelity note / report</b></td><td>A positioned record of one divergence; the report is the full list.</td></tr><tr><td><b>Guard</b></td><td>A runtime check, for example for integer overflow.</td></tr><tr><td><b>Guard elision</b></td><td>Removing a guard that analysis proves can never fire.</td></tr><tr><td><b>Hotspot</b></td><td>A function where a program spends much of its time.</td></tr><tr><td><b>Interval analysis</b></td><td>Tracking a (low, high) range for each integer expression.</td></tr><tr><td><b>IR / PIR</b></td><td>Intermediate representation; PIR is our typed tree with explicit conversions.</td></tr><tr><td><b>Library mode</b></td><td>Compiling functions into a Python extension module instead of a standalone program.</td></tr><tr><td><b>Lattice</b></td><td>A set of types with a “join” that combines evidence; bool, int, float is a tiny one.</td></tr><tr><td><b>Off-side rule</b></td><td>Block structure carried by indentation.</td></tr><tr><td><b>Oracle</b></td><td>The test harness that compares compiled output to CPython’s.</td></tr><tr><td><b>pybind11</b></td><td>A C++ library that builds Python extension modules.</td></tr><tr><td><b>Pratt parsing</b></td><td>Expression parsing with a binding-power table.</td></tr><tr><td><b>PySub</b></td><td>The typed Python subset PYTHIA compiles.</td></tr><tr><td><b>Replay</b></td><td>Feeding recorded calls to both the original and the compiled function and comparing.</td></tr><tr><td><b>Splice</b></td><td>Adding a decorator so the compiled function is used, keeping the original body.</td></tr><tr><td><b>Declined</b></td><td>Compiled and measured, but not spliced because it was not at least 1.1x faster.</td></tr><tr><td><b>Translation validation</b></td><td>Checking each translation, instead of proving the translator correct.</td></tr></table>
+</section>
+</body></html>

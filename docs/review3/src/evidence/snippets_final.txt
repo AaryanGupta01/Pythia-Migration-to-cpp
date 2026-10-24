@@ -1,0 +1,5 @@
+2026-10-24T13:41:31+05:30
+SAME      climb_stairs_memo      
+
+21/22 snippets compile (or compile and match CPython)
+print inside a compiled function matches CPython byte for byte (55 bytes, piped stdout)

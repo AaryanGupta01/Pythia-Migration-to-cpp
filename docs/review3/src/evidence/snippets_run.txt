@@ -1,0 +1,26 @@
+2026-10-24T12:12:41+05:30
+COMPILES  two_sum                
+COMPILES  is_palindrome          
+COMPILES  max_subarray           
+COMPILES  fib_dp                 
+COMPILES  lcs                    
+COMPILES  knapsack               
+COMPILES  binary_search          
+COMPILES  merge_intervals        
+COMPILES  valid_parens           
+TYPECHECK coin_change            line 10: the branches of `x if c else y` have types float and int; PySub requires a single static result type (convert one branch explicitly, e.g. float(x))
+COMPILES  count_primes           
+COMPILES  group_anagrams         
+COMPILES  rotate_matrix          
+SAME      gfg_gcd_function       
+SAME      gfg_input_program      
+SAME      linked_list            
+SAME      bank_class_driver      
+SAME      bfs_queue              
+SAME      k_largest_heap         
+SAME      bisect_search          
+SAME      prefix_sum_accumulate  
+SAME      climb_stairs_memo      
+
+21/22 snippets compile (or compile and match CPython)
+exit=1

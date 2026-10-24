@@ -1,0 +1,185 @@
+2026-10-24T08:04:30+00:00
+====================================================================
+PYTHIA DIFFERENTIAL ORACLE   (CPython 3.12  vs  PYTHIA -> C++17 -> c++ -O2)
+====================================================================
+
+PROGRAM                  CPython    PYTHIA   SPEEDUP  RESULT
+--------------------------------------------------------------------
+t01_arith.py              113.5m     24.2m      4.7x  [32mPASS[0m
+t02_lists.py              128.3m     10.4m     12.3x  [32mPASS[0m
+t03_strings.py            104.7m      7.6m     13.8x  [32mPASS[0m
+t04_control.py            131.4m      6.9m     19.0x  [32mPASS[0m
+t05_floats.py             100.2m      7.0m     14.2x  [32mPASS[0m
+t06_boolops.py            112.8m      8.2m     13.7x  [32mPASS[0m
+t07_bubble.py             118.1m      8.3m     14.2x  [32mPASS[0m
+t08_nested.py             116.5m      7.5m     15.6x  [32mPASS[0m
+t09_sieve.py              125.0m     11.8m     10.6x  [32mPASS[0m
+t100_linked_list_inferred.py    238.2m     11.0m     21.7x  [32mPASS[0m
+t101_inheritance_dispatch.py    102.9m      7.1m     14.5x  [32mPASS[0m
+t102_static_class_property.py    124.1m      6.7m     18.4x  [32mPASS[0m
+t103_dunders_sorting.py    217.6m     15.5m     14.0x  [32mPASS[0m
+t104_leetcode_solution.py    219.4m      8.4m     26.1x  [32mPASS[0m
+t105_bst_stack_queue.py    208.5m     11.5m     18.1x  [32mPASS[0m
+t106_dataclass_records.py    242.9m     13.4m     18.2x  [32mPASS[0m
+t107_class_attrs_accounts.py    131.3m     11.0m     12.0x  [32mPASS[0m
+t108_graph_tree_people.py    189.9m      8.1m     23.6x  [32mPASS[0m
+t109_class_error_paths.py    175.2m     14.9m     11.8x  [32mPASS[0m
+t10_collatz.py            694.3m     24.9m     27.8x  [32mPASS[0m
+t110_private_inplace_membership.py    168.5m      7.1m     23.7x  [32mPASS[0m
+t111_assert_and_nested_init.py    126.4m     13.2m      9.6x  [32mPASS[0m
+t112_stdlib_heap_bisect_deque_copy_sys.py    366.4m      7.7m     47.4x  [32mPASS[0m
+t113_stdlib_itertools_enum_setcomp.py    123.6m      7.8m     15.9x  [32mPASS[0m
+t11_matmul.py             155.3m     16.0m      9.7x  [32mPASS[0m
+t12_err_index.py          244.5m      7.7m     31.6x  [32mPASS[0m
+t13_err_zerodiv.py        205.7m     11.7m     17.7x  [32mPASS[0m
+t14_edges.py              115.8m      6.9m     16.9x  [32mPASS[0m
+t15_classes_dict_nested_try.py    112.3m      9.4m     12.0x  [32mPASS[0m
+t160_dict_get1.py         115.5m     10.4m     11.2x  [32mPASS[0m
+t161_slice_assign_del.py    119.0m      6.6m     18.0x  [32mPASS[0m
+t162_nlargest_str_container.py    121.0m      8.5m     14.2x  [32mPASS[0m
+t163_try_else_finally.py     99.9m     10.2m      9.7x  [32mPASS[0m
+t164_recursion_stdin.py    115.1m     23.7m      4.8x  [32mPASS[0m
+t165_semicolons_inline.py    119.6m      7.8m     15.3x  [32mPASS[0m
+t16_classes_methods_exceptions.py    166.2m     13.0m     12.8x  [32mPASS[0m
+t17_loopvar_reassign_immune.py    126.7m      8.2m     15.4x  [32mPASS[0m
+t18_pysub11_features.py    129.7m     13.1m      9.9x  [32mPASS[0m
+t19_error_messages.py     142.8m     11.1m     12.8x  [32mPASS[0m
+t20_ifexp_not.py          149.8m     18.9m      7.9x  [32mPASS[0m
+t21_list_sorted_sources.py    127.5m      9.7m     13.1x  [32mPASS[0m
+t22_ord_chr.py            226.3m      8.3m     27.3x  [32mPASS[0m
+t23_chained_compare.py    162.4m     11.2m     14.5x  [32mPASS[0m
+t24_tuples.py             104.0m     14.6m      7.1x  [32mPASS[0m
+t40_list_dict_comprehensions.py    146.3m      7.5m     19.6x  [32mPASS[0m
+t41_generator_consumers.py    109.0m     13.2m      8.3x  [32mPASS[0m
+t42_enumerate_zip_reversed.py    110.8m      7.2m     15.3x  [32mPASS[0m
+t43_key_functions.py      124.6m      7.8m     15.9x  [32mPASS[0m
+t44_comprehension_edges.py    231.4m     11.7m     19.9x  [32mPASS[0m
+t45_dict_changed_during_iteration.py    202.5m      7.4m     27.5x  [32mPASS[0m
+t46_tuples_with_iteration.py    109.3m     13.2m      8.3x  [32mPASS[0m
+t50_defaults_kwargs.py    142.9m      6.2m     23.1x  [32mPASS[0m
+t51_optional_linked.py    230.5m     11.4m     20.3x  [32mPASS[0m
+t52_isinstance.py         224.1m     12.0m     18.7x  [32mPASS[0m
+t53_module_globals.py     241.7m     10.5m     23.0x  [32mPASS[0m
+t54_sets.py               225.5m     11.9m     18.9x  [32mPASS[0m
+t55_dict_values.py        222.1m      8.0m     27.9x  [32mPASS[0m
+t56_optional_scalars.py    194.9m      8.3m     23.4x  [32mPASS[0m
+t57_collections.py        240.9m     10.0m     24.0x  [32mPASS[0m
+t70_bitops.py             168.0m     10.9m     15.4x  [32mPASS[0m
+t71_math.py               134.9m     14.0m      9.6x  [32mPASS[0m
+t72_slices.py             109.8m      7.9m     13.9x  [32mPASS[0m
+t73_str_methods.py        127.2m     12.8m      9.9x  [32mPASS[0m
+t74_list_dict_methods.py    123.4m      9.1m     13.5x  [32mPASS[0m
+t75_pow_int_conv.py       129.3m      9.0m     14.3x  [32mPASS[0m
+t76_format_percent.py     123.9m     10.4m     11.9x  [32mPASS[0m
+t77_err_sqrt.py           232.2m     10.9m     21.2x  [32mPASS[0m
+t78_err_dict_pop.py       234.5m     21.0m     11.1x  [32mPASS[0m
+t79_err_negshift.py       226.6m      8.5m     26.7x  [32mPASS[0m
+t80_err_pow_inverse.py    208.1m     10.3m     20.2x  [32mPASS[0m
+t81_err_slice_step.py     200.2m      8.0m     25.2x  [32mPASS[0m
+t82_err_log0.py           216.6m      9.4m     23.1x  [32mPASS[0m
+t83_repr_concat.py        107.9m      8.6m     12.5x  [32mPASS[0m
+t90_list_repeat.py        110.4m      8.5m     13.0x  [32mPASS[0m
+t91_chained_assign.py     129.2m      8.0m     16.1x  [32mPASS[0m
+t92_fstring_eq.py         150.0m      6.0m     24.9x  [32mPASS[0m
+t93_cond_mixed_boolop.py    120.3m      8.2m     14.7x  [32mPASS[0m
+t94_optional_tuple.py     153.7m      9.8m     15.7x  [32mPASS[0m
+
+NEGATIVE CASE                     EXPECTED              RESULT
+--------------------------------------------------------------------
+n01_rebind.py                     cannot assign         [32mREJECTED[0m
+n02_badarg.py                     expected int, found   [32mREJECTED[0m
+n03_undefined.py                  is not defined        [32mREJECTED[0m
+n04_return_type.py                returning str from a  [32mREJECTED[0m
+n05_mixed_list.py                 incompatible element  [32mREJECTED[0m
+n06_missing_return.py             without returning a   [32mREJECTED[0m
+n07_empty_list_infer.py           cannot infer element  [32mREJECTED[0m
+n08_arity.py                      expects 2 argument    [32mREJECTED[0m
+n09_bad_index.py                  index must be int     [32mREJECTED[0m
+n100_print_subclass_no_repr.py    defines neither __st  [32mREJECTED[0m
+n101_multiple_inheritance.py      multiple inheritance  [32mREJECTED[0m
+n102_override_signature.py        different signature   [32mREJECTED[0m
+n103_classmethod_via_subclass.py  called through subcl  [32mREJECTED[0m
+n104_field_not_inferable.py       cannot infer the typ  [32mREJECTED[0m
+n105_sort_without_lt.py           '<' not supported be  [32mREJECTED[0m
+n106_operator_not_defined.py      unsupported operand   [32mREJECTED[0m
+n107_property_no_setter.py        has no setter         [32mREJECTED[0m
+n108_frozen_dataclass.py          frozen dataclass      [32mREJECTED[0m
+n109_base_defined_later.py        must be defined befo  [32mREJECTED[0m
+n10_str_item_assign.py            does not support ite  [32mREJECTED[0m
+n110_eq_in_hierarchy.py           cannot define __eq__  [32mREJECTED[0m
+n111_iter_dunder.py               __iter__ is outside   [32mREJECTED[0m
+n112_exception_subclass.py        may only inherit fro  [32mREJECTED[0m
+n113_class_attr_call.py           must be a constant    [32mREJECTED[0m
+n114_dataclass_mutable_default.py mutable default       [32mREJECTED[0m
+n115_method_only_in_subclass.py   has no method 'bark'  [32mREJECTED[0m
+n116_unknown_decorator.py         decorator @functools  [32mREJECTED[0m
+n117_super_outside_method.py      super() is supported  [32mREJECTED[0m
+n118_instance_hides_class_attr.py hides class attribut  [32mREJECTED[0m
+n119_default_repr_in_fstring.py   defines neither __st  [32mREJECTED[0m
+n11_compare_types.py              cannot compare        [32mREJECTED[0m
+n12_break_outside.py              outside loop          [32mREJECTED[0m
+n13_class_no_init.py              no __init__           [32mREJECTED[0m
+n14_missing_init_fields.py        no __init__           [32mREJECTED[0m
+n15_bad_field.py                  no field              [32mREJECTED[0m
+n16_dict_bad_key.py               dict key type         [32mREJECTED[0m
+n17_unknown_exception.py          unknown exception ty  [32mREJECTED[0m
+n18_print_class.py                no reproducible repr  [32mREJECTED[0m
+n19_nested_list_too_deep.py       deeper than two leve  [32mREJECTED[0m
+n20_break_in_try_no_loop.py       outside loop          [32mREJECTED[0m
+n21_ifexp_mixed.py                single static result  [32mREJECTED[0m
+n22_chain_impure_middle.py        chained comparison w  [32mREJECTED[0m
+n23_tuple_var_index.py            tuple index must be   [32mREJECTED[0m
+n40_lambda_value.py               lambda is supported   [32mREJECTED[0m
+n41_len_generator.py              generator expression  [32mREJECTED[0m
+n42_enumerate_len.py              enumerate() is suppo  [32mREJECTED[0m
+n43_unpack_list.py                cannot unpack         [32mREJECTED[0m
+n44_comp_var_scope.py             name 'x' is not defi  [32mREJECTED[0m
+n45_set_comprehension.py          set comprehensions a  [32mREJECTED[0m
+n46_range_value.py                range() is supported  [32mREJECTED[0m
+n47_list_key.py                   a key function must   [32mREJECTED[0m
+n48_bare_genexp.py                Generator expression  [32mREJECTED[0m
+n49_comp_unpack_list.py           cannot unpack a list  [32mREJECTED[0m
+n50_unknown_kwarg.py              unexpected keyword a  [32mREJECTED[0m
+n51_duplicate_kwarg.py            multiple values for   [32mREJECTED[0m
+n52_missing_arg.py                missing               [32mREJECTED[0m
+n53_nonconst_default.py           default values must   [32mREJECTED[0m
+n54_optional_arith.py             may be None here      [32mREJECTED[0m
+n55_isinstance_float.py           cannot be decided st  [32mREJECTED[0m
+n56_print_set.py                  hash order            [32mREJECTED[0m
+n57_iterate_set.py                iterate over sorted   [32mREJECTED[0m
+n58_import_os.py                  is not supported in   [32mREJECTED[0m
+n59_typing_not_imported.py        is not imported       [32mREJECTED[0m
+n60_unbound_local.py              UnboundLocalError     [32mREJECTED[0m
+n61_none_infer.py                 cannot infer a type   [32mREJECTED[0m
+n62_union.py                      unions other than     [32mREJECTED[0m
+n63_set_pop.py                    set.pop()             [32mREJECTED[0m
+n64_is_int.py                     implementation-defin  [32mREJECTED[0m
+n65_int_default_float.py          CPython keeps the     [32mREJECTED[0m
+n66_global_undefined.py           must be assigned at   [32mREJECTED[0m
+n67_defaultdict_factory.py        makes values of type  [32mREJECTED[0m
+n68_optional_len.py               may be None here      [32mREJECTED[0m
+n70_bitop_float.py                bitwise operators ne  [32mREJECTED[0m
+n71_unsupported_module.py         is not supported in   [32mREJECTED[0m
+n72_partition.py                  returns a tuple       [32mREJECTED[0m
+n73_dict_keys_print.py            live view             [32mREJECTED[0m
+n74_math_unknown.py               has no attribute      [32mREJECTED[0m
+n75_format_nonliteral.py          string-literal templ  [32mREJECTED[0m
+n76_slice_dict.py                 does not support sli  [32mREJECTED[0m
+n77_pct_d_str.py                  real number is requi  [32mREJECTED[0m
+n79_invert_float.py               unary                 [32mREJECTED[0m
+n80_hash.py                       not defined           [32mREJECTED[0m
+n81_gcd_float.py                  needs an integer      [32mREJECTED[0m
+n82_pct_few.py                    not enough arguments  [32mREJECTED[0m
+n83_format_attr.py                outside the PySub su  [32mREJECTED[0m
+n84_format_impure.py              must be used exactly  [32mREJECTED[0m
+n85_fstring_ascii.py              !a                    [32mREJECTED[0m
+n93_boolop_value_mixed.py         unrelated types       [32mREJECTED[0m
+
+====================================================================
+SUMMARY
+--------------------------------------------------------------------
+  semantic equivalence : 78/78 programs (100.0%)
+  type-checker recall  : 88/88 invalid programs rejected (100.0%)
+  median speedup       : 15.4x   (min 4.7x, max 47.4x)
+  fidelity notes       : 1280 emitted across the suite
+====================================================================
