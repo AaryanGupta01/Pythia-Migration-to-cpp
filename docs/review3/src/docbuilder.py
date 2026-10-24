@@ -280,6 +280,7 @@ class Report:
             c.width = Cm(widths[i])
             _shade(c, "ECEBFB")
             c.paragraphs[0].paragraph_format.space_after = Pt(0)
+            c.paragraphs[0].paragraph_format.keep_with_next = True
             self._runs(c.paragraphs[0], h, size=size, bold=True, color=INK)
         tr = t.rows[0]._tr
         trPr = tr.get_or_add_trPr()

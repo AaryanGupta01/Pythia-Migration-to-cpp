@@ -7,7 +7,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import demo_info  # noqa: E402
-import rc1, rc2, rc3, rc4  # noqa: E402
+import rc1, rc1b, rc2b, rc3, rc3b, rc4  # noqa: E402
 import report_data, report_tables, report_texts  # noqa: E402
 from docbuilder import Report  # noqa: E402
 
@@ -22,18 +22,18 @@ def compose(d, F):
     d.toc("1-1")
     d.pagebreak()
     rc1.abstract(d, F)
-    rc1.sec2(d, F)
-    rc1.sec3(d, F)
-    rc1.sec4(d, F)
-    rc1.sec5(d, F)
-    rc2.sec6(d, F)
-    rc2.sec7(d, F)
-    rc2.sec8(d, F)
-    rc2.sec9(d, F)
-    rc3.sec10(d, F)
-    rc3.sec11(d, F)
-    rc3.sec12(d, F)
-    rc3.sec13(d, F)
+    rc1b.sec2(d, F)
+    rc1b.sec3(d, F)
+    rc1b.sec4(d, F)
+    rc1b.sec5(d, F)
+    rc2b.sec6(d, F)
+    rc2b.sec7(d, F)
+    rc2b.sec8(d, F)
+    rc2b.sec9(d, F)
+    rc3b.sec10(d, F)
+    rc3b.sec11(d, F)
+    rc3b.sec12(d, F)
+    rc3b.sec13(d, F)
     rc3.sec14(d, F)
     rc4.appendices(d, F)
 

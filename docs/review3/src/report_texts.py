@@ -59,9 +59,11 @@ def texts(F, D):
         parts.append(f"**{j['label']}**: {s.get('functions')} functions found, {len(acc)} accelerated, {s.get('declined', 0)} declined, "
                      f"{s.get('not_eligible', 0)} not eligible; whole job {j['seconds']:.0f} s"
                      + (f"; program {e.get('before_s', 0):.1f} s to {e.get('after_s', 0):.1f} s ({e.get('speedup', 0):.2f}x), output hash {'identical' if e.get('output_match') else 'DIFFERENT'}" if e else "") + ".")
-    F["studio_text"] = ("Each project was run through the real application path (the HTTP API that the UI uses) on a clean server with no LLM key, with its trace command "
-                        "and the build cache cold unless marked warm. A function is counted *accelerated* only if its replay matched on every call and its measured "
-                        "speedup was at least 1.1x. " + " ".join(parts))
+    F["studio_intro"] = ("Each project ran through the real application path (the HTTP API the UI uses) on a clean server with no LLM key and a cold build cache. "
+                         "A function counts as *accelerated* only if every replayed call matched and its measured speedup was at least 1.1x. The row marked \"before print fix\" is the "
+                         "first TextLab run, whose output hash differed until commit `bd7e8ca`.")
+    F["studio_parts"] = parts
+    F["studio_text"] = F["studio_intro"]
     F["stress_results_text"] = D.get("stress_text", "pending")
     F["stress_text"] = ("`scripts/stress.py OWNER/REPO` downloads a public repository as a zip, pushes every file through converter, type checker, C++ build and run "
                         "against CPython, and reports build failures and output differences (which must be zero) and the ranked reasons for rejection. "

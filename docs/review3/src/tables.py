@@ -1,17 +1,14 @@
 """Static tables for the report (facts that do not depend on this session's measurements)."""
 
 R2R3_ROWS = [
-    ["Input", "Typed PySub: every function annotated by hand", "Ordinary Python: snippet, file, folder or GitHub URL; annotations are inferred", "Developers have untyped projects, not PySub programs"],
-    ["Unit of translation", "One whole program", "One function at a time inside a larger project, spliced back", "Speed up hot spots without rewriting the project"],
-    ["Types", "Written by the author", "In-house inference: observation, whole-program fixpoint, search (no LLM)", "Deterministic, free, offline"],
-    ["Output", "C++17 executable", "pybind11 module (.so / .pyd) behind a one-line decorator, plus exportable C++", "The project keeps running in Python"],
-    ["Correctness evidence", "Differential oracle on 17 positive and 20 negative programs", "Oracle (78 / 88) plus replay of the program's own recorded calls for every converted function", "Evidence about the user's code, not only ours"],
-    ["Language", "Scalars, lists, PyDict and PySet libraries", "Plus classes, tuples, comprehensions, try/except, sets, f-strings and a standard-library subset (heapq, bisect, collections, itertools, functools)", "Real code uses them"],
-    ["Guard elision", "Implemented, barely measured", "Measured on ten kernels with and without the pass (Section 10.2)", "Review 2 gap"],
-    ["Memory", "Never reclaimed (D7)", "Per-call arena in library mode; standalone binaries unchanged", "Review 1 plan for Review 3"],
-    ["Interface", "Command line", "Studio: pipeline stepper, diff, fidelity gutter, per-function journey, playground, report", "Make every stage inspectable"],
-    ["Delivery", "Clone and run", "Windows installer, portable zip, wheel, Docker image", "Usable by someone who did not write it"],
-    ["Back ends", "C++17 (WebAssembly promised for Review 3)", "C++17 only; **WebAssembly dropped**", "Time went to the Studio pipeline; see Section 3.4"],
+    ["Input", "Hand-annotated PySub", "Ordinary Python: snippet, file, folder or GitHub URL; types inferred"],
+    ["Unit", "One whole program", "One function at a time inside a project, spliced back behind a decorator"],
+    ["Types", "Written by the author", "In-house inference (observe, fixpoint, search); no LLM needed"],
+    ["Evidence", "Oracle: 17 positive, 20 negative programs", "Oracle 78 and 88, plus replay of the program's own calls for every converted function"],
+    ["Language", "Scalars, lists, PyDict, PySet", "Plus classes, tuples, comprehensions, try/except, f-strings, a standard-library subset"],
+    ["Interface", "Command line", "Studio: pipeline stepper, diff with fidelity gutter, function journey, playground, report"],
+    ["Delivery", "Clone and run", "Windows installer, portable zip, wheel, Docker image"],
+    ["Back ends", "C++17 (WebAssembly promised)", "C++17 only; **WebAssembly dropped**"],
 ]
 
 WHY_ROWS = [
@@ -47,13 +44,12 @@ DIV_ROWS = [
 ]
 
 KNOWN_ISSUES = [
-    "**Snippet `coin_change`** is refused (int and float on different paths); 21 of 22 snippets pass, not the 22 of 22 recorded in `STATUS.md` (Section 9.4).",
-    "**`docs/grammar.ebnf` is the v0.1 core** (33 named rules). The implemented language has grown past it, and the extensions are documented by prose rules generated from the compiler source (`pysub_rules.py`), not by an updated grammar. Review 1 counted 41 productions; a count of named rules gives 33.",
-    "**Stale text in the fidelity catalogue:** the D8 note still describes `setjmp`/`longjmp`, and the D7 note says region-based reclamation is \"the Review 3 target\" although library mode now has it.",
-    "**`STATUS.md` lists three stress-harness bugs** (a C++ build failure on a dict-of-tuples case, and two int-versus-float printing cases that replay correctly rejects). They were recorded before this session and were not re-investigated here.",
-    "**Windows long paths:** repositories with paths over 260 characters have those files skipped on ingest.",
-    "**A stale server is the usual cause of impossible-looking errors.** The launcher refuses to reuse a server with a different build fingerprint, but a forgotten WSL server on the same port can still answer first.",
-    "**Oracle timings are single runs** of whole processes, so very short programs mostly measure process start-up; the kernel benchmark in Section 10.2 is the number to quote.",
+    "**Snippet `coin_change`** is refused (int and float on different paths): 21 of 22 snippets pass, not the 22 of 22 in `STATUS.md` (Section 9.2).",
+    "**`docs/grammar.ebnf` is the v0.1 core** (33 named rules; Review 1 reported 41). The language has grown past it; later constructs are described by prose rules generated from the compiler source.",
+    "**Stale text:** the D8 note still describes `setjmp`/`longjmp`, and the D7 note calls reclamation \"the Review 3 target\".",
+    "**Dictionaries use a linear scan** (`runtime/pyrt.cpp:131`), about 29 times slower than CPython on our dictionary kernel.",
+    "**Stress harness not re-run;** `STATUS.md` lists three older stress-harness bugs that we did not re-investigate.",
+    "**A stale server is the usual cause of impossible-looking errors;** the launcher checks a build fingerprint, but a forgotten WSL server on the same port can still answer first.",
 ]
 
 REFS_BOOKS = [
