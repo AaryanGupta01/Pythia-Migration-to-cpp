@@ -1,0 +1,422 @@
+[
+ {
+  "repo": "promsun/101-library-project-public",
+  "path": "app.py",
+  "lines": 160,
+  "stars": 1,
+  "lic": "MIT",
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import streamlit` (a third-party library). It still runs under Python (press Run)."
+ },
+ {
+  "repo": "ayoobmuwahid/console_library_management_system_python",
+  "path": "main.py",
+  "lines": 306,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: the dicts with keys author, available_copies, category, identity, title, total_copies look like records bu"
+ },
+ {
+  "repo": "ankit804/Library-Management-system",
+  "path": "issuetable.py",
+  "lines": 143,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: The in-house converter could not finish this program: line 2: int has no methods in PySub. The AI converte"
+ },
+ {
+  "repo": "ankit804/Library-Management-system",
+  "path": "main.py",
+  "lines": 99,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import db` (a third-party library); `import insert` (a third-party library); `import book` (a third-party lib"
+ },
+ {
+  "repo": "ankit804/Library-Management-system",
+  "path": "update.py",
+  "lines": 107,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: the PySub type checker still reports line 2: int has no methods in PySub. The AI converter can try: add a "
+ },
+ {
+  "repo": "ankit804/Library-Management-system",
+  "path": "view.py",
+  "lines": 98,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: the PySub type checker still reports line 2: int has no methods in PySub. The AI converter can try: add a "
+ },
+ {
+  "repo": "thuyphuong180206-star/KTLT-Library-Management-System",
+  "path": "source_code/interface/account_manager.py",
+  "lines": 94,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import interface` (a third-party library); `import objects` (a third-party library). It still runs under Pyth"
+ },
+ {
+  "repo": "Divine126/library-management-system",
+  "path": "main.py",
+  "lines": 92,
+  "stars": 0,
+  "lic": "MIT",
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import library` (a third-party library); `import validators` (a third-party library). It still runs under Pyt"
+ },
+ {
+  "repo": "vtmcodes/Bank-Management-System",
+  "path": "admin.py",
+  "lines": 277,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import beatm` (a third-party library). It still runs under Python (press Run)."
+ },
+ {
+  "repo": "vtmcodes/Bank-Management-System",
+  "path": "atm.py",
+  "lines": 82,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import beatm` (a third-party library). It still runs under Python (press Run)."
+ },
+ {
+  "repo": "Winnie-cv/Banking-Management-System",
+  "path": "main.py",
+  "lines": 106,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import bank_service` (a third-party library). It still runs under Python (press Run)."
+ },
+ {
+  "repo": "developerKunal18/Blood-Bank-Management-System",
+  "path": "donor_manager.py",
+  "lines": 136,
+  "stars": 1,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import config` (a third-party library); `import storage` (a third-party library); `import utils` (a third-par"
+ },
+ {
+  "repo": "fnaccount/Student_Management_System",
+  "path": "basicOperation.py",
+  "lines": 139,
+  "stars": 3,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: the dicts with keys age, name, number, score look like records but can't become a class: line 45: the dict"
+ },
+ {
+  "repo": "ukyusufaa/hospital-management-system",
+  "path": "menu.py",
+  "lines": 758,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import pyfiglet` (a third-party library); `import threading` (threads); `import database` (a third-party libr"
+ },
+ {
+  "repo": "24rautsp/smart-parking-management-system",
+  "path": "src/main.py",
+  "lines": 311,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import os` (the operating system); `import time` (the clock); `import src` (a third-party library); `import p"
+ },
+ {
+  "repo": "mahshidrezapour-dev/contact-book-cli",
+  "path": "third.py",
+  "lines": 71,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: the PySub type checker still reports line 9: chained comparison with a computed middle operand: assign it "
+ },
+ {
+  "repo": "X404V2000/fnb_app_academy_2026",
+  "path": "unit_3/calculator.py",
+  "lines": 141,
+  "stars": 0,
+  "lic": "MIT",
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: the PySub type checker still reports line 125: unknown exception type 'KeyboardInterrupt'; PySub raises ['"
+ },
+ {
+  "repo": "X404V2000/fnb_app_academy_2026",
+  "path": "unit_3/rsa_fuel_cost_calc.py",
+  "lines": 116,
+  "stars": 0,
+  "lic": "MIT",
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: the PySub type checker still reports line 46: dict values cannot be float | None in PySub. The AI converte"
+ },
+ {
+  "repo": "X404V2000/fnb_app_academy_2026",
+  "path": "unit_4/atm_sim.py",
+  "lines": 94,
+  "stars": 0,
+  "lic": "MIT",
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: the PySub type checker still reports line 80: unknown exception type 'KeyboardInterrupt'; PySub raises ['A"
+ },
+ {
+  "repo": "X404V2000/fnb_app_academy_2026",
+  "path": "unit_4/student_grading_system.py",
+  "lines": 168,
+  "stars": 0,
+  "lic": "MIT",
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: line 20: couldn't work out the type of parameter 'mark' of letter_grade(): it receives conflicting types; "
+ },
+ {
+  "repo": "X404V2000/fnb_app_academy_2026",
+  "path": "unit_5/contact_book.py",
+  "lines": 137,
+  "stars": 0,
+  "lic": "MIT",
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: the PySub type checker still reports line 119: unknown exception type 'KeyboardInterrupt'; PySub raises ['"
+ },
+ {
+  "repo": "X404V2000/fnb_app_academy_2026",
+  "path": "unit_5/score_tracker.py",
+  "lines": 113,
+  "stars": 0,
+  "lic": "MIT",
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: the PySub type checker still reports line 94: unknown exception type 'KeyboardInterrupt'; PySub raises ['A"
+ },
+ {
+  "repo": "Hash-Noone/python-contact-book",
+  "path": "main.py",
+  "lines": 174,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import contact` (a third-party library); `import contact_manager` (a third-party library); `import storage` ("
+ },
+ {
+  "repo": "BVMist/Contact-Book-and-Student-Score-Exercise-",
+  "path": "contact_book.py",
+  "lines": 104,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: line 1: 'contacts' holds values of different types (str and int); PySub variables keep one type; line 31: "
+ },
+ {
+  "repo": "lipkooo066-hub/contact-book",
+  "path": "main.py",
+  "lines": 88,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import models` (a third-party library); `import logic` (a third-party library); `import menu` (a third-party "
+ },
+ {
+  "repo": "2005tamannasaini-dot/Student-Grade-Calculator",
+  "path": "StudentGradeCalculator.py",
+  "lines": 118,
+  "stars": 0,
+  "lic": null,
+  "status": "OK",
+  "stdin": "1\n2\n3\n4\n5\n6\n",
+  "py_ms": 84.64,
+  "cpp_ms": 19.79,
+  "out_lines": 16
+ },
+ {
+  "repo": "Mahdi-Ghasri/todo_list_v2.py",
+  "path": "main.py",
+  "lines": 206,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import argparse` (a third-party library); `import utils` (a third-party library). It still runs under Python "
+ },
+ {
+  "repo": "Mysterio997/Vending-Machine-Project",
+  "path": "VendingMachine.py",
+  "lines": 72,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: line 45: 'AMOUNTNEEDED' holds values of different types (str and int); PySub variables keep one type. The "
+ },
+ {
+  "repo": "maxfowlercodes/Vending-machine-PY",
+  "path": "vending-machine.py",
+  "lines": 164,
+  "stars": 0,
+  "lic": "MIT",
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: line 22: couldn't work out the type of parameter 'balence' of vending_process(): it receives conflicting t"
+ },
+ {
+  "repo": "iteoluwashomade582-cyber/vending-machine",
+  "path": "Projects/Vendingmachine.py",
+  "lines": 108,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: line 6: 'coins' holds values of different types (str and float); PySub variables keep one type; line 26: '"
+ },
+ {
+  "repo": "charlie-elkington/VendingMachineProject",
+  "path": "main.py",
+  "lines": 170,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import colorama` (a third-party library). It still runs under Python (press Run)."
+ },
+ {
+  "repo": "rhythael/airobot",
+  "path": "launchers/start_bridge.py",
+  "lines": 126,
+  "stars": 0,
+  "lic": "NOASSERTION",
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import os` (the operating system); `import pathlib` (files); `import getpass` (a third-party library); `impor"
+ },
+ {
+  "repo": "ingdavid72/atm-simulator-python",
+  "path": "main.py",
+  "lines": 78,
+  "stars": 1,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: compiled, the conversion prints something different from the original. The AI converter can try: add a fre"
+ },
+ {
+  "repo": "CanDuru4/atm-python",
+  "path": "ATM-Python.py",
+  "lines": 169,
+  "stars": 0,
+  "lic": "MIT",
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: line 36: `balance_a` is an int on some runs and a float on others; PySub must pick one type, and an int pr"
+ },
+ {
+  "repo": "vanshhiiikaa/ATM-Simulator",
+  "path": "ATM.py",
+  "lines": 81,
+  "stars": 1,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: the dicts with keys Balance, Name, PIN, Transactions look like records but can't become a class: line 4: t"
+ },
+ {
+  "repo": "kislaya26bce10063-ship-it/Atm-Simulator",
+  "path": "main.py",
+  "lines": 60,
+  "stars": 0,
+  "lic": null,
+  "status": "OK",
+  "stdin": "1\n",
+  "py_ms": 39.86,
+  "cpp_ms": 21.46,
+  "out_lines": 6
+ },
+ {
+  "repo": "Anshikapandey66/ATM-Simulator",
+  "path": "atm.py",
+  "lines": 93,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "The in-house converter could not finish this program: the PySub type checker still reports line 17: function 'exit' is not defined. The AI converter can try: ad"
+ },
+ {
+  "repo": "ashmit044/tip-calculator",
+  "path": "app.py",
+  "lines": 91,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import argparse` (a third-party library); `import calculator` (a third-party library); `import streamlit` (a "
+ },
+ {
+  "repo": "Vindhyalekhana/restaurant-management-system",
+  "path": "application/ui/cli.py",
+  "lines": 565,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import application` (a third-party library); `import pprint` (a third-party library). It still runs under Pyt"
+ },
+ {
+  "repo": "Kumar-Ansuman1/Dyanamic_Gym",
+  "path": "backend/create_owner.py",
+  "lines": 65,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import getpass` (a third-party library); `import sqlalchemy` (a third-party library); `import backend` (a thi"
+ },
+ {
+  "repo": "kianbala/gym-management-system-online",
+  "path": "auth_ui.py",
+  "lines": 112,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import streamlit` (a third-party library); `import auth` (a third-party library); `import ui_styles` (a third"
+ },
+ {
+  "repo": "kianbala/gym-management-system-online",
+  "path": "member_ui.py",
+  "lines": 307,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import html` (a third-party library); `import streamlit` (a third-party library); `import db_manager` (a thir"
+ },
+ {
+  "repo": "dennohlimo/gym-membership-management",
+  "path": "attendance.py",
+  "lines": 108,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import models` (a third-party library). It still runs under Python (press Run)."
+ },
+ {
+  "repo": "dheepthireddy18/tic-tac-toe",
+  "path": "main.py",
+  "lines": 69,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import game` (a third-party library); `import ai` (a third-party library). It still runs under Python (press "
+ },
+ {
+  "repo": "DhruvHegde/Voice_based-_Tic-Tac-Toe",
+  "path": "example.py",
+  "lines": 74,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This program can't be compiled to C++ as a whole: `import speech_recognition` (a third-party library). It still runs under Python (press Run)."
+ },
+ {
+  "repo": "Python-for-Foxes/Python-Tic-Tac-Toe",
+  "path": "main.py",
+  "lines": 170,
+  "stars": 0,
+  "lic": null,
+  "status": "NOCONV",
+  "why": "This is not valid Python yet: line 1: invalid non-printable character U+FEFF. Fix the syntax first."
+ }
+]

@@ -3,6 +3,11 @@
 Everything below was run on 2026-10-24 on the team laptop (see report Table 5.1), zero-LLM path (no API key). Times are from that run; expect
 the same shape, not the same digits.
 
+> **Third hunt, "library-management style" programs (2026-10-24).** I searched GitHub for menu-driven student projects (library, bank, inventory, student, ATM, vending, contact book, gym, parking, tic-tac-toe): 270 repos, 46 candidate files that use `input()` and no files, GUI or network.
+> Only **2 of 46** convert whole and match CPython: `2005tamannasaini-dot/Student-Grade-Calculator` @ `a87cda2` (118 lines, 84.6 ms to 19.8 ms in the Playground) and `kislaya26bce10063-ship-it/Atm-Simulator` @ `df848af` (60 lines, 39.9 ms to 21.5 ms). Neither has a licence file.
+> The rest fail for stated reasons: they import sibling modules (`import db`, `import library`), use dictionaries with mixed value types, ints and floats in one variable, `os`/`time`, or Streamlit. Library-management apps in particular do not convert as whole programs today.
+> These two are **Playground** demos (paste the file, press Convert, Run: output identical, compiled version faster), not Studio project demos. Stdin used for the check is the first canned script that gave at least 6 output lines; see `src/evidence/hunt3_results.json`.
+
 > **Update after a second, wider hunt (2026-10-24).** About 310 small public Python repositories came back from GitHub search; 45 passed a static filter (pure Python, no numpy/pygame/input(), several loop-heavy functions) and
 > only a handful run standalone for more than a second. None gave several verified functions: most are CLI wrappers, class-based, use generators or sympy, or are tiny toy scripts. A hand-built driver on `transmogrifier/eulerlib`
 > (Apache-2.0) accelerated **nothing**: its functions are tiny, so Studio correctly declined `gcd` (0.59x) and `is_palindrome` (0.44x) and rejected generator-based ones. That is Studio working as designed, but it is not a showpiece.

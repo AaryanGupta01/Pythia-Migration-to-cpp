@@ -1,0 +1,370 @@
+[
+ {
+  "repo": "promsun/101-library-project-public",
+  "stars": 1,
+  "lic": "MIT",
+  "branch": "main",
+  "path": "app.py",
+  "lines": 160
+ },
+ {
+  "repo": "ayoobmuwahid/console_library_management_system_python",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "main.py",
+  "lines": 306
+ },
+ {
+  "repo": "ankit804/Library-Management-system",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "issuetable.py",
+  "lines": 143
+ },
+ {
+  "repo": "ankit804/Library-Management-system",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "main.py",
+  "lines": 99
+ },
+ {
+  "repo": "ankit804/Library-Management-system",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "update.py",
+  "lines": 107
+ },
+ {
+  "repo": "ankit804/Library-Management-system",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "view.py",
+  "lines": 98
+ },
+ {
+  "repo": "thuyphuong180206-star/KTLT-Library-Management-System",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "source_code/interface/account_manager.py",
+  "lines": 94
+ },
+ {
+  "repo": "Divine126/library-management-system",
+  "stars": 0,
+  "lic": "MIT",
+  "branch": "main",
+  "path": "main.py",
+  "lines": 92
+ },
+ {
+  "repo": "vtmcodes/Bank-Management-System",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "admin.py",
+  "lines": 277
+ },
+ {
+  "repo": "vtmcodes/Bank-Management-System",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "atm.py",
+  "lines": 82
+ },
+ {
+  "repo": "Winnie-cv/Banking-Management-System",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "main.py",
+  "lines": 106
+ },
+ {
+  "repo": "developerKunal18/Blood-Bank-Management-System",
+  "stars": 1,
+  "lic": null,
+  "branch": "main",
+  "path": "donor_manager.py",
+  "lines": 136
+ },
+ {
+  "repo": "fnaccount/Student_Management_System",
+  "stars": 3,
+  "lic": null,
+  "branch": "master",
+  "path": "basicOperation.py",
+  "lines": 139
+ },
+ {
+  "repo": "ukyusufaa/hospital-management-system",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "menu.py",
+  "lines": 758
+ },
+ {
+  "repo": "24rautsp/smart-parking-management-system",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "src/main.py",
+  "lines": 311
+ },
+ {
+  "repo": "mahshidrezapour-dev/contact-book-cli",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "third.py",
+  "lines": 71
+ },
+ {
+  "repo": "X404V2000/fnb_app_academy_2026",
+  "stars": 0,
+  "lic": "MIT",
+  "branch": "main",
+  "path": "unit_3/calculator.py",
+  "lines": 141
+ },
+ {
+  "repo": "X404V2000/fnb_app_academy_2026",
+  "stars": 0,
+  "lic": "MIT",
+  "branch": "main",
+  "path": "unit_3/rsa_fuel_cost_calc.py",
+  "lines": 116
+ },
+ {
+  "repo": "X404V2000/fnb_app_academy_2026",
+  "stars": 0,
+  "lic": "MIT",
+  "branch": "main",
+  "path": "unit_4/atm_sim.py",
+  "lines": 94
+ },
+ {
+  "repo": "X404V2000/fnb_app_academy_2026",
+  "stars": 0,
+  "lic": "MIT",
+  "branch": "main",
+  "path": "unit_4/student_grading_system.py",
+  "lines": 168
+ },
+ {
+  "repo": "X404V2000/fnb_app_academy_2026",
+  "stars": 0,
+  "lic": "MIT",
+  "branch": "main",
+  "path": "unit_5/contact_book.py",
+  "lines": 137
+ },
+ {
+  "repo": "X404V2000/fnb_app_academy_2026",
+  "stars": 0,
+  "lic": "MIT",
+  "branch": "main",
+  "path": "unit_5/score_tracker.py",
+  "lines": 113
+ },
+ {
+  "repo": "Hash-Noone/python-contact-book",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "main.py",
+  "lines": 174
+ },
+ {
+  "repo": "BVMist/Contact-Book-and-Student-Score-Exercise-",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "contact_book.py",
+  "lines": 104
+ },
+ {
+  "repo": "lipkooo066-hub/contact-book",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "main.py",
+  "lines": 88
+ },
+ {
+  "repo": "2005tamannasaini-dot/Student-Grade-Calculator",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "StudentGradeCalculator.py",
+  "lines": 118
+ },
+ {
+  "repo": "Mahdi-Ghasri/todo_list_v2.py",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "main.py",
+  "lines": 206
+ },
+ {
+  "repo": "Mysterio997/Vending-Machine-Project",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "VendingMachine.py",
+  "lines": 72
+ },
+ {
+  "repo": "maxfowlercodes/Vending-machine-PY",
+  "stars": 0,
+  "lic": "MIT",
+  "branch": "main",
+  "path": "vending-machine.py",
+  "lines": 164
+ },
+ {
+  "repo": "iteoluwashomade582-cyber/vending-machine",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "Projects/Vendingmachine.py",
+  "lines": 108
+ },
+ {
+  "repo": "charlie-elkington/VendingMachineProject",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "main.py",
+  "lines": 170
+ },
+ {
+  "repo": "rhythael/airobot",
+  "stars": 0,
+  "lic": "NOASSERTION",
+  "branch": "main",
+  "path": "launchers/start_bridge.py",
+  "lines": 126
+ },
+ {
+  "repo": "ingdavid72/atm-simulator-python",
+  "stars": 1,
+  "lic": null,
+  "branch": "main",
+  "path": "main.py",
+  "lines": 78
+ },
+ {
+  "repo": "CanDuru4/atm-python",
+  "stars": 0,
+  "lic": "MIT",
+  "branch": "main",
+  "path": "ATM-Python.py",
+  "lines": 169
+ },
+ {
+  "repo": "vanshhiiikaa/ATM-Simulator",
+  "stars": 1,
+  "lic": null,
+  "branch": "main",
+  "path": "ATM.py",
+  "lines": 81
+ },
+ {
+  "repo": "kislaya26bce10063-ship-it/Atm-Simulator",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "main.py",
+  "lines": 60
+ },
+ {
+  "repo": "Anshikapandey66/ATM-Simulator",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "atm.py",
+  "lines": 93
+ },
+ {
+  "repo": "ashmit044/tip-calculator",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "app.py",
+  "lines": 91
+ },
+ {
+  "repo": "Vindhyalekhana/restaurant-management-system",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "application/ui/cli.py",
+  "lines": 565
+ },
+ {
+  "repo": "Kumar-Ansuman1/Dyanamic_Gym",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "backend/create_owner.py",
+  "lines": 65
+ },
+ {
+  "repo": "kianbala/gym-management-system-online",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "auth_ui.py",
+  "lines": 112
+ },
+ {
+  "repo": "kianbala/gym-management-system-online",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "member_ui.py",
+  "lines": 307
+ },
+ {
+  "repo": "dennohlimo/gym-membership-management",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "attendance.py",
+  "lines": 108
+ },
+ {
+  "repo": "dheepthireddy18/tic-tac-toe",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "main.py",
+  "lines": 69
+ },
+ {
+  "repo": "DhruvHegde/Voice_based-_Tic-Tac-Toe",
+  "stars": 0,
+  "lic": null,
+  "branch": "master",
+  "path": "example.py",
+  "lines": 74
+ },
+ {
+  "repo": "Python-for-Foxes/Python-Tic-Tac-Toe",
+  "stars": 0,
+  "lic": null,
+  "branch": "main",
+  "path": "main.py",
+  "lines": 170
+ }
+]
