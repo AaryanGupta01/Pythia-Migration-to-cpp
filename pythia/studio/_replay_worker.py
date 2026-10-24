@@ -68,6 +68,9 @@ else:
 
 def load_original(root, rel, name):
     sys.path.insert(0, root)
+    here = os.path.dirname(os.path.join(root, rel))
+    if os.path.abspath(here) != os.path.abspath(root):
+        sys.path.insert(1, here)                    # a script imports its siblings by bare name (`from utils import f`)
     mod = rel[:-3].replace("/", ".")
     if mod.endswith(".__init__"):
         mod = mod[:-9]

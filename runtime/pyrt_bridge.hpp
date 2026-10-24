@@ -11,6 +11,8 @@
 
 #include <pybind11/pybind11.h>
 #include <algorithm>
+#include <iostream>
+#include <streambuf>
 #include <cstring>
 #include <functional>
 #include <string>
@@ -24,9 +26,35 @@ inline PyObject *FallbackError = nullptr;   // created in the module init
 inline PyObject *SemanticError = nullptr;   // PythiaSemanticError(RuntimeError)
 
 // All allocations made while an Arena is alive are freed when it dies.
+// print() inside a compiled function must land in Python's sys.stdout (same buffer, same newline translation, same order as
+// the surrounding Python code), not in the C++ stdout, which a pipe buffers separately and on Windows writes without "\r".
+struct PyOutBuf : std::streambuf {
+    std::string buf;
+    void flush_() {
+        if (buf.empty()) return;
+        try {
+            PyObject *s = PyUnicode_DecodeUTF8(buf.data(), static_cast<Py_ssize_t>(buf.size()), "replace");
+            if (s) { py::module_::import("sys").attr("stdout").attr("write")(py::reinterpret_steal<py::object>(s)); }
+        } catch (...) { PyErr_Clear(); }
+        buf.clear();
+    }
+    int_type overflow(int_type c) override { if (c != traits_type::eof()) { buf.push_back(static_cast<char>(c)); if (buf.size() > 8192) flush_(); } return c; }
+    std::streamsize xsputn(const char *s, std::streamsize n) override { buf.append(s, static_cast<size_t>(n)); if (buf.size() > 8192) flush_(); return n; }
+    int sync() override { flush_(); return 0; }
+};
+
 struct Arena {
-    Arena() { pyrt::arena_begin(); }
-    ~Arena() { pyrt::arena_end(); }
+    static inline PyOutBuf out_buf;
+    static inline int depth = 0;
+    std::streambuf *saved = nullptr;
+    Arena() {
+        pyrt::arena_begin();
+        if (depth++ == 0) saved = std::cout.rdbuf(&out_buf);
+    }
+    ~Arena() {
+        if (--depth == 0) { out_buf.flush_(); std::cout.rdbuf(saved); }
+        pyrt::arena_end();
+    }
     Arena(const Arena &) = delete;
     Arena &operator=(const Arena &) = delete;
 };
