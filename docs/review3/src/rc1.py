@@ -15,6 +15,7 @@ def cover(d, F):
             ["Team number", "Team 2"],
             ["Review", "Review 3 (final), October 2026"],
             ["Faculty", "Shalini L"],
+            ["Repository", "https://github.com/Vishalvivek2007/Pythia"],
             ["Repository state", f"branch `main`, commit `{F['git']['head']}` ({F['git']['commits']} commits)"]]
     _plain_table(d, ["Item", "Details"], rows, [4.2, 12.4])
     d.p("", after=6)
